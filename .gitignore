@@ -1,3 +1,8 @@
+# Rust / Cargo
+/target
+**/*.rs.bk
+# Note: Cargo.lock IS committed (workspace ships binaries).
+
 # Prerequisites
 *.d
 
