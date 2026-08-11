@@ -139,8 +139,8 @@ the definition of done.
 - [x] 000018 — Audio buffer model (block size, channels, allocation outside the RT thread) 🧪
 - [x] 000019 — Node parameter model (ranges, units, defaults, normalization) 🧪
 - [ ] 000020 — 🧩 Allowed feedback via an explicit delay node (feedback delay) 🧪
-- [ ] 000021 — Handle sample rate / block size and their on-the-fly changes 🧪
-- [ ] 000022 — Graph diagnostics: clear errors (incompatible ports, dangling inputs) 🧪
+- [x] 000021 — Handle sample rate / block size and their on-the-fly changes 🧪
+- [x] 000022 — Graph diagnostics: clear errors (incompatible ports, dangling inputs) 🧪
 - [ ] 000023 — Core benchmarks (`criterion`) on typical graphs
 
 ### Epic 3 — Node library (`vb-nodes`)

@@ -121,6 +121,33 @@ impl Engine {
         }
     }
 
+    /// The block size (frames) the engine currently processes.
+    #[must_use]
+    pub fn block_size(&self) -> usize {
+        self.frames
+    }
+
+    /// Resizes every output buffer to `frames` and resets all processors.
+    ///
+    /// Reallocation happens here (off the audio thread), never inside
+    /// [`Engine::process`]. Sample-rate changes are carried per block by
+    /// [`ProcessContext`]; call this when the host's block size changes.
+    pub fn set_block_size(&mut self, frames: usize) {
+        self.frames = frames;
+        for buf in &mut self.outputs {
+            let channels = buf.channels();
+            *buf = AudioBuffer::new(channels, frames);
+        }
+        self.reset();
+    }
+
+    /// Resets every processor's internal state (filter memory, envelope phase, …).
+    pub fn reset(&mut self) {
+        for processor in &mut self.processors {
+            processor.reset();
+        }
+    }
+
     /// Returns the output buffer of `id` after the last [`Engine::process`], if present.
     #[must_use]
     pub fn node_output(&self, id: NodeId) -> Option<&AudioBuffer> {
@@ -163,6 +190,20 @@ mod tests {
             for (i, o) in out[0].iter_mut().enumerate().take(ctx.frames) {
                 *o = inp[0][i] + inp[1][i];
             }
+        }
+    }
+
+    /// Stateful source: emits an incrementing counter; `reset` returns it to zero.
+    struct Counter {
+        count: f32,
+    }
+    impl Processor for Counter {
+        fn process(&mut self, _ctx: &ProcessContext, _in: &[&[f32]], out: &mut [&mut [f32]]) {
+            self.count += 1.0;
+            out[0].fill(self.count);
+        }
+        fn reset(&mut self) {
+            self.count = 0.0;
         }
     }
 
@@ -278,5 +319,44 @@ mod tests {
             Engine::compile(&g, procs, 4),
             Err(EngineError::Graph(_))
         ));
+    }
+
+    #[test]
+    fn set_block_size_resizes_outputs() {
+        let mut g = Graph::new();
+        let src = g.add_node(source("const"));
+        let amp = g.add_node(mono("gain"));
+        g.connect(src, PortId(0), amp, PortId(0)).unwrap();
+
+        let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+        procs.insert(src, Box::new(Constant(2.0)));
+        procs.insert(amp, Box::new(Gain(3.0)));
+
+        let mut engine = Engine::compile(&g, procs, 4).unwrap();
+        engine.set_block_size(8);
+        assert_eq!(engine.block_size(), 8);
+        engine.process(&ctx(8));
+        assert_eq!(
+            engine.node_output(amp).unwrap().channel(0).unwrap(),
+            &[6.0; 8]
+        );
+    }
+
+    #[test]
+    fn reset_clears_processor_state() {
+        let mut g = Graph::new();
+        let n = g.add_node(source("counter"));
+        let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+        procs.insert(n, Box::new(Counter { count: 0.0 }));
+
+        let mut engine = Engine::compile(&g, procs, 1).unwrap();
+        engine.process(&ctx(1));
+        assert_eq!(engine.node_output(n).unwrap().channel(0).unwrap(), &[1.0]);
+        engine.process(&ctx(1));
+        assert_eq!(engine.node_output(n).unwrap().channel(0).unwrap(), &[2.0]);
+
+        engine.reset();
+        engine.process(&ctx(1));
+        assert_eq!(engine.node_output(n).unwrap().channel(0).unwrap(), &[1.0]);
     }
 }
