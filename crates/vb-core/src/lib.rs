@@ -1,19 +1,17 @@
-//! `vb-core` — graph model, port types, scheduler, sample processing.
+//! `vb-core` — the structural DSP graph model for VST_bomb.
 //!
-//! Stub crate; the real implementation lands in Epic 2.
+//! This crate holds the data model that the whole editor and runtime build on:
+//! typed [`Port`]s, [`GraphNode`]s and the [`Graph`] container that wires them
+//! together while enforcing the connection rules. DSP processing behaviour, cycle
+//! detection and scheduling arrive in later epics; keeping the structural model
+//! separate keeps it easy to serialize, diff and reason about (SOLID).
 
-/// Returns this crate's name. Placeholder until the real API lands.
-#[must_use]
-pub fn crate_name() -> &'static str {
-    "vb-core"
-}
+pub mod graph;
+pub mod node;
+pub mod port;
+pub mod signal;
 
-#[cfg(test)]
-mod tests {
-    use super::crate_name;
-
-    #[test]
-    fn exposes_crate_name() {
-        assert_eq!(crate_name(), "vb-core");
-    }
-}
+pub use graph::{Edge, Graph, GraphError};
+pub use node::{GraphNode, NodeId};
+pub use port::{Port, PortDirection, PortId};
+pub use signal::SignalType;
