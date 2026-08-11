@@ -20,3 +20,6 @@ authors = ["ice1x"]
 
 # Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).
 [workspace.dependencies]
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
