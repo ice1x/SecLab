@@ -1,19 +1,9 @@
-//! `vb-nodes` — DSP node library (oscillators, filters, envelopes, math, MIDI).
+//! `vb-nodes` — the DSP node library for VST_bomb.
 //!
-//! Stub crate; the real implementation lands in Epic 3.
+//! Concrete nodes that implement [`vb_core::Processor`]: oscillators, filters,
+//! envelopes, math and routing. Each node is a small, independently tested unit that
+//! plugs into the [`vb_core`] graph engine.
 
-/// Returns this crate's name. Placeholder until the real API lands.
-#[must_use]
-pub fn crate_name() -> &'static str {
-    "vb-nodes"
-}
+pub mod oscillator;
 
-#[cfg(test)]
-mod tests {
-    use super::crate_name;
-
-    #[test]
-    fn exposes_crate_name() {
-        assert_eq!(crate_name(), "vb-nodes");
-    }
-}
+pub use oscillator::{Oscillator, Waveform};
