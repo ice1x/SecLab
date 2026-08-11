@@ -135,7 +135,7 @@ the definition of done.
 - [x] 000014 — Add/remove nodes and connections with validation 🧪
 - [x] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
 - [x] 000016 — Topological sort for processing order 🧪
-- [ ] 000017 — Processing scheduler: traverse the graph over sample buffers 🧪
+- [x] 000017 — Processing scheduler: traverse the graph over sample buffers 🧪
 - [x] 000018 — Audio buffer model (block size, channels, allocation outside the RT thread) 🧪
 - [x] 000019 — Node parameter model (ranges, units, defaults, normalization) 🧪
 - [ ] 000020 — 🧩 Allowed feedback via an explicit delay node (feedback delay) 🧪

@@ -58,6 +58,12 @@ impl AudioBuffer {
     pub fn clear(&mut self) {
         self.samples.fill(0.0);
     }
+
+    /// Iterates every channel as a mutable slice, channel 0 first.
+    pub fn channels_mut(&mut self) -> impl Iterator<Item = &mut [f32]> {
+        let frames = self.frames;
+        self.samples.chunks_mut(frames.max(1))
+    }
 }
 
 #[cfg(test)]
