@@ -8,6 +8,7 @@
 //! easy to serialize, diff and reason about (SOLID).
 
 pub mod buffer;
+pub mod engine;
 pub mod graph;
 pub mod node;
 pub mod param;
@@ -17,6 +18,7 @@ pub mod signal;
 pub mod topology;
 
 pub use buffer::AudioBuffer;
+pub use engine::{Engine, EngineError};
 pub use graph::{Edge, Graph, GraphError};
 pub use node::{GraphNode, NodeId};
 pub use param::Parameter;
