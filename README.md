@@ -131,8 +131,8 @@ the definition of done.
 
 - [x] 000011 — Design the data model: `Node`, `Port`, `Edge`, `Graph` (interfaces/traits, SOLID) 🧪
 - [x] 000012 — Port types and compatibility rules: `Audio`, `Control/CV`, `Event/MIDI` 🧪
-- [ ] 000013 — `Node` trait (process contract, in/out, state) as the extension point 🧪
-- [ ] 000014 — Add/remove nodes and connections with validation 🧪
+- [x] 000013 — `Node` trait (process contract, in/out, state) as the extension point 🧪
+- [x] 000014 — Add/remove nodes and connections with validation 🧪
 - [ ] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
 - [ ] 000016 — Topological sort for processing order 🧪
 - [ ] 000017 — Processing scheduler: traverse the graph over sample buffers 🧪
