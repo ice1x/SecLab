@@ -42,6 +42,8 @@ pub enum GraphError {
         /// The already-connected target input port.
         port: PortId,
     },
+    /// The graph contains a cycle, so no valid processing order exists.
+    Cycle,
 }
 
 impl fmt::Display for GraphError {
@@ -62,6 +64,7 @@ impl fmt::Display for GraphError {
                     "input port {port:?} on node {node:?} is already connected"
                 )
             }
+            Self::Cycle => write!(f, "graph contains a cycle"),
         }
     }
 }
@@ -112,6 +115,11 @@ impl Graph {
     #[must_use]
     pub fn edges(&self) -> &[Edge] {
         &self.edges
+    }
+
+    /// Iterates the ids of every node in the graph, in unspecified order.
+    pub fn node_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.nodes.keys().copied()
     }
 
     /// Connects an output port to an input port, validating the connection.

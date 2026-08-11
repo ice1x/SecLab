@@ -12,6 +12,7 @@ pub mod node;
 pub mod port;
 pub mod process;
 pub mod signal;
+pub mod topology;
 
 pub use graph::{Edge, Graph, GraphError};
 pub use node::{GraphNode, NodeId};

@@ -133,8 +133,8 @@ the definition of done.
 - [x] 000012 — Port types and compatibility rules: `Audio`, `Control/CV`, `Event/MIDI` 🧪
 - [x] 000013 — `Node` trait (process contract, in/out, state) as the extension point 🧪
 - [x] 000014 — Add/remove nodes and connections with validation 🧪
-- [ ] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
-- [ ] 000016 — Topological sort for processing order 🧪
+- [x] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
+- [x] 000016 — Topological sort for processing order 🧪
 - [ ] 000017 — Processing scheduler: traverse the graph over sample buffers 🧪
 - [ ] 000018 — Audio buffer model (block size, channels, allocation outside the RT thread) 🧪
 - [ ] 000019 — Node parameter model (ranges, units, defaults, normalization) 🧪
