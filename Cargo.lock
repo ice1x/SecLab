@@ -13,6 +13,9 @@ version = "0.0.0"
 [[package]]
 name = "vb-nodes"
 version = "0.0.0"
+dependencies = [
+ "vb-core",
+]
 
 [[package]]
 name = "vb-plugin"

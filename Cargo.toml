@@ -20,6 +20,7 @@ authors = ["ice1x"]
 
 # Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).
 [workspace.dependencies]
+vb-core = { path = "crates/vb-core" }
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
