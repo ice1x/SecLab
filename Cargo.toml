@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/vb-core",
+    "crates/vb-nodes",
+    "crates/vb-project",
+    "crates/vb-runtime",
+    "crates/vb-editor",
+    "crates/vb-standalone",
+    "crates/vb-plugin",
+]
+
+# Shared package metadata inherited by every crate via `field.workspace = true`.
+[workspace.package]
+version = "0.0.0"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/ice1x/VST_bomb"
+authors = ["ice1x"]
+
+# Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).
+[workspace.dependencies]

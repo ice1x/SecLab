@@ -116,14 +116,14 @@ the definition of done.
 
 ### Epic 1 — Project infrastructure & CI
 
-- [ ] 000001 — Initialize the Cargo workspace (`Cargo.toml` with members: `vb-core`, `vb-nodes`, `vb-project`, `vb-runtime`, `vb-editor`, `vb-standalone`, `vb-plugin`)
-- [ ] 000002 — Update `.gitignore` for Rust (`/target`, `Cargo.lock` policy, `*.rs.bk`)
+- [x] 000001 — Initialize the Cargo workspace (`Cargo.toml` with members: `vb-core`, `vb-nodes`, `vb-project`, `vb-runtime`, `vb-editor`, `vb-standalone`, `vb-plugin`)
+- [x] 000002 — Update `.gitignore` for Rust (`/target`, `Cargo.lock` policy, `*.rs.bk`)
 - [ ] 000003 — Set up `rustfmt.toml` and `clippy` (deny warnings) as the repo standard
 - [ ] 000004 — Set up CI (GitHub Actions): `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check`
 - [ ] 000005 — CI matrix across OSes: Linux, macOS, Windows
 - [ ] 000006 — 🧩 Configure dependency caching in CI (faster builds)
 - [ ] 000007 — Add `CONTRIBUTING.md` with TDD/SOLID rules and branch workflow
-- [ ] 000008 — Crate stubs: each crate compiles and has an empty passing test 🧪
+- [x] 000008 — Crate stubs: each crate compiles and has an empty passing test 🧪
 - [ ] 000009 — Set up `cargo-nextest` (optional) for fast test runs
 - [ ] 000010 — Set up test coverage measurement (`cargo-llvm-cov`) in CI
 
