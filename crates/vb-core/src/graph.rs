@@ -179,6 +179,24 @@ impl Graph {
         self.edges.push(edge);
         Ok(edge)
     }
+
+    /// Removes the edge feeding `to_node`'s input `to_port`, if any, and returns it.
+    ///
+    /// After this the input is free and may be reconnected.
+    pub fn disconnect(&mut self, to_node: NodeId, to_port: PortId) -> Option<Edge> {
+        let pos = self
+            .edges
+            .iter()
+            .position(|e| e.to_node == to_node && e.to_port == to_port)?;
+        Some(self.edges.remove(pos))
+    }
+
+    /// Removes a node and every edge incident to it, returning the node if it existed.
+    pub fn remove_node(&mut self, id: NodeId) -> Option<GraphNode> {
+        let removed = self.nodes.remove(&id)?;
+        self.edges.retain(|e| e.from_node != id && e.to_node != id);
+        Some(removed)
+    }
 }
 
 #[cfg(test)]
@@ -273,5 +291,53 @@ mod tests {
                 port: PortId(0)
             })
         );
+    }
+
+    #[test]
+    fn disconnect_frees_the_input_for_reconnection() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(osc());
+        let sink = g.add_node(gain());
+        g.connect(a, PortId(0), sink, PortId(0)).unwrap();
+
+        let removed = g.disconnect(sink, PortId(0)).expect("edge exists");
+        assert_eq!(removed.from_node, a);
+        assert_eq!(g.edges().len(), 0);
+
+        // The input is free again, so a different source connects fine.
+        g.connect(b, PortId(0), sink, PortId(0))
+            .expect("reconnect after disconnect");
+        assert_eq!(g.edges().len(), 1);
+    }
+
+    #[test]
+    fn disconnect_unconnected_input_returns_none() {
+        let mut g = Graph::new();
+        let sink = g.add_node(gain());
+        assert_eq!(g.disconnect(sink, PortId(0)), None);
+    }
+
+    #[test]
+    fn remove_node_drops_incident_edges() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let mid = g.add_node(gain());
+        let sink = g.add_node(gain());
+        g.connect(a, PortId(0), mid, PortId(0)).unwrap();
+        g.connect(mid, PortId(0), sink, PortId(0)).unwrap();
+        assert_eq!(g.edges().len(), 2);
+
+        let removed = g.remove_node(mid).expect("node exists");
+        assert_eq!(removed.kind, "gain");
+        assert_eq!(g.node_count(), 2);
+        // Both edges touched `mid`, so both are gone.
+        assert_eq!(g.edges().len(), 0);
+    }
+
+    #[test]
+    fn remove_unknown_node_returns_none() {
+        let mut g = Graph::new();
+        assert_eq!(g.remove_node(crate::node::NodeId(42)), None);
     }
 }
