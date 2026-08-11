@@ -129,8 +129,8 @@ the definition of done.
 
 ### Epic 2 — Core: DSP graph engine (`vb-core`)
 
-- [ ] 000011 — Design the data model: `Node`, `Port`, `Edge`, `Graph` (interfaces/traits, SOLID) 🧪
-- [ ] 000012 — Port types and compatibility rules: `Audio`, `Control/CV`, `Event/MIDI` 🧪
+- [x] 000011 — Design the data model: `Node`, `Port`, `Edge`, `Graph` (interfaces/traits, SOLID) 🧪
+- [x] 000012 — Port types and compatibility rules: `Audio`, `Control/CV`, `Event/MIDI` 🧪
 - [ ] 000013 — `Node` trait (process contract, in/out, state) as the extension point 🧪
 - [ ] 000014 — Add/remove nodes and connections with validation 🧪
 - [ ] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
