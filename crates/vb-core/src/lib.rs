@@ -7,15 +7,19 @@
 //! arrive in later epics. Keeping structure and behaviour separate keeps the model
 //! easy to serialize, diff and reason about (SOLID).
 
+pub mod buffer;
 pub mod graph;
 pub mod node;
+pub mod param;
 pub mod port;
 pub mod process;
 pub mod signal;
 pub mod topology;
 
+pub use buffer::AudioBuffer;
 pub use graph::{Edge, Graph, GraphError};
 pub use node::{GraphNode, NodeId};
+pub use param::Parameter;
 pub use port::{Port, PortDirection, PortId};
 pub use process::{ProcessContext, Processor};
 pub use signal::SignalType;

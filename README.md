@@ -136,8 +136,8 @@ the definition of done.
 - [x] 000015 — Cycle detection in the graph (forbid invalid feedback loops) 🧪
 - [x] 000016 — Topological sort for processing order 🧪
 - [ ] 000017 — Processing scheduler: traverse the graph over sample buffers 🧪
-- [ ] 000018 — Audio buffer model (block size, channels, allocation outside the RT thread) 🧪
-- [ ] 000019 — Node parameter model (ranges, units, defaults, normalization) 🧪
+- [x] 000018 — Audio buffer model (block size, channels, allocation outside the RT thread) 🧪
+- [x] 000019 — Node parameter model (ranges, units, defaults, normalization) 🧪
 - [ ] 000020 — 🧩 Allowed feedback via an explicit delay node (feedback delay) 🧪
 - [ ] 000021 — Handle sample rate / block size and their on-the-fly changes 🧪
 - [ ] 000022 — Graph diagnostics: clear errors (incompatible ports, dangling inputs) 🧪
