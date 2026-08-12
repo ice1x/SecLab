@@ -147,11 +147,11 @@ the definition of done.
 
 - [x] 000024 — Generator: oscillator (sine/saw/square/triangle) with anti-aliasing 🧪
 - [ ] 000025 — Noise generator (white/pink) 🧪
-- [ ] 000026 — Filter: biquad (LP/HP/BP/notch) 🧪
+- [x] 000026 — Filter: biquad (LP/HP/BP/notch) 🧪
 - [ ] 000027 — Filter: state-variable / ladder 🧪
 - [ ] 000028 — ADSR envelope 🧪
 - [ ] 000029 — LFO (with tempo sync) 🧪
-- [ ] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
+- [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
 - [ ] 000031 — Routing nodes: splitter, merger, selector 🧪
 - [ ] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪
 - [ ] 000033 — MIDI input: note on/off → gate/pitch/velocity 🧪
