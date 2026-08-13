@@ -184,8 +184,8 @@ the definition of done.
 > `drevo` (see Epic 11). RON is the source of truth; drevo stores links/metadata and
 > does not replace the project file.
 
-- [ ] 000052 — Project file format (graph + node positions + parameters): **RON** via `serde` (decided) 🧪
-- [ ] 000053 — Save/Load a project with round-trip tests 🧪
+- [x] 000052 — Project file format (graph + node positions + parameters): **RON** via `serde` (decided) 🧪
+- [x] 000053 — Save/Load a project with round-trip tests 🧪
 - [ ] 000054 — Format versioning and migrations 🧪
 - [ ] 000055 — Export/import a single macro-node as a reusable module 🧪
 - [ ] 000056 — Validate a loaded file (robustness to corrupt/foreign data) 🧪

@@ -1,7 +1,7 @@
 //! Signal types carried by ports, and the compatibility rule between them.
 
 /// The kind of signal a port carries.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum SignalType {
     /// Audio-rate sample stream.
     Audio,
