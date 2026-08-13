@@ -7,7 +7,7 @@ use crate::node::{GraphNode, NodeId};
 use crate::port::{PortDirection, PortId};
 
 /// A directed connection from an output port to an input port.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Edge {
     /// Source node (the output side).
     pub from_node: NodeId,

@@ -3,7 +3,7 @@
 use crate::port::Port;
 
 /// Stable identifier for a node within a [`crate::graph::Graph`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct NodeId(pub u64);
 
 /// A node instance: a `kind` label plus its typed input and output ports.
@@ -11,7 +11,7 @@ pub struct NodeId(pub u64);
 /// This is the structural model only — DSP processing behaviour arrives with the
 /// `Node` processing trait in a later task (000013). Keeping data and behaviour
 /// separate keeps the graph model easy to serialize, diff and reason about.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GraphNode {
     /// Registry kind label (e.g. `"oscillator"`).
     pub kind: String,

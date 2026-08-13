@@ -3,7 +3,7 @@
 use crate::signal::SignalType;
 
 /// Whether a port consumes (input) or produces (output) a signal.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum PortDirection {
     /// Consumes a signal.
     Input,
@@ -12,11 +12,11 @@ pub enum PortDirection {
 }
 
 /// Index of a port within a node's input or output list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct PortId(pub usize);
 
 /// A typed connection point on a node.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Port {
     /// Human-readable label shown in the editor.
     pub name: String,
