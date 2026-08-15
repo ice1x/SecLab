@@ -136,6 +136,10 @@ dependencies = [
 [[package]]
 name = "vb-runtime"
 version = "0.0.0"
+dependencies = [
+ "vb-core",
+ "vb-nodes",
+]
 
 [[package]]
 name = "vb-standalone"
