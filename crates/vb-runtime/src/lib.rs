@@ -1,19 +1,15 @@
-//! `vb-runtime` — real-time graph execution (buffers, parameters, MIDI).
+//! `vb-runtime` — real-time graph execution for VST_bomb.
 //!
-//! Stub crate; the real implementation lands in Epic 6.
+//! [`vb_core::Engine`] is the reference evaluator: correct, simple, and free to allocate.
+//! That is fine for tests and offline rendering but not for an audio callback, where a
+//! single heap allocation can miss a deadline and click.
+//!
+//! [`RtEngine`] runs the same graph with the same [`Processor`]s, but every buffer and
+//! routing table is allocated once in [`RtEngine::compile`]. [`RtEngine::process`] only
+//! reads and writes already-sized memory — no allocation, no locks, no `Vec` growth. The
+//! per-node slice tables live on the stack, which is why a node may expose at most
+//! [`MAX_PORTS_PER_NODE`] ports per side.
 
-/// Returns this crate's name. Placeholder until the real API lands.
-#[must_use]
-pub fn crate_name() -> &'static str {
-    "vb-runtime"
-}
+pub mod engine;
 
-#[cfg(test)]
-mod tests {
-    use super::crate_name;
-
-    #[test]
-    fn exposes_crate_name() {
-        assert_eq!(crate_name(), "vb-runtime");
-    }
-}
+pub use engine::{RtEngine, RtEngineError, MAX_PORTS_PER_NODE};

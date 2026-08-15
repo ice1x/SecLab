@@ -21,6 +21,7 @@ authors = ["ice1x"]
 # Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).
 [workspace.dependencies]
 vb-core = { path = "crates/vb-core" }
+vb-nodes = { path = "crates/vb-nodes" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 

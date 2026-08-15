@@ -192,7 +192,7 @@ the definition of done.
 
 ### Epic 6 — Standalone audio runtime (`vb-runtime`, `vb-standalone`)
 
-- [ ] 000057 — RT graph executor: no allocations/locks in the audio thread 🧪
+- [x] 000057 — RT graph executor: no allocations/locks in the audio thread 🧪
 - [ ] 000058 — Double buffering / thread-safe delivery of graph edits into the RT thread 🧪
 - [ ] 000059 — `cpal` integration: audio output to the default device
 - [ ] 000060 — Choose audio device, sample rate, buffer size in the UI

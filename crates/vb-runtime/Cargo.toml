@@ -8,6 +8,10 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+vb-core.workspace = true
+
+[dev-dependencies]
+vb-nodes.workspace = true
 
 [lints]
 workspace = true
