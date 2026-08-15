@@ -3,6 +3,10 @@
 **/*.rs.bk
 # Note: Cargo.lock IS committed (workspace ships binaries).
 
+# Self-hosted GitHub Actions runner living inside the checkout (never commit it:
+# it contains credentials in .runner/.credentials and gigabytes of work dirs)
+/actions-runner/
+
 # Prerequisites
 *.d
 
