@@ -1,20 +1,36 @@
 //! Proves the central real-time claim: `RtEngine::process` performs no heap allocation.
 //!
-//! A counting global allocator is installed for this test binary. Allocations are only
-//! tallied inside the measured window, so setup is free to allocate as much as it likes.
-//! This file deliberately holds a single test — the counter is process-wide, so a second
-//! test running in parallel would pollute it.
+//! A counting global allocator is installed for this test binary. A global allocator sees
+//! *every* thread, including the test harness's own bookkeeping, so counting is armed per
+//! thread: only allocations made on the thread running the measured loop are tallied.
+//! Setup is free to allocate as much as it likes — the window opens after it.
 
 use std::alloc::{GlobalAlloc, Layout, System};
+use std::cell::Cell;
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use vb_core::{Graph, GraphNode, NodeId, Port, PortId, ProcessContext, Processor, SignalType};
 use vb_nodes::{Adsr, Biquad, FilterKind, Mul, Oscillator, Waveform};
 use vb_runtime::RtEngine;
 
-static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
-static COUNTING: AtomicBool = AtomicBool::new(false);
+thread_local! {
+    /// Whether this thread is inside the measured window.
+    static COUNTING: Cell<bool> = const { Cell::new(false) };
+    /// Allocations this thread made while armed.
+    static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+}
+
+/// Records one allocation if this thread is armed.
+///
+/// Both thread-locals are const-initialised and hold no destructor, so touching them
+/// cannot itself allocate or re-enter the allocator. `try_with` keeps this sound even
+/// during thread teardown, when the locals may already be gone.
+fn note_allocation() {
+    let armed = COUNTING.try_with(Cell::get).unwrap_or(false);
+    if armed {
+        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
+    }
+}
 
 struct CountingAllocator;
 
@@ -22,9 +38,7 @@ struct CountingAllocator;
 // observe traffic and never affect the returned pointers.
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        }
+        note_allocation();
         unsafe { System.alloc(layout) }
     }
 
@@ -33,16 +47,12 @@ unsafe impl GlobalAlloc for CountingAllocator {
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        }
+        note_allocation();
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        if COUNTING.load(Ordering::Relaxed) {
-            ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
-        }
+        note_allocation();
         unsafe { System.alloc_zeroed(layout) }
     }
 }
@@ -113,15 +123,15 @@ fn processing_a_block_does_not_allocate() {
     // Warm up outside the measured window.
     engine.process(&ctx);
 
-    ALLOCATIONS.store(0, Ordering::SeqCst);
-    COUNTING.store(true, Ordering::SeqCst);
+    ALLOCATIONS.with(|n| n.set(0));
+    COUNTING.with(|c| c.set(true));
     for _ in 0..64 {
         engine.process(&ctx);
     }
-    COUNTING.store(false, Ordering::SeqCst);
+    COUNTING.with(|c| c.set(false));
 
     assert_eq!(
-        ALLOCATIONS.load(Ordering::SeqCst),
+        ALLOCATIONS.with(Cell::get),
         0,
         "RtEngine::process must not allocate on the audio thread"
     );
