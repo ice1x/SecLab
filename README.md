@@ -103,6 +103,79 @@ cargo fmt --check
 > abstraction. The AI **proposes** edits; they are applied as ordinary undoable commands
 > with preview — the engine stays the source of truth.
 
+---
+
+## 🤖 MVP feature: AI assistant that builds your synth/plugin with you
+
+**The headline MVP scenario.** The user brings their own LLM API keys, describes in a
+chat what device they want — the algorithm, what connects to what — gets honest,
+grounded critique back, and after a short dialogue walks away with a working **VST/AU**
+built from a validated patch graph. The assistant is a *collaborator with taste*, not a
+code generator: it argues, simplifies, and only then builds.
+
+### User flow
+
+```
+add API key ──▶ describe the device ──▶ critique & clarify ──▶ propose graph
+   (once)        "I want a mono bass      assistant pushes        diff + preview
+                  synth: saw → ladder     back: what's the        on the canvas
+                  filter, LFO on          filter envelope?
+                  cutoff, glide"          glide time? why 2
+                                          LFOs — one is enough
+                        ▲                                             │
+                        └──────────── iterate in chat ◀───────────────┘
+                                                                      │ accept
+                                                                      ▼
+                                                    validate (vb-core) ──▶ audition
+                                                    live in the editor ──▶ export
+                                                    VST3 / AU / CLAP bundle
+```
+
+### Design pillars
+
+1. **BYOK — bring your own keys.** The user adds keys for their LLM provider(s) in
+   Settings. Keys live in the OS keychain (never in project files, never in telemetry).
+   `AiProvider` trait; Anthropic (Claude) is the reference implementation, an
+   OpenAI-compatible adapter widens coverage, local models can slot in later (000111).
+   Nothing is sent anywhere until the user explicitly starts a chat, and the exact
+   payload is inspectable ("what will be sent?" button).
+2. **Grounded, not hallucinated.** The assistant works from *distilled documentation*:
+   an auto-generated node reference (from the registry: kinds, ports, parameters,
+   categories — 000086) compressed into a compact "node card" corpus that fits the
+   context window. It can only propose nodes that exist; the schema it emits is the
+   same RON `ProjectDoc` the editor loads, so `vb-core` validation is the hard gate —
+   an invalid proposal never reaches the canvas, it goes back to the model with the
+   validator's issue list until it converges or the assistant admits defeat.
+3. **Skills & pre-prompts.** Reusable prompt assets shipped with the app: a system
+   pre-prompt (role, output contract, refusal rules), per-task *skills* (synth design,
+   effect design, patch explanation, patch repair), and DSP design heuristics (gain
+   staging, aliasing, feedback safety). Stored as versioned files in the repo, unit
+   tested with golden transcripts, and user-extensible.
+4. **Sound critique, Occam's razor.** Before building anything the assistant runs a
+   critic pass over the user's request *and* over its own draft: is every node earning
+   its place? Can two oscillators be one? Is the modulation routing audible at all?
+   The critique is shown to the user as short bullet points with trade-offs — the user
+   decides, the assistant argues but never overrules.
+5. **Context compression / distillation.** Long dialogues and big patches must not blow
+   the context window or the user's token budget: the graph is summarized structurally
+   (node counts, chains, modulation routes) instead of dumped verbatim; earlier turns
+   are distilled into a running "session brief"; node cards are pre-distilled offline.
+   Budget guard: the assistant reports approximate tokens/cost per exchange.
+6. **Dialogue → artifact.** The end state of a successful conversation is not text —
+   it is a patch on the canvas the user can audition immediately, plus (on request) the
+   exported VST3/AU/CLAP bundle via the standard export pipeline (Epic 7). Every
+   assistant edit is an undoable command in the same history as manual edits.
+
+### MVP cut line
+
+**In:** one provider (Claude) + OpenAI-compatible adapter behind `AiProvider`; keychain
+key storage; chat panel; distilled node reference; system pre-prompt + 2 skills
+("design a synth", "explain/repair a patch"); critic pass; propose→validate→repair
+loop; apply-as-undoable-diff; audition; export via Epic 7.
+**Out (post-MVP):** multi-agent orchestration, RAG over the drevo patch library
+(000109), local models (000111), auto-tuning parameters by ear (analysis-driven),
+voice input.
+
 Detailed checklist — in the [Tasks](#-tasks-backlog) section.
 
 ---
@@ -291,8 +364,26 @@ the definition of done.
 - [ ] 000110 — Privacy/security: API key handling, explicit consent before sending the project, offline mode 🧪
 - [ ] 000111 — 🧩 Offline/local models (optional) via the same `AiProvider` abstraction
 
+#### MVP: "dialogue → your VST/AU" pipeline (see [MVP feature](#-mvp-feature-ai-assistant-that-builds-your-synthplugin-with-you))
+
+- [ ] 000112 — BYOK key management: add/remove provider API keys in Settings, stored in the OS keychain (never in project files) 🧪
+- [ ] 000113 — 🧩 `AiProvider` adapter: Anthropic (Claude) reference implementation (chat + structured output) 🧪
+- [ ] 000114 — 🧩 `AiProvider` adapter: OpenAI-compatible endpoint (covers most third-party providers) 🧪
+- [ ] 000115 — Distilled node reference: auto-generate compact "node cards" from the registry (kinds, ports, params) as LLM context 🧪
+- [ ] 000116 — System pre-prompt & output contract: assistant role, RON `ProjectDoc` schema, refusal rules — versioned prompt assets in-repo 🧪
+- [ ] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
+- [ ] 000118 — Skill: "explain / repair an existing patch" (uses validator issues as input) 🧪
+- [ ] 000119 — Critic pass (Occam's razor): review request + draft for redundant nodes/routing, surface trade-offs as short bullets 🧪
+- [ ] 000120 — Propose→validate→repair loop: every proposal gated by `vb-core`/`vb-project` validation, issues fed back to the model until convergence (with retry cap) 🧪
+- [ ] 000121 — Context compression: structural graph summary + running "session brief" distillation of earlier turns 🧪
+- [ ] 000122 — 🧩 Token/cost budget guard: estimate and report per-exchange usage, warn before large sends 🧪
+- [ ] 000123 — "What will be sent?" inspector: show the exact outgoing payload before the first request of a session
+- [ ] 000124 — Wire the accepted proposal into the editor: apply as undoable diff → audition in the editor (builds on 000104/000105)
+- [ ] 000125 — End-to-end MVP scenario test: scripted dialogue (mock provider) → validated graph → exported CLAP/VST3 bundle (ties into Epic 7) 🧪
+- [ ] 000126 — 🧩 Golden-transcript tests for prompt assets: pre-prompt/skills regressions caught by fixture dialogues 🧪
+
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000112, …); split a large task into 🧩 subtasks with
+the end with a new global number (000127, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
