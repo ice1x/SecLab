@@ -17,6 +17,7 @@ use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
 use crate::waveshaper::{Shape, Waveshaper};
@@ -387,6 +388,20 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(FbDelay::new(arg(v, 0, 0.25), arg(v, 1, 0.4))),
+        ),
+        NodeDescriptor::new(
+            "reverb",
+            "effect",
+            || GraphNode::new("reverb", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Reverb::new(0.5, 0.5, 0.3)),
+            || {
+                vec![
+                    Parameter::new("room_size", 0.0, 1.0, 0.5),
+                    Parameter::new("damping", 0.0, 1.0, 0.5),
+                    Parameter::new("mix", 0.0, 1.0, 0.3),
+                ]
+            },
+            |_, v| Box::new(Reverb::new(arg(v, 0, 0.5), arg(v, 1, 0.5), arg(v, 2, 0.3))),
         ),
         NodeDescriptor::new(
             "waveshaper",
