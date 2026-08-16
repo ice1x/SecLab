@@ -13,7 +13,9 @@
 
 pub mod engine_builder;
 
+use std::collections::HashMap;
 use std::num::NonZeroU32;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 
 use nih_plug::prelude::*;
@@ -22,24 +24,133 @@ use vb_nodes::{BuildContext, Registry};
 use vb_project::ProjectDoc;
 use vb_runtime::RtEngine;
 
-pub use engine_builder::{default_patch, engine_from_doc, BuildError};
+use vb_runtime::{engine_swap, EngineReceiver};
+
+pub use engine_builder::{default_patch, engine_from_doc, engine_from_doc_with_values, BuildError};
 
 /// The VST_bomb instrument plugin.
 pub struct VstBomb {
     params: Arc<VstBombParams>,
     /// The project this instance plays.
-    doc: ProjectDoc,
-    registry: Registry,
+    doc: Arc<ProjectDoc>,
+    registry: Arc<Registry>,
     build_ctx: BuildContext,
     /// Compiled in `initialize` (needs the host's buffer size), used in `process`.
     engine: Option<RtEngine>,
     sink: Option<NodeId>,
     sample_rate: f32,
+    /// Block size the engine was compiled for, shared with the rebuild executor.
+    frames: Arc<AtomicUsize>,
+    /// Fresh engines from background rebuilds arrive here (lock-free).
+    rx: EngineReceiver,
+    /// The install side, handed to the background task executor once.
+    tx: Option<vb_runtime::EngineSender>,
+    /// Values the running engine was built with; compared in place, no allocation.
+    built_values: Vec<f32>,
 }
 
-/// No automatable parameters yet — host automation routing is task 000065.
-#[derive(Params, Default)]
-pub struct VstBombParams {}
+/// One host-automatable parameter bound to a node's registry parameter.
+struct BoundParam {
+    node: NodeId,
+    param: FloatParam,
+    /// Stable host-facing identifier (`n<node>_<index>`).
+    id: String,
+}
+
+/// The patch's parameters, one `FloatParam` per registry parameter of every node.
+///
+/// Built dynamically from the loaded document, so the host sees exactly the knobs
+/// the patch has. IDs are stable across sessions (`n<node-id>_<param-index>`), which
+/// also gives host preset state save/restore for free via nih-plug's serializer.
+#[derive(Default)]
+pub struct VstBombParams {
+    bound: Vec<BoundParam>,
+}
+
+impl VstBombParams {
+    /// Builds the parameter set for `doc` from the registry metadata. Unknown node
+    /// kinds contribute nothing (the engine builder rejects them separately).
+    #[must_use]
+    pub fn for_doc(doc: &ProjectDoc, registry: &Registry) -> Self {
+        let mut bound = Vec::new();
+        for entry in &doc.nodes {
+            let Some(descriptor) = registry.get(&entry.node.kind) else {
+                continue;
+            };
+            for (index, p) in descriptor.params().into_iter().enumerate() {
+                let id = format!("n{}_{index}", entry.id.0);
+                let name = format!("{} {} (node {})", entry.node.kind, p.name, entry.id.0);
+                // Rounded display so value → string → value round-trips exactly:
+                // the digit budget shrinks as the range grows, keeping the printed
+                // string well inside f32's ~7 significant digits.
+                let decimals = if p.max.abs() >= 1_000.0 {
+                    1
+                } else if p.max.abs() >= 10.0 {
+                    2
+                } else {
+                    3
+                };
+                let param = FloatParam::new(
+                    name,
+                    p.default,
+                    FloatRange::Linear {
+                        min: p.min,
+                        max: p.max,
+                    },
+                )
+                .with_value_to_string(formatters::v2s_f32_rounded(decimals));
+                bound.push(BoundParam {
+                    node: entry.id,
+                    param,
+                    id,
+                });
+            }
+        }
+        Self { bound }
+    }
+
+    /// Current values grouped per node, in registry `params()` order — the shape
+    /// [`engine_from_doc_with_values`] consumes.
+    #[must_use]
+    pub fn values_by_node(&self) -> HashMap<NodeId, Vec<f32>> {
+        let mut map: HashMap<NodeId, Vec<f32>> = HashMap::new();
+        for b in &self.bound {
+            map.entry(b.node).or_default().push(b.param.value());
+        }
+        map
+    }
+
+    /// Number of automatable parameters.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.bound.len()
+    }
+
+    /// Whether the patch has no automatable parameters.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.bound.is_empty()
+    }
+}
+
+// SAFETY: `param_map` returns one entry per `FloatParam` owned by `self.bound`; the
+// pointers live exactly as long as `self`, ids are unique per construction, and the
+// vector is never mutated after the plugin hands the Arc to the wrapper.
+unsafe impl Params for VstBombParams {
+    fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
+        self.bound
+            .iter()
+            .map(|b| (b.id.clone(), b.param.as_ptr(), String::new()))
+            .collect()
+    }
+}
+
+/// Work the audio thread hands to nih-plug's background executor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PluginTask {
+    /// Parameter values changed: rebuild the engine and swap it in.
+    RebuildEngine,
+}
 
 /// Resource location of a patch shipped inside the bundle, given the dylib's path
 /// (`…/Contents/MacOS/lib.dylib` → `…/Contents/Resources/patch.vbp`).
@@ -92,14 +203,21 @@ impl Default for VstBomb {
     fn default() -> Self {
         let registry = Registry::with_builtins();
         let doc = load_patch(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+        let built_values = params.bound.iter().map(|b| b.param.value()).collect();
+        let (tx, rx) = engine_swap();
         Self {
-            params: Arc::new(VstBombParams::default()),
-            doc,
-            registry,
+            params: Arc::new(params),
+            doc: Arc::new(doc),
+            registry: Arc::new(registry),
             build_ctx: BuildContext::default(),
             engine: None,
             sink: None,
             sample_rate: 48_000.0,
+            frames: Arc::new(AtomicUsize::new(0)),
+            rx,
+            tx: Some(tx),
+            built_values,
         }
     }
 }
@@ -122,10 +240,36 @@ impl Plugin for VstBomb {
     const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
 
     type SysExMessage = ();
-    type BackgroundTask = ();
+    type BackgroundTask = PluginTask;
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
+    }
+
+    fn task_executor(&mut self) -> TaskExecutor<Self> {
+        // Runs off the audio thread: snapshot values, rebuild, swap. The audio
+        // thread only ever polls the lock-free mailbox.
+        let params = self.params.clone();
+        let doc = self.doc.clone();
+        let registry = self.registry.clone();
+        let build_ctx = self.build_ctx.clone();
+        let frames = self.frames.clone();
+        let tx = self.tx.take().expect("task_executor is requested once");
+        Box::new(move |task| match task {
+            PluginTask::RebuildEngine => {
+                let block = frames.load(Ordering::Acquire);
+                if block == 0 {
+                    return; // not initialized yet
+                }
+                tx.collect();
+                let values = params.values_by_node();
+                if let Ok((engine, _)) =
+                    engine_from_doc_with_values(&doc, &registry, &build_ctx, block, &values)
+                {
+                    tx.install(engine);
+                }
+            }
+        })
     }
 
     fn initialize(
@@ -136,7 +280,18 @@ impl Plugin for VstBomb {
     ) -> bool {
         self.sample_rate = buffer_config.sample_rate;
         let frames = buffer_config.max_buffer_size as usize;
-        match engine_from_doc(&self.doc, &self.registry, &self.build_ctx, frames) {
+        self.frames.store(frames, Ordering::Release);
+        let values = self.params.values_by_node();
+        for (slot, b) in self.built_values.iter_mut().zip(&self.params.bound) {
+            *slot = b.param.value();
+        }
+        match engine_from_doc_with_values(
+            &self.doc,
+            &self.registry,
+            &self.build_ctx,
+            frames,
+            &values,
+        ) {
             Ok((engine, sink)) => {
                 self.engine = Some(engine);
                 self.sink = sink;
@@ -164,6 +319,23 @@ impl Plugin for VstBomb {
         let Some(engine) = &mut self.engine else {
             return ProcessStatus::Error("engine not initialized");
         };
+        // A background rebuild may have delivered a fresh engine.
+        self.rx.poll_swap(engine);
+
+        // Detect automation: compare current values against what the engine was
+        // built with — in place, allocation-free — and kick a background rebuild.
+        let mut changed = false;
+        for (slot, b) in self.built_values.iter_mut().zip(&self.params.bound) {
+            let value = b.param.value();
+            if (*slot - value).abs() > f32::EPSILON {
+                *slot = value;
+                changed = true;
+            }
+        }
+        if changed {
+            context.execute_background(PluginTask::RebuildEngine);
+        }
+
         // Drain the host's note events into the shared mailboxes; midi-in and
         // voice-in processors read them at the coming engine pass. Timing is
         // block-level for now (sample-accurate splitting is later polish).
@@ -279,6 +451,81 @@ mod tests {
         route_note(&ctx, 60, 7.5, true);
         let (_, _, vel) = ctx.poly.read(0);
         assert_eq!(vel, 127);
+    }
+
+    #[test]
+    fn params_mirror_the_patch_and_have_stable_unique_ids() {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+
+        // osc (waveform, freq_hz) + svf (cutoff_hz, q) + gain (gain) = 5 knobs.
+        assert_eq!(params.len(), 5);
+        let map = params.param_map();
+        let ids: Vec<&str> = map.iter().map(|(id, _, _)| id.as_str()).collect();
+        let mut unique = ids.clone();
+        unique.sort_unstable();
+        unique.dedup();
+        assert_eq!(unique.len(), ids.len(), "ids are unique: {ids:?}");
+        assert!(ids.iter().all(|id| id.starts_with('n')), "stable id scheme");
+    }
+
+    #[test]
+    fn value_snapshot_groups_by_node_in_registry_order() {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+        let values = params.values_by_node();
+
+        assert_eq!(values.len(), 3, "three nodes carry parameters");
+        // Each group's defaults match the registry's declared defaults.
+        for entry in &doc.nodes {
+            let expected: Vec<f32> = registry
+                .get(&entry.node.kind)
+                .unwrap()
+                .params()
+                .iter()
+                .map(|p| p.default)
+                .collect();
+            assert_eq!(values[&entry.id], expected, "{}", entry.node.kind);
+        }
+    }
+
+    #[test]
+    fn engine_rebuild_with_values_changes_the_sound() {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let ctx = BuildContext::default();
+        let gain_node = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "gain")
+            .map(|e| e.id)
+            .unwrap();
+
+        let run = |values: &HashMap<NodeId, Vec<f32>>| {
+            let (mut engine, sink) =
+                engine_from_doc_with_values(&doc, &registry, &ctx, 256, values).unwrap();
+            let sink = sink.unwrap();
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 256,
+            });
+            engine
+                .node_output(sink)
+                .unwrap()
+                .channel(0)
+                .unwrap()
+                .iter()
+                .fold(0.0_f32, |m, s| m.max(s.abs()))
+        };
+
+        let loud = run(&HashMap::from([(gain_node, vec![1.0])]));
+        let quiet = run(&HashMap::from([(gain_node, vec![0.25])]));
+        assert!(
+            (quiet - loud * 0.25).abs() < 1e-3,
+            "automated gain reaches the processor: {loud} vs {quiet}"
+        );
     }
 
     #[test]

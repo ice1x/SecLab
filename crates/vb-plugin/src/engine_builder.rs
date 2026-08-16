@@ -34,10 +34,8 @@ impl std::fmt::Display for BuildError {
 
 impl std::error::Error for BuildError {}
 
-/// Compiles `doc` into an engine plus the sink node (a terminal audio output).
-///
-/// Format v1 carries no parameter values, so processors are built with their
-/// defaults; parameter routing arrives with host automation (000065).
+/// Compiles `doc` into an engine plus the sink node (a terminal audio output),
+/// with every processor built from its defaults.
 ///
 /// # Errors
 ///
@@ -49,6 +47,23 @@ pub fn engine_from_doc(
     ctx: &BuildContext,
     frames: usize,
 ) -> Result<(RtEngine, Option<NodeId>), BuildError> {
+    engine_from_doc_with_values(doc, registry, ctx, frames, &HashMap::new())
+}
+
+/// Like [`engine_from_doc`], but nodes listed in `values` get their processors built
+/// from those parameter values (in registry `params()` order) — the host-automation
+/// path: the plugin snapshots its automatable parameters and rebuilds through here.
+///
+/// # Errors
+///
+/// Same as [`engine_from_doc`].
+pub fn engine_from_doc_with_values(
+    doc: &ProjectDoc,
+    registry: &Registry,
+    ctx: &BuildContext,
+    frames: usize,
+    values: &HashMap<NodeId, Vec<f32>>,
+) -> Result<(RtEngine, Option<NodeId>), BuildError> {
     let graph = doc
         .to_graph()
         .map_err(|e| BuildError::Project(e.to_string()))?;
@@ -59,7 +74,8 @@ pub fn engine_from_doc(
         let descriptor = registry
             .get(kind)
             .ok_or_else(|| BuildError::UnknownKind(kind.clone()))?;
-        procs.insert(id, descriptor.processor_with(ctx, &[]));
+        let node_values = values.get(&id).map(Vec::as_slice).unwrap_or(&[]);
+        procs.insert(id, descriptor.processor_with(ctx, node_values));
     }
 
     // Sink: the last terminal audio node in document order (deterministic).
