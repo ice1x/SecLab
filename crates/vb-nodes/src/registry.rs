@@ -17,6 +17,7 @@ use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::poly::{PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
@@ -510,6 +511,27 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Noise::new(noise_kind_from(arg(v, 0, 0.0)), arg(v, 1, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "voice-in",
+            "input",
+            || {
+                GraphNode::new(
+                    "voice-in",
+                    vec![],
+                    vec![
+                        Port::output("gate", SignalType::Control),
+                        Port::output("pitch_hz", SignalType::Control),
+                        Port::output("velocity", SignalType::Control),
+                    ],
+                )
+            },
+            || Box::new(PolyVoiceIn::new(crate::poly::PolyNoteSource::new(), 0)),
+            || vec![Parameter::new("voice", 0.0, (MAX_VOICES - 1) as f32, 0.0)],
+            |ctx, v| {
+                let voice = (arg(v, 0, 0.0).round().max(0.0) as usize).min(MAX_VOICES - 1);
+                Box::new(PolyVoiceIn::new(ctx.poly.clone(), voice))
+            },
         ),
         NodeDescriptor::new(
             "midi-in",
