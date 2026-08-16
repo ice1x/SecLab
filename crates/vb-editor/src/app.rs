@@ -36,6 +36,8 @@ pub struct EditorApp {
     /// Macro-entry stack: each entry is (the parent patch, the macro node entered).
     /// `patch` is always the ACTIVE patch; parents wait here until we go back up.
     stack: Vec<(PatchView, vb_core::NodeId)>,
+    /// Snap node positions to the grid when a drag ends.
+    snap_to_grid: bool,
 }
 
 impl Default for EditorApp {
@@ -50,6 +52,7 @@ impl Default for EditorApp {
             spawn_at: Pos2::new(80.0, 220.0),
             moving: None,
             stack: Vec::new(),
+            snap_to_grid: true,
         }
     }
 }
@@ -197,6 +200,10 @@ impl EditorApp {
             if let Some(pointer) = response.interact_pointer_pos() {
                 let canvas = self.camera.screen_to_canvas(pointer - origin);
                 self.patch.end_wire(canvas, &self.style);
+            }
+            if let (Some(id), true) = (self.moving, self.snap_to_grid) {
+                // Snap to the base grid spacing so nodes line up across zoom levels.
+                self.patch.snap_node(id, 32.0);
             }
             self.moving = None;
             self.patch.end_gesture();
@@ -624,6 +631,7 @@ impl eframe::App for EditorApp {
                 if ui.button("reset view").clicked() {
                     self.camera = Camera::default();
                 }
+                ui.checkbox(&mut self.snap_to_grid, "snap");
                 ui.separator();
                 if ui
                     .add_enabled(self.patch.can_undo(), egui::Button::new("undo"))
