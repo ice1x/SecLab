@@ -7,7 +7,7 @@
 
 use std::collections::HashMap;
 
-use egui::Pos2;
+use egui::{Pos2, Vec2};
 use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
@@ -245,6 +245,58 @@ impl PatchView {
             return Some(false);
         };
         Some(self.graph.can_connect(from.0, from.1, to.0, to.1).is_ok())
+    }
+
+    /// Moves a node by a canvas-space delta. Returns `false` for unknown nodes.
+    pub fn move_node(&mut self, id: NodeId, delta: Vec2) -> bool {
+        match self.positions.get_mut(&id) {
+            Some(pos) => {
+                *pos += delta;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Removes a node and everything attached to it: incident edges (via
+    /// [`Graph::remove_node`]), position, draw-order entry, params, and the selection
+    /// if it pointed here. Returns `false` for unknown nodes.
+    pub fn remove_node(&mut self, id: NodeId) -> bool {
+        if self.graph.remove_node(id).is_none() {
+            return false;
+        }
+        self.positions.remove(&id);
+        self.order.retain(|n| *n != id);
+        self.params.remove(&id);
+        if self.selected == Some(id) {
+            self.selected = None;
+        }
+        true
+    }
+
+    /// Removes the selected node, returning its id.
+    pub fn remove_selected(&mut self) -> Option<NodeId> {
+        let id = self.selected?;
+        self.remove_node(id).then_some(id)
+    }
+
+    /// Duplicates a node: same kind and ports, current (not default) parameter
+    /// values, offset position, no edges. The copy becomes the selection.
+    pub fn duplicate(&mut self, id: NodeId) -> Option<NodeId> {
+        let node = self.graph.node(id)?.clone();
+        let pos = *self.positions.get(&id)? + Vec2::new(24.0, 24.0);
+        let slots = self.params.get(&id).cloned().unwrap_or_default();
+        let copy = self.graph.add_node(node);
+        self.positions.insert(copy, pos);
+        self.order.push(copy);
+        self.params.insert(copy, slots);
+        self.selected = Some(copy);
+        Some(copy)
+    }
+
+    /// Duplicates the selected node, selecting and returning the copy.
+    pub fn duplicate_selected(&mut self) -> Option<NodeId> {
+        self.duplicate(self.selected?)
     }
 
     /// Handles a click at `p`: selects the topmost node there (raising it to the top
@@ -563,6 +615,68 @@ mod tests {
         let mut patch = PatchView::new();
         let id = patch.add_node(gain(), Pos2::ZERO);
         assert!(patch.params(id).is_empty());
+    }
+
+    #[test]
+    fn move_node_shifts_its_position() {
+        let (mut patch, a, _) = two_gains();
+        assert!(patch.move_node(a, Vec2::new(15.0, -5.0)));
+        assert_eq!(patch.position(a), Some(Pos2::new(15.0, -5.0)));
+        assert!(!patch.move_node(NodeId(999), Vec2::ZERO));
+    }
+
+    #[test]
+    fn remove_selected_cleans_node_edges_params_and_selection() {
+        let mut patch = PatchView::new();
+        let a = patch.add_node(gain(), Pos2::new(0.0, 0.0));
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+        patch.click(Pos2::new(310.0, 5.0), &style()); // select b
+        assert_eq!(patch.selected(), Some(b));
+
+        assert_eq!(patch.remove_selected(), Some(b));
+        assert_eq!(patch.selected(), None);
+        assert!(patch.graph().node(b).is_none());
+        assert!(patch.graph().edges().is_empty(), "incident edge removed");
+        assert!(patch.params(b).is_empty());
+        assert!(patch.position(b).is_none());
+        assert!(patch.draw_order().all(|(id, _, _)| id != b));
+
+        // Nothing selected now: another remove is a no-op.
+        assert_eq!(patch.remove_selected(), None);
+    }
+
+    #[test]
+    fn duplicate_clones_params_by_value_but_not_edges() {
+        let mut patch = PatchView::new();
+        let a = patch.add_node(gain(), Pos2::new(0.0, 0.0));
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+        patch.set_param(b, 0, 1.7);
+        patch.click(Pos2::new(310.0, 5.0), &style()); // select b
+
+        let copy = patch.duplicate_selected().expect("copy created");
+        assert_ne!(copy, b);
+        assert_eq!(patch.selected(), Some(copy), "the copy takes the selection");
+        assert_eq!(patch.graph().node(copy).unwrap().kind, "gain");
+        assert!(
+            (patch.params(copy)[0].value - 1.7).abs() < f32::EPSILON,
+            "current value survives, not the default"
+        );
+        assert_eq!(
+            patch.position(copy),
+            Some(Pos2::new(324.0, 24.0)),
+            "offset from the original"
+        );
+        assert_eq!(patch.graph().edges().len(), 1, "edges are not cloned");
     }
 
     #[test]
