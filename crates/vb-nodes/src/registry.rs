@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::math::{Add, Clamp, Gain, Mix, Mul};
+use crate::midi::{BuildContext, MidiIn};
 use crate::oscillator::{Oscillator, Waveform};
 
 /// Metadata and factories for one node kind.
@@ -21,7 +22,7 @@ pub struct NodeDescriptor {
     make_node: fn() -> GraphNode,
     make_processor: fn() -> Box<dyn Processor>,
     make_params: fn() -> Vec<Parameter>,
-    make_processor_with: fn(&[f32]) -> Box<dyn Processor>,
+    make_processor_with: fn(&BuildContext, &[f32]) -> Box<dyn Processor>,
 }
 
 impl NodeDescriptor {
@@ -33,7 +34,7 @@ impl NodeDescriptor {
         make_node: fn() -> GraphNode,
         make_processor: fn() -> Box<dyn Processor>,
         make_params: fn() -> Vec<Parameter>,
-        make_processor_with: fn(&[f32]) -> Box<dyn Processor>,
+        make_processor_with: fn(&BuildContext, &[f32]) -> Box<dyn Processor>,
     ) -> Self {
         Self {
             kind,
@@ -81,9 +82,10 @@ impl NodeDescriptor {
     /// Builds a boxed [`Processor`] configured from `values`, one per parameter in
     /// [`NodeDescriptor::params`] order. Missing values fall back to the parameter's
     /// default, so a stale or truncated value list still builds a working processor.
+    /// Context-dependent kinds (`midi-in`) attach to the live inputs in `ctx`.
     #[must_use]
-    pub fn processor_with(&self, values: &[f32]) -> Box<dyn Processor> {
-        (self.make_processor_with)(values)
+    pub fn processor_with(&self, ctx: &BuildContext, values: &[f32]) -> Box<dyn Processor> {
+        (self.make_processor_with)(ctx, values)
     }
 }
 
@@ -193,7 +195,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("freq_hz", 20.0, 20_000.0, 440.0),
                 ]
             },
-            |v| {
+            |_, v| {
                 Box::new(Oscillator::new(
                     waveform_from(arg(v, 0, 0.0)),
                     arg(v, 1, 440.0),
@@ -212,7 +214,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("q", 0.1, 10.0, 0.707),
                 ]
             },
-            |v| {
+            |_, v| {
                 Box::new(Biquad::new(
                     filter_kind_from(arg(v, 0, 0.0)),
                     arg(v, 1, 1_000.0),
@@ -226,7 +228,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             || GraphNode::new("gain", vec![audio_in("in")], vec![audio_out("out")]),
             || Box::new(Gain::new(1.0)),
             || vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
-            |v| Box::new(Gain::new(arg(v, 0, 1.0))),
+            |_, v| Box::new(Gain::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "add",
@@ -240,7 +242,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Add),
             Vec::new,
-            |_| Box::new(Add),
+            |_, _| Box::new(Add),
         ),
         NodeDescriptor::new(
             "mul",
@@ -254,7 +256,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Mul),
             Vec::new,
-            |_| Box::new(Mul),
+            |_, _| Box::new(Mul),
         ),
         NodeDescriptor::new(
             "mix",
@@ -268,7 +270,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Mix::new(0.5)),
             || vec![Parameter::new("t", 0.0, 1.0, 0.5)],
-            |v| Box::new(Mix::new(arg(v, 0, 0.5))),
+            |_, v| Box::new(Mix::new(arg(v, 0, 0.5))),
         ),
         NodeDescriptor::new(
             "clamp",
@@ -281,7 +283,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("max", -1.0, 1.0, 1.0),
                 ]
             },
-            |v| Box::new(Clamp::new(arg(v, 0, -1.0), arg(v, 1, 1.0))),
+            |_, v| Box::new(Clamp::new(arg(v, 0, -1.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "adsr",
@@ -302,7 +304,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("release_s", 0.0, 5.0, 0.2),
                 ]
             },
-            |v| {
+            |_, v| {
                 Box::new(Adsr::new(
                     arg(v, 0, 0.01),
                     arg(v, 1, 0.1),
@@ -311,12 +313,32 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ))
             },
         ),
+        NodeDescriptor::new(
+            "midi-in",
+            "input",
+            || {
+                GraphNode::new(
+                    "midi-in",
+                    vec![],
+                    vec![
+                        Port::output("gate", SignalType::Control),
+                        Port::output("pitch_hz", SignalType::Control),
+                        Port::output("velocity", SignalType::Control),
+                    ],
+                )
+            },
+            // Without a context there is nothing to listen to: a fresh silent source.
+            || Box::new(MidiIn::new(crate::midi::NoteSource::new())),
+            Vec::new,
+            |ctx, _| Box::new(MidiIn::new(ctx.notes.clone())),
+        ),
     ]
 }
 
 #[cfg(test)]
 mod tests {
     use super::Registry;
+    use crate::midi::BuildContext;
     use std::collections::HashMap;
     use vb_core::{Engine, Graph, PortId, ProcessContext, Processor};
 
@@ -451,7 +473,12 @@ mod tests {
         let input = vec![1.0_f32; 64];
 
         // gain 0.5 halves the signal; default gain passes it through.
-        let halved = run_effect(r.get("gain").unwrap().processor_with(&[0.5]), &input);
+        let halved = run_effect(
+            r.get("gain")
+                .unwrap()
+                .processor_with(&BuildContext::default(), &[0.5]),
+            &input,
+        );
         assert!(halved.iter().all(|&s| (s - 0.5).abs() < 1e-6));
         let default = run_effect(r.get("gain").unwrap().processor(), &input);
         assert!(default.iter().all(|&s| (s - 1.0).abs() < 1e-6));
@@ -459,11 +486,15 @@ mod tests {
         // A 100 Hz sine crosses zero going upward once per 480 samples at 48 kHz;
         // a 1000 Hz one ten times as often — the freq value audibly matters.
         let slow = run_source(
-            r.get("oscillator").unwrap().processor_with(&[0.0, 100.0]),
+            r.get("oscillator")
+                .unwrap()
+                .processor_with(&BuildContext::default(), &[0.0, 100.0]),
             4_800,
         );
         let fast = run_source(
-            r.get("oscillator").unwrap().processor_with(&[0.0, 1_000.0]),
+            r.get("oscillator")
+                .unwrap()
+                .processor_with(&BuildContext::default(), &[0.0, 1_000.0]),
             4_800,
         );
         let crossings = |xs: &[f32]| xs.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
@@ -475,10 +506,21 @@ mod tests {
         let r = Registry::with_builtins();
         let input = vec![1.0_f32; 32];
         // No values at all: behaves like the default constructor.
-        let out = run_effect(r.get("gain").unwrap().processor_with(&[]), &input);
+        let out = run_effect(
+            r.get("gain")
+                .unwrap()
+                .processor_with(&BuildContext::default(), &[]),
+            &input,
+        );
         assert!(out.iter().all(|&s| (s - 1.0).abs() < 1e-6));
         // Enum mappers accept any float without panicking.
-        let _ = r.get("biquad").unwrap().processor_with(&[99.0]);
-        let _ = r.get("oscillator").unwrap().processor_with(&[-7.0, 55.0]);
+        let _ = r
+            .get("biquad")
+            .unwrap()
+            .processor_with(&BuildContext::default(), &[99.0]);
+        let _ = r
+            .get("oscillator")
+            .unwrap()
+            .processor_with(&BuildContext::default(), &[-7.0, 55.0]);
     }
 }

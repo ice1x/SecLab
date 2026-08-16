@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use vb_core::{NodeId, Processor, SignalType};
 use vb_editor::PatchView;
-use vb_nodes::Registry;
+use vb_nodes::{BuildContext, Registry};
 use vb_runtime::RtEngine;
 
 /// Compiles the patch into an engine plus the node to listen to.
@@ -26,6 +26,7 @@ use vb_runtime::RtEngine;
 pub fn build_live_engine(
     patch: &PatchView,
     registry: &Registry,
+    ctx: &BuildContext,
     frames: usize,
 ) -> Option<(RtEngine, Option<NodeId>)> {
     let graph = patch.graph();
@@ -35,7 +36,7 @@ pub fn build_live_engine(
         let node = graph.node(id)?;
         let descriptor = registry.get(&node.kind)?;
         let values: Vec<f32> = patch.params(id).iter().map(|s| s.value).collect();
-        procs.insert(id, descriptor.processor_with(&values));
+        procs.insert(id, descriptor.processor_with(ctx, &values));
     }
 
     // Topmost terminal audio node wins: audio output, nothing downstream.
@@ -96,7 +97,8 @@ mod tests {
     fn the_canvas_patch_compiles_and_the_terminal_gain_is_the_sink() {
         let registry = Registry::with_builtins();
         let (patch, amp) = patch_with_gain(1.0);
-        let (mut engine, sink) = build_live_engine(&patch, &registry, 256).expect("compiles");
+        let (mut engine, sink) =
+            build_live_engine(&patch, &registry, &BuildContext::default(), 256).expect("compiles");
         assert_eq!(sink, Some(amp), "terminal audio node is the sink");
         assert!(peak(&mut engine, amp) > 0.1, "the patch makes sound");
     }
@@ -107,8 +109,10 @@ mod tests {
         let (loud_patch, amp) = patch_with_gain(1.0);
         let (quiet_patch, _) = patch_with_gain(0.25);
 
-        let (mut loud, _) = build_live_engine(&loud_patch, &registry, 256).unwrap();
-        let (mut quiet, _) = build_live_engine(&quiet_patch, &registry, 256).unwrap();
+        let (mut loud, _) =
+            build_live_engine(&loud_patch, &registry, &BuildContext::default(), 256).unwrap();
+        let (mut quiet, _) =
+            build_live_engine(&quiet_patch, &registry, &BuildContext::default(), 256).unwrap();
 
         let loud_peak = peak(&mut loud, amp);
         let quiet_peak = peak(&mut quiet, amp);
@@ -130,7 +134,7 @@ mod tests {
             ),
             Pos2::ZERO,
         );
-        assert!(build_live_engine(&patch, &registry, 256).is_none());
+        assert!(build_live_engine(&patch, &registry, &BuildContext::default(), 256).is_none());
     }
 
     #[test]
@@ -143,7 +147,8 @@ mod tests {
             registry.get("adsr").unwrap().params(),
             Pos2::ZERO,
         );
-        let (_engine, sink) = build_live_engine(&patch, &registry, 256).expect("still compiles");
+        let (_engine, sink) = build_live_engine(&patch, &registry, &BuildContext::default(), 256)
+            .expect("still compiles");
         assert_eq!(sink, None);
     }
 }

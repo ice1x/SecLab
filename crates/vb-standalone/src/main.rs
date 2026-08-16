@@ -18,7 +18,9 @@ use std::collections::HashMap;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use vb_core::{Graph, GraphNode, NodeId, Port, PortId, Processor, SignalType};
 use vb_editor::EditorApp;
-use vb_nodes::{Biquad, FilterKind, Gain, Oscillator, Registry, Waveform};
+use vb_nodes::{
+    Biquad, BuildContext, FilterKind, Gain, NoteSource, Oscillator, Registry, Waveform,
+};
 use vb_runtime::{engine_swap, EngineSender, RtEngine};
 
 use audio::{BlockFeeder, LoadMonitor, SinkHandle};
@@ -48,6 +50,7 @@ fn start_stack(
     block_frames: usize,
     editor: &EditorApp,
     registry: &Registry,
+    build_ctx: &BuildContext,
 ) -> Result<AudioStack, String> {
     let default = device.default_output_config().map_err(|e| e.to_string())?;
     if default.sample_format() != cpal::SampleFormat::F32 {
@@ -58,7 +61,7 @@ fn start_stack(
     }
     let channels = default.channels() as usize;
 
-    let (engine, sink_id) = build_live_engine(editor.patch(), registry, block_frames)
+    let (engine, sink_id) = build_live_engine(editor.patch(), registry, build_ctx, block_frames)
         .ok_or("the patch failed to compile")?;
     let (tx, rx) = engine_swap();
     let sink = SinkHandle::new(sink_id);
@@ -122,6 +125,9 @@ fn supported_rates(device: &cpal::Device) -> Vec<u32> {
 struct LiveApp {
     editor: EditorApp,
     registry: Registry,
+    /// Live inputs handed to every engine rebuild (`midi-in` nodes listen to
+    /// `build_ctx.notes`; the midir wiring lands with task 000061).
+    build_ctx: BuildContext,
     /// Output devices as enumerated at startup, parallel to `device_names`.
     devices: Vec<cpal::Device>,
     device_names: Vec<String>,
@@ -210,6 +216,7 @@ impl LiveApp {
             self.sel_block,
             &self.editor,
             &self.registry,
+            &self.build_ctx,
         ) {
             Ok(stack) => {
                 // Dropping the old stack stops its stream; the new one is already live.
@@ -264,9 +271,12 @@ impl eframe::App for LiveApp {
         let revision = self.editor.patch().revision();
         if revision != self.compiled_revision {
             self.compiled_revision = revision;
-            if let Some((engine, sink)) =
-                build_live_engine(self.editor.patch(), &self.registry, self.sel_block)
-            {
+            if let Some((engine, sink)) = build_live_engine(
+                self.editor.patch(),
+                &self.registry,
+                &self.build_ctx,
+                self.sel_block,
+            ) {
                 self.stack.sink.set(sink);
                 self.stack.tx.install(engine);
             }
@@ -299,7 +309,17 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
 
     let editor = EditorApp::new();
     let registry = Registry::with_builtins();
-    let stack = start_stack(device, sel_rate, BLOCK_FRAMES, &editor, &registry)?;
+    let build_ctx = BuildContext {
+        notes: NoteSource::new(),
+    };
+    let stack = start_stack(
+        device,
+        sel_rate,
+        BLOCK_FRAMES,
+        &editor,
+        &registry,
+        &build_ctx,
+    )?;
     let compiled_revision = editor.patch().revision();
 
     println!(
@@ -310,6 +330,7 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     let app = LiveApp {
         editor,
         registry,
+        build_ctx,
         devices,
         device_names,
         sel_device,
