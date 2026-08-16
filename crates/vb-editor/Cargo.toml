@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 vb-core.workspace = true
+vb-nodes.workspace = true
 egui.workspace = true
 eframe.workspace = true
 
