@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use vb_core::{GraphNode, Port, Processor, SignalType};
+use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
@@ -20,6 +20,7 @@ pub struct NodeDescriptor {
     category: &'static str,
     make_node: fn() -> GraphNode,
     make_processor: fn() -> Box<dyn Processor>,
+    make_params: fn() -> Vec<Parameter>,
 }
 
 impl NodeDescriptor {
@@ -30,12 +31,14 @@ impl NodeDescriptor {
         category: &'static str,
         make_node: fn() -> GraphNode,
         make_processor: fn() -> Box<dyn Processor>,
+        make_params: fn() -> Vec<Parameter>,
     ) -> Self {
         Self {
             kind,
             category,
             make_node,
             make_processor,
+            make_params,
         }
     }
 
@@ -61,6 +64,15 @@ impl NodeDescriptor {
     #[must_use]
     pub fn processor(&self) -> Box<dyn Processor> {
         (self.make_processor)()
+    }
+
+    /// The editable parameters of this kind (name, range, default), in UI order.
+    ///
+    /// Enum-like choices (waveform, filter kind) are modelled as stepped float
+    /// parameters until dedicated control widgets land (000049).
+    #[must_use]
+    pub fn params(&self) -> Vec<Parameter> {
+        (self.make_params)()
     }
 }
 
@@ -139,18 +151,32 @@ fn builtins() -> Vec<NodeDescriptor> {
             "generator",
             || GraphNode::new("oscillator", vec![], vec![audio_out("out")]),
             || Box::new(Oscillator::new(Waveform::Sine, 440.0)),
+            || {
+                vec![
+                    Parameter::new("waveform", 0.0, 3.0, 0.0),
+                    Parameter::new("freq_hz", 20.0, 20_000.0, 440.0),
+                ]
+            },
         ),
         NodeDescriptor::new(
             "biquad",
             "filter",
             || GraphNode::new("biquad", vec![audio_in("in")], vec![audio_out("out")]),
             || Box::new(Biquad::new(FilterKind::LowPass, 1_000.0, 0.707)),
+            || {
+                vec![
+                    Parameter::new("kind", 0.0, 3.0, 0.0),
+                    Parameter::new("cutoff_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("q", 0.1, 10.0, 0.707),
+                ]
+            },
         ),
         NodeDescriptor::new(
             "gain",
             "math",
             || GraphNode::new("gain", vec![audio_in("in")], vec![audio_out("out")]),
             || Box::new(Gain::new(1.0)),
+            || vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
         ),
         NodeDescriptor::new(
             "add",
@@ -163,6 +189,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                 )
             },
             || Box::new(Add),
+            Vec::new,
         ),
         NodeDescriptor::new(
             "mul",
@@ -175,6 +202,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                 )
             },
             || Box::new(Mul),
+            Vec::new,
         ),
         NodeDescriptor::new(
             "mix",
@@ -187,12 +215,19 @@ fn builtins() -> Vec<NodeDescriptor> {
                 )
             },
             || Box::new(Mix::new(0.5)),
+            || vec![Parameter::new("t", 0.0, 1.0, 0.5)],
         ),
         NodeDescriptor::new(
             "clamp",
             "math",
             || GraphNode::new("clamp", vec![audio_in("in")], vec![audio_out("out")]),
             || Box::new(Clamp::new(-1.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("min", -1.0, 1.0, -1.0),
+                    Parameter::new("max", -1.0, 1.0, 1.0),
+                ]
+            },
         ),
         NodeDescriptor::new(
             "adsr",
@@ -205,6 +240,14 @@ fn builtins() -> Vec<NodeDescriptor> {
                 )
             },
             || Box::new(Adsr::new(0.01, 0.1, 0.7, 0.2)),
+            || {
+                vec![
+                    Parameter::new("attack_s", 0.0, 5.0, 0.01),
+                    Parameter::new("decay_s", 0.0, 5.0, 0.1),
+                    Parameter::new("sustain", 0.0, 1.0, 0.7),
+                    Parameter::new("release_s", 0.0, 5.0, 0.2),
+                ]
+            },
         ),
     ]
 }
@@ -282,5 +325,39 @@ mod tests {
             out.iter().any(|&s| s.abs() > 0.01),
             "registry-built patch should produce sound"
         );
+    }
+
+    #[test]
+    fn every_builtin_exposes_well_formed_params() {
+        let r = Registry::with_builtins();
+        for kind in r.kinds() {
+            let params = r.get(kind).unwrap().params();
+            for p in &params {
+                assert!(p.min <= p.max, "{kind}.{}: inverted range", p.name);
+                assert!(
+                    (p.min..=p.max).contains(&p.default),
+                    "{kind}.{}: default out of range",
+                    p.name
+                );
+                assert!(!p.name.is_empty(), "{kind}: unnamed parameter");
+            }
+        }
+    }
+
+    #[test]
+    fn param_metadata_matches_the_processors_defaults() {
+        let r = Registry::with_builtins();
+        // Spot-check the kinds whose constructors carry the same defaults.
+        let osc: Vec<_> = r.get("oscillator").unwrap().params();
+        assert_eq!(osc[1].name, "freq_hz");
+        assert!((osc[1].default - 440.0).abs() < f32::EPSILON);
+
+        let biquad = r.get("biquad").unwrap().params();
+        assert_eq!(biquad.len(), 3);
+        assert!((biquad[1].default - 1_000.0).abs() < f32::EPSILON);
+
+        // Pure combinators have nothing to edit.
+        assert!(r.get("add").unwrap().params().is_empty());
+        assert!(r.get("mul").unwrap().params().is_empty());
     }
 }

@@ -33,30 +33,34 @@ pub struct EditorApp {
 
 impl Default for EditorApp {
     fn default() -> Self {
+        let registry = Registry::with_builtins();
         Self {
             camera: Camera::default(),
-            patch: demo_patch(),
+            patch: demo_patch(&registry),
             style: NodeStyle::default(),
-            registry: Registry::with_builtins(),
+            registry,
             palette_query: String::new(),
             spawn_at: Pos2::new(80.0, 220.0),
         }
     }
 }
 
-/// Seed content until the palette (000043) lets the user add nodes: the same
-/// oscillator → filter → gain shape the standalone plays.
-fn demo_patch() -> PatchView {
+/// Starter content so the canvas isn't empty: the same oscillator → filter → gain
+/// shape the standalone plays. Parameters come from the registry so the inspector has
+/// something real to edit; the filter keeps an extra control input for wiring demos.
+fn demo_patch(registry: &Registry) -> PatchView {
+    let params_of = |kind: &str| registry.get(kind).map(|d| d.params()).unwrap_or_default();
     let mut patch = PatchView::new();
-    let osc = patch.add_node(
+    let osc = patch.add_node_with_params(
         GraphNode::new(
             "oscillator",
             vec![],
             vec![Port::output("out", SignalType::Audio)],
         ),
+        params_of("oscillator"),
         Pos2::new(0.0, 0.0),
     );
-    let flt = patch.add_node(
+    let flt = patch.add_node_with_params(
         GraphNode::new(
             "biquad",
             vec![
@@ -65,14 +69,16 @@ fn demo_patch() -> PatchView {
             ],
             vec![Port::output("out", SignalType::Audio)],
         ),
+        params_of("biquad"),
         Pos2::new(180.0, 10.0),
     );
-    let amp = patch.add_node(
+    let amp = patch.add_node_with_params(
         GraphNode::new(
             "gain",
             vec![Port::input("in", SignalType::Audio)],
             vec![Port::output("out", SignalType::Audio)],
         ),
+        params_of("gain"),
         Pos2::new(360.0, 20.0),
     );
     patch
@@ -388,13 +394,51 @@ impl EditorApp {
     /// Spawns a registry node of `kind` at the centre of the visible canvas and
     /// selects it. Returns the new node's id, or `None` for an unknown kind.
     pub fn spawn_node(&mut self, kind: &str) -> Option<vb_core::NodeId> {
-        let node = self.registry.graph_node(kind)?;
+        let descriptor = self.registry.get(kind)?;
+        let node = descriptor.graph_node();
+        let params = descriptor.params();
         // Centre the node's frame on the spawn point.
         let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
-        let id = self.patch.add_node(node, self.spawn_at - half);
+        let id = self
+            .patch
+            .add_node_with_params(node, params, self.spawn_at - half);
         self.patch
             .click(self.spawn_at - half + Vec2::new(4.0, 4.0), &self.style);
         Some(id)
+    }
+
+    /// Renders the inspector panel: name and editable parameters of the selection.
+    fn inspector_ui(&mut self, ui: &mut Ui) {
+        ui.heading("inspector");
+        let Some(id) = self.patch.selected() else {
+            ui.weak("nothing selected");
+            return;
+        };
+        let kind = self
+            .patch
+            .graph()
+            .node(id)
+            .map_or_else(|| "?".to_owned(), |n| n.kind.clone());
+        ui.label(kind);
+        ui.separator();
+
+        if self.patch.params(id).is_empty() {
+            ui.weak("no parameters");
+            return;
+        }
+        // Copy the slots out so the sliders can borrow `ui` while edits go back
+        // through set_param (which re-clamps).
+        let slots: Vec<_> = self.patch.params(id).to_vec();
+        for (i, slot) in slots.iter().enumerate() {
+            let mut value = slot.value;
+            let range = slot.param.min..=slot.param.max;
+            if ui
+                .add(egui::Slider::new(&mut value, range).text(&slot.param.name))
+                .changed()
+            {
+                self.patch.set_param(id, i, value);
+            }
+        }
     }
 
     /// Renders the palette panel contents: search box + one button per matching kind,
@@ -456,6 +500,9 @@ impl eframe::App for EditorApp {
         egui::Panel::left("palette")
             .resizable(true)
             .show(ui, |ui| self.palette_ui(ui));
+        egui::Panel::right("inspector")
+            .resizable(true)
+            .show(ui, |ui| self.inspector_ui(ui));
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| self.canvas_ui(ui));
@@ -531,6 +578,39 @@ mod tests {
 
         assert_eq!(app.spawn_node("no-such-kind"), None);
         assert_eq!(app.patch().graph().node_count(), before + 1);
+    }
+
+    #[test]
+    fn spawned_nodes_carry_registry_params_and_edits_clamp() {
+        let mut app = EditorApp::new();
+        let id = app.spawn_node("biquad").expect("builtin");
+
+        let slots = app.patch().params(id);
+        assert_eq!(slots.len(), 3, "kind, cutoff_hz, q");
+        assert_eq!(slots[1].param.name, "cutoff_hz");
+        assert!((slots[1].value - slots[1].param.default).abs() < f32::EPSILON);
+
+        // The inspector writes through set_param, which clamps into range.
+        assert_eq!(app.patch_mut().set_param(id, 1, 99_999.0), Some(20_000.0));
+        assert!((app.patch().params(id)[1].value - 20_000.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn the_demo_patch_params_come_from_the_registry() {
+        let app = EditorApp::new();
+        let osc = app
+            .patch()
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "oscillator")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        let names: Vec<_> = app
+            .patch()
+            .params(osc)
+            .iter()
+            .map(|s| s.param.name.clone())
+            .collect();
+        assert_eq!(names, vec!["waveform", "freq_hz"]);
     }
 
     #[test]
