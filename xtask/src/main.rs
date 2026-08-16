@@ -23,6 +23,9 @@
 //! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
 //!   into `~/Library/Audio/Plug-Ins/Components`, validate with
 //!   `auval -v aumu gWrp clAd`).
+//! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
+//!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
+//!   editor standalone lives in `vb-standalone`).
 //!
 //! Everything else is forwarded to nih-plug's xtask untouched.
 
@@ -47,6 +50,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("bundle-auv2") => {
             args.next();
             bundle_wrapped(WrappedFormat::Auv2)
+        }
+        Some("bundle-standalone") => {
+            args.next();
+            bundle_wrapped(WrappedFormat::Standalone)
         }
         Some("demo-patch") => {
             args.next();
@@ -111,6 +118,7 @@ const CLAP_WRAPPER_REPO: &str = "https://github.com/free-audio/clap-wrapper.git"
 enum WrappedFormat {
     Vst3,
     Auv2,
+    Standalone,
 }
 
 impl WrappedFormat {
@@ -118,6 +126,7 @@ impl WrappedFormat {
         match self {
             Self::Vst3 => "build-vst3",
             Self::Auv2 => "build-auv2",
+            Self::Standalone => "build-standalone",
         }
     }
 
@@ -125,6 +134,7 @@ impl WrappedFormat {
         match self {
             Self::Vst3 => "vb-plugin.vst3",
             Self::Auv2 => "vb-plugin.component",
+            Self::Standalone => "vb-plugin.app",
         }
     }
 
@@ -132,6 +142,15 @@ impl WrappedFormat {
         match self {
             Self::Vst3 => "~/Library/Audio/Plug-Ins/VST3/",
             Self::Auv2 => "~/Library/Audio/Plug-Ins/Components/",
+            Self::Standalone => "/Applications/",
+        }
+    }
+
+    fn extra_cmake_flag(self) -> Option<&'static str> {
+        match self {
+            Self::Vst3 => None,
+            Self::Auv2 => Some("-DCLAP_WRAPPER_BUILD_AUV2=ON"),
+            Self::Standalone => Some("-DCLAP_WRAPPER_BUILD_STANDALONE=ON"),
         }
     }
 }
@@ -176,8 +195,8 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
             #[cfg(target_arch = "x86_64")]
             "-DCMAKE_OSX_ARCHITECTURES=x86_64",
         ]);
-    if matches!(format, WrappedFormat::Auv2) {
-        configure.arg("-DCLAP_WRAPPER_BUILD_AUV2=ON");
+    if let Some(flag) = format.extra_cmake_flag() {
+        configure.arg(flag);
     }
     run(
         &mut configure,
