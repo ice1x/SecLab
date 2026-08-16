@@ -2391,6 +2391,7 @@ version = "0.0.0"
 dependencies = [
  "eframe",
  "egui",
+ "vb-core",
 ]
 
 [[package]]
