@@ -13,6 +13,7 @@ vb-nodes.workspace = true
 vb-runtime.workspace = true
 vb-editor.workspace = true
 cpal.workspace = true
+midir.workspace = true
 egui.workspace = true
 eframe.workspace = true
 
