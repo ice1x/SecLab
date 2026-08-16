@@ -43,6 +43,42 @@ fn normalize_wire(
     }
 }
 
+/// What kind of edit the last recorded history entry belongs to.
+///
+/// Consecutive edits of the same gesture (dragging one node, sliding one parameter)
+/// coalesce into a single undo step; anything else records one step per action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Gesture {
+    /// Continuous node move; coalesces per node.
+    Move(NodeId),
+    /// Continuous parameter edit; coalesces per (node, param index).
+    Param(NodeId, usize),
+    /// A one-shot action (add, remove, duplicate, wire); never coalesces.
+    Discrete,
+}
+
+/// Everything [`PatchView::undo`] needs to restore.
+#[derive(Clone)]
+struct Snapshot {
+    graph: Graph,
+    positions: HashMap<NodeId, Pos2>,
+    order: Vec<NodeId>,
+    selected: Option<NodeId>,
+    params: HashMap<NodeId, Vec<ParamSlot>>,
+}
+
+/// Bounded undo/redo stacks plus the coalescing tag.
+#[derive(Default)]
+struct History {
+    undo: Vec<Snapshot>,
+    redo: Vec<Snapshot>,
+    /// The gesture the most recent undo entry was recorded for.
+    last: Option<Gesture>,
+}
+
+/// Cap on stored undo steps; the oldest entries fall off beyond this.
+const HISTORY_LIMIT: usize = 200;
+
 /// One editable parameter on a node: its descriptor plus the current value.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamSlot {
@@ -64,6 +100,8 @@ pub struct PatchView {
     drag: Option<WireDrag>,
     /// Editable parameter values per node, in the descriptor's UI order.
     params: HashMap<NodeId, Vec<ParamSlot>>,
+    /// Undo/redo state.
+    history: History,
 }
 
 impl PatchView {
@@ -79,6 +117,94 @@ impl PatchView {
         &self.graph
     }
 
+    /// Captures the current state for the undo stack.
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            graph: self.graph.clone(),
+            positions: self.positions.clone(),
+            order: self.order.clone(),
+            selected: self.selected,
+            params: self.params.clone(),
+        }
+    }
+
+    /// Restores a snapshot, returning the state it replaced.
+    fn restore(&mut self, snap: Snapshot) -> Snapshot {
+        let current = self.snapshot();
+        self.graph = snap.graph;
+        self.positions = snap.positions;
+        self.order = snap.order;
+        self.selected = snap.selected;
+        self.params = snap.params;
+        self.drag = None;
+        current
+    }
+
+    /// Records an undo step for `gesture`, unless it coalesces with the previous one.
+    /// Any new edit invalidates the redo stack.
+    fn record(&mut self, gesture: Gesture) {
+        self.history.redo.clear();
+        if gesture != Gesture::Discrete && self.history.last == Some(gesture) {
+            return;
+        }
+        let snap = self.snapshot();
+        self.history.undo.push(snap);
+        if self.history.undo.len() > HISTORY_LIMIT {
+            self.history.undo.remove(0);
+        }
+        self.history.last = Some(gesture);
+    }
+
+    /// Ends the current continuous gesture (mouse released): the next move or
+    /// parameter edit starts a fresh undo step.
+    pub fn end_gesture(&mut self) {
+        self.history.last = None;
+    }
+
+    /// Forgets all history — call after programmatic seeding so the user cannot undo
+    /// into an empty patch.
+    pub fn clear_history(&mut self) {
+        self.history = History::default();
+    }
+
+    /// Whether there is anything to undo.
+    #[must_use]
+    pub fn can_undo(&self) -> bool {
+        !self.history.undo.is_empty()
+    }
+
+    /// Whether there is anything to redo.
+    #[must_use]
+    pub fn can_redo(&self) -> bool {
+        !self.history.redo.is_empty()
+    }
+
+    /// Reverts the most recent edit. Returns `false` with an empty undo stack.
+    pub fn undo(&mut self) -> bool {
+        match self.history.undo.pop() {
+            Some(snap) => {
+                let current = self.restore(snap);
+                self.history.redo.push(current);
+                self.history.last = None;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Re-applies the most recently undone edit. Returns `false` if there is none.
+    pub fn redo(&mut self) -> bool {
+        match self.history.redo.pop() {
+            Some(snap) => {
+                let current = self.restore(snap);
+                self.history.undo.push(current);
+                self.history.last = None;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Adds `node` to the graph at canvas position `pos` (top of the draw order),
     /// with no editable parameters.
     pub fn add_node(&mut self, node: GraphNode, pos: Pos2) -> NodeId {
@@ -92,6 +218,7 @@ impl PatchView {
         params: Vec<Parameter>,
         pos: Pos2,
     ) -> NodeId {
+        self.record(Gesture::Discrete);
         let id = self.graph.add_node(node);
         self.positions.insert(id, pos);
         self.order.push(id);
@@ -116,6 +243,10 @@ impl PatchView {
     ///
     /// Returns the stored (clamped) value, or `None` for an unknown node/index.
     pub fn set_param(&mut self, id: NodeId, index: usize, value: f32) -> Option<f32> {
+        if !self.params.get(&id).is_some_and(|s| index < s.len()) {
+            return None;
+        }
+        self.record(Gesture::Param(id, index));
         let slot = self.params.get_mut(&id)?.get_mut(index)?;
         slot.value = slot.param.clamp(value);
         Some(slot.value)
@@ -132,6 +263,8 @@ impl PatchView {
         to: NodeId,
         to_port: PortId,
     ) -> Result<Edge, vb_core::GraphError> {
+        self.graph.can_connect(from, from_port, to, to_port)?;
+        self.record(Gesture::Discrete);
         self.graph.connect(from, from_port, to, to_port)
     }
 
@@ -221,6 +354,7 @@ impl PatchView {
         let target = self.node_at(p, style)?;
         let (from, to) = normalize_wire(drag, target)?;
         self.graph.can_connect(from.0, from.1, to.0, to.1).ok()?;
+        self.record(Gesture::Discrete);
         self.graph.connect(from.0, from.1, to.0, to.1).ok()
     }
 
@@ -249,19 +383,24 @@ impl PatchView {
 
     /// Moves a node by a canvas-space delta. Returns `false` for unknown nodes.
     pub fn move_node(&mut self, id: NodeId, delta: Vec2) -> bool {
-        match self.positions.get_mut(&id) {
-            Some(pos) => {
-                *pos += delta;
-                true
-            }
-            None => false,
+        if !self.positions.contains_key(&id) {
+            return false;
         }
+        self.record(Gesture::Move(id));
+        if let Some(pos) = self.positions.get_mut(&id) {
+            *pos += delta;
+        }
+        true
     }
 
     /// Removes a node and everything attached to it: incident edges (via
     /// [`Graph::remove_node`]), position, draw-order entry, params, and the selection
     /// if it pointed here. Returns `false` for unknown nodes.
     pub fn remove_node(&mut self, id: NodeId) -> bool {
+        if self.graph.node(id).is_none() {
+            return false;
+        }
+        self.record(Gesture::Discrete);
         if self.graph.remove_node(id).is_none() {
             return false;
         }
@@ -285,6 +424,7 @@ impl PatchView {
     pub fn duplicate(&mut self, id: NodeId) -> Option<NodeId> {
         let node = self.graph.node(id)?.clone();
         let pos = *self.positions.get(&id)? + Vec2::new(24.0, 24.0);
+        self.record(Gesture::Discrete);
         let slots = self.params.get(&id).cloned().unwrap_or_default();
         let copy = self.graph.add_node(node);
         self.positions.insert(copy, pos);
@@ -677,6 +817,123 @@ mod tests {
             "offset from the original"
         );
         assert_eq!(patch.graph().edges().len(), 1, "edges are not cloned");
+    }
+
+    #[test]
+    fn undo_and_redo_walk_add_and_remove() {
+        let mut patch = PatchView::new();
+        assert!(!patch.can_undo() && !patch.can_redo());
+        assert!(!patch.undo(), "empty stack refuses");
+
+        let a = patch.add_node(gain(), Pos2::new(0.0, 0.0));
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+        assert_eq!(patch.graph().node_count(), 2);
+
+        assert!(patch.undo(), "undo the connect");
+        assert!(patch.graph().edges().is_empty());
+        assert!(patch.undo(), "undo adding b");
+        assert_eq!(patch.graph().node_count(), 1);
+
+        assert!(patch.redo(), "redo adding b");
+        assert_eq!(patch.graph().node_count(), 2);
+        assert!(patch.params(b).len() == 1, "params come back too");
+        assert!(patch.redo(), "redo the connect");
+        assert_eq!(patch.graph().edges().len(), 1);
+        assert!(!patch.redo(), "nothing further");
+    }
+
+    #[test]
+    fn undoing_a_remove_restores_edges_and_params() {
+        let mut patch = PatchView::new();
+        let a = patch.add_node(gain(), Pos2::new(0.0, 0.0));
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+        patch.set_param(b, 0, 1.5);
+
+        assert!(patch.remove_node(b));
+        assert!(patch.graph().edges().is_empty());
+
+        assert!(patch.undo());
+        assert!(patch.graph().node(b).is_some());
+        assert_eq!(patch.graph().edges().len(), 1);
+        assert!((patch.params(b)[0].value - 1.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn continuous_gestures_coalesce_until_ended() {
+        let (mut patch, a, _) = two_gains();
+        patch.clear_history();
+
+        // One drag = many move_node calls = one undo step.
+        patch.move_node(a, Vec2::new(5.0, 0.0));
+        patch.move_node(a, Vec2::new(5.0, 0.0));
+        patch.move_node(a, Vec2::new(5.0, 0.0));
+        patch.end_gesture();
+        // A second drag is its own step.
+        patch.move_node(a, Vec2::new(0.0, 10.0));
+        patch.end_gesture();
+
+        assert_eq!(patch.position(a), Some(Pos2::new(15.0, 10.0)));
+        assert!(patch.undo());
+        assert_eq!(
+            patch.position(a),
+            Some(Pos2::new(15.0, 0.0)),
+            "second drag undone"
+        );
+        assert!(patch.undo());
+        assert_eq!(
+            patch.position(a),
+            Some(Pos2::new(0.0, 0.0)),
+            "first drag undone"
+        );
+        assert!(!patch.can_undo(), "exactly two steps were recorded");
+    }
+
+    #[test]
+    fn param_slides_coalesce_per_param() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![
+                Parameter::new("gain", 0.0, 2.0, 1.0),
+                Parameter::new("pan", -1.0, 1.0, 0.0),
+            ],
+            Pos2::ZERO,
+        );
+        patch.clear_history();
+
+        patch.set_param(id, 0, 1.2);
+        patch.set_param(id, 0, 1.4); // same slider, same gesture
+        patch.set_param(id, 1, 0.5); // different param → new step
+        patch.end_gesture();
+
+        assert!(patch.undo());
+        assert!((patch.params(id)[1].value - 0.0).abs() < f32::EPSILON);
+        assert!((patch.params(id)[0].value - 1.4).abs() < f32::EPSILON);
+        assert!(patch.undo());
+        assert!((patch.params(id)[0].value - 1.0).abs() < f32::EPSILON);
+        assert!(!patch.can_undo());
+    }
+
+    #[test]
+    fn a_new_edit_clears_the_redo_stack() {
+        let mut patch = PatchView::new();
+        patch.add_node(gain(), Pos2::ZERO);
+        patch.add_node(gain(), Pos2::new(300.0, 0.0));
+        patch.undo();
+        assert!(patch.can_redo());
+
+        patch.add_node(gain(), Pos2::new(600.0, 0.0));
+        assert!(!patch.can_redo(), "diverging edit invalidates redo");
     }
 
     #[test]

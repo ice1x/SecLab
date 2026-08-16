@@ -77,7 +77,7 @@ impl std::error::Error for GraphError {}
 /// must exist, an output may only feed an input, the signal types must be compatible,
 /// and each input accepts a single source. Cycle detection and processing order are
 /// handled by later tasks (000015, 000016).
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Graph {
     next_id: u64,
     nodes: HashMap<NodeId, GraphNode>,

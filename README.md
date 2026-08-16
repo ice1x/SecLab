@@ -251,7 +251,7 @@ the definition of done.
 - [x] 000043 — Node palette/search and adding to the canvas from the registry 🧪
 - [x] 000044 — Property inspector for the selected node (edit parameters) 🧪
 - [x] 000045 — Select, move, delete, copy/paste nodes 🧪
-- [ ] 000046 — Undo/redo (command stack) 🧪
+- [x] 000046 — Undo/redo (command stack) 🧪
 - [ ] 000047 — Enter a macro-node and navigate the subgraph hierarchy 🧪
 - [ ] 000048 — Live visualizations: level meter, oscilloscope, spectrum
 - [ ] 000049 — Control widgets: knob, slider, switch, XY-pad (mapped to parameters) 🧪
