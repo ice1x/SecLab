@@ -267,7 +267,7 @@ the definition of done.
 
 - [x] 000057 — RT graph executor: no allocations/locks in the audio thread 🧪
 - [x] 000058 — Double buffering / thread-safe delivery of graph edits into the RT thread 🧪
-- [ ] 000059 — `cpal` integration: audio output to the default device
+- [x] 000059 — `cpal` integration: audio output to the default device
 - [ ] 000060 — Choose audio device, sample rate, buffer size in the UI
 - [ ] 000061 — MIDI input from a device (`midir`) in standalone
 - [ ] 000062 — Wire editor + runtime together: graph changes are "audible" in real time

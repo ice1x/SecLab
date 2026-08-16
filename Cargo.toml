@@ -22,6 +22,8 @@ authors = ["ice1x"]
 [workspace.dependencies]
 vb-core = { path = "crates/vb-core" }
 vb-nodes = { path = "crates/vb-nodes" }
+vb-runtime = { path = "crates/vb-runtime" }
+cpal = "0.18"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 
