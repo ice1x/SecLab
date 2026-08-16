@@ -16,6 +16,7 @@ use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
 
 /// Metadata and factories for one node kind.
@@ -358,6 +359,48 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 3, 0.2),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "splitter",
+            "routing",
+            || {
+                GraphNode::new(
+                    "splitter",
+                    vec![audio_in("in")],
+                    vec![audio_out("a"), audio_out("b")],
+                )
+            },
+            || Box::new(Splitter),
+            Vec::new,
+            |_, _| Box::new(Splitter),
+        ),
+        NodeDescriptor::new(
+            "merger",
+            "routing",
+            || {
+                GraphNode::new(
+                    "merger",
+                    vec![audio_in("a"), audio_in("b"), audio_in("c"), audio_in("d")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Merger),
+            Vec::new,
+            |_, _| Box::new(Merger),
+        ),
+        NodeDescriptor::new(
+            "selector",
+            "routing",
+            || {
+                GraphNode::new(
+                    "selector",
+                    vec![audio_in("a"), audio_in("b"), audio_in("c"), audio_in("d")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Selector::new(0)),
+            || vec![Parameter::new("input", 0.0, 3.0, 0.0)],
+            |_, v| Box::new(Selector::new(arg(v, 0, 0.0).round().max(0.0) as usize)),
         ),
         NodeDescriptor::new(
             "lfo",
