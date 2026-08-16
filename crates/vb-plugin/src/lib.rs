@@ -41,15 +41,57 @@ pub struct VstBomb {
 #[derive(Params, Default)]
 pub struct VstBombParams {}
 
+/// Resource location of a patch shipped inside the bundle, given the dylib's path
+/// (`…/Contents/MacOS/lib.dylib` → `…/Contents/Resources/patch.vbp`).
+fn resources_patch_path(dylib: &std::path::Path) -> Option<std::path::PathBuf> {
+    let macos_dir = dylib.parent()?;
+    let contents = macos_dir.parent()?;
+    (macos_dir.file_name()? == "MacOS" && contents.file_name()? == "Contents")
+        .then(|| contents.join("Resources").join("patch.vbp"))
+}
+
+/// The path of the shared library this code lives in (`dladdr` on unix).
+#[cfg(unix)]
+fn own_dylib_path() -> Option<std::path::PathBuf> {
+    let probe = own_dylib_path as *const std::os::raw::c_void;
+    // SAFETY: dladdr only reads the address and fills the (zeroed) info struct;
+    // dli_fname, when non-null, is a valid NUL-terminated path owned by the loader.
+    unsafe {
+        let mut info: libc::Dl_info = std::mem::zeroed();
+        if libc::dladdr(probe, &mut info) != 0 && !info.dli_fname.is_null() {
+            let name = std::ffi::CStr::from_ptr(info.dli_fname);
+            return Some(std::path::PathBuf::from(
+                name.to_string_lossy().into_owned(),
+            ));
+        }
+    }
+    None
+}
+
+#[cfg(not(unix))]
+fn own_dylib_path() -> Option<std::path::PathBuf> {
+    None
+}
+
+/// The patch this instance should play, in priority order: `VB_PATCH` env override,
+/// the patch bundled into the plugin's Resources (via `cargo xtask export`), then
+/// the built-in default. Unreadable candidates fall through so the plugin loads.
+fn load_patch(registry: &Registry) -> ProjectDoc {
+    std::env::var("VB_PATCH")
+        .ok()
+        .and_then(|path| vb_project::open_path(std::path::Path::new(&path)).ok())
+        .or_else(|| {
+            own_dylib_path()
+                .and_then(|dylib| resources_patch_path(&dylib))
+                .and_then(|path| vb_project::open_path(&path).ok())
+        })
+        .unwrap_or_else(|| default_patch(registry))
+}
+
 impl Default for VstBomb {
     fn default() -> Self {
         let registry = Registry::with_builtins();
-        // A patch file from the environment wins; anything unreadable falls back to
-        // the built-in patch so the plugin always loads.
-        let doc = std::env::var("VB_PATCH")
-            .ok()
-            .and_then(|path| vb_project::open_path(std::path::Path::new(&path)).ok())
-            .unwrap_or_else(|| default_patch(&registry));
+        let doc = load_patch(&registry);
         Self {
             params: Arc::new(VstBombParams::default()),
             doc,
@@ -237,6 +279,21 @@ mod tests {
         route_note(&ctx, 60, 7.5, true);
         let (_, _, vel) = ctx.poly.read(0);
         assert_eq!(vel, 127);
+    }
+
+    #[test]
+    fn bundle_resource_path_is_derived_from_the_dylib_location() {
+        use std::path::Path;
+        let dylib = Path::new("/Library/Audio/vb.clap/Contents/MacOS/vb-plugin");
+        assert_eq!(
+            resources_patch_path(dylib),
+            Some("/Library/Audio/vb.clap/Contents/Resources/patch.vbp".into())
+        );
+        // A bare dylib outside a bundle has no resource patch.
+        assert_eq!(
+            resources_patch_path(Path::new("/usr/lib/libfoo.dylib")),
+            None
+        );
     }
 
     #[test]
