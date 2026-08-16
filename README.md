@@ -250,7 +250,7 @@ the definition of done.
 - [x] 000042 — Connection validation while dragging (highlight compatible ports) 🧪
 - [x] 000043 — Node palette/search and adding to the canvas from the registry 🧪
 - [x] 000044 — Property inspector for the selected node (edit parameters) 🧪
-- [ ] 000045 — Select, move, delete, copy/paste nodes 🧪
+- [x] 000045 — Select, move, delete, copy/paste nodes 🧪
 - [ ] 000046 — Undo/redo (command stack) 🧪
 - [ ] 000047 — Enter a macro-node and navigate the subgraph hierarchy 🧪
 - [ ] 000048 — Live visualizations: level meter, oscilloscope, spectrum

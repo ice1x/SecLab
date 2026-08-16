@@ -1,12 +1,13 @@
 //! The editor window shell: an infinite canvas with pan, zoom, a grid, and nodes.
 //!
 //! Input mapping (Reaktor-style):
-//! - drag on the canvas — pan
-//! - scroll / pinch — zoom anchored at the pointer
-//! - click — select the node under the cursor (raises it), click empty to deselect
+//! - drag on empty canvas — pan; scroll / pinch — zoom anchored at the pointer
+//! - drag from a port — pull a wire; drop on a compatible port to connect
+//! - drag a node's title/body — move it; click — select (raises), click empty to clear
+//! - Delete/Backspace — remove the selection; Cmd/Ctrl+D — duplicate it
 //!
-//! Wires, the palette, and node dragging land in the follow-up Epic 4 tasks; this
-//! shell owns the [`Camera`] and the [`PatchView`] they all draw through.
+//! Undo/redo and macro-node navigation land in the follow-up Epic 4 tasks; this shell
+//! owns the [`Camera`] and the [`PatchView`] they all draw through.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use vb_core::{GraphNode, Port, PortDirection, PortId, SignalType};
@@ -29,6 +30,8 @@ pub struct EditorApp {
     palette_query: String,
     /// Canvas-space centre of the last painted viewport; new nodes spawn there.
     spawn_at: Pos2,
+    /// Node being dragged across the canvas, if any.
+    moving: Option<vb_core::NodeId>,
 }
 
 impl Default for EditorApp {
@@ -41,6 +44,7 @@ impl Default for EditorApp {
             registry,
             palette_query: String::new(),
             spawn_at: Pos2::new(80.0, 220.0),
+            moving: None,
         }
     }
 }
@@ -150,20 +154,52 @@ impl EditorApp {
         // Palette spawns land in the middle of whatever is currently visible.
         self.spawn_at = self.camera.screen_to_canvas(viewport.center() - origin);
 
-        // A drag starting on a port pulls a wire; anywhere else it pans.
+        // A drag starting on a port pulls a wire; on a node's title/body it moves
+        // that node; anywhere else it pans.
         if response.drag_started() {
             if let Some(pointer) = response.interact_pointer_pos() {
                 let canvas = self.camera.screen_to_canvas(pointer - origin);
-                self.patch.begin_wire(canvas, &self.style);
+                if self.patch.begin_wire(canvas, &self.style).is_none() {
+                    if let Some((id, _)) = self.patch.node_at(canvas, &self.style) {
+                        self.patch.click(canvas, &self.style); // select + raise
+                        self.moving = Some(id);
+                    }
+                }
             }
         }
         if response.dragged() && self.patch.wire_drag().is_none() {
-            self.camera.pan_by(response.drag_delta());
+            match self.moving {
+                // Screen-pixel drag ÷ zoom = canvas delta, so the node tracks the
+                // pointer 1:1 at any zoom.
+                Some(id) => {
+                    let delta = response.drag_delta() / self.camera.zoom();
+                    self.patch.move_node(id, delta);
+                }
+                None => self.camera.pan_by(response.drag_delta()),
+            }
         }
         if response.drag_stopped() {
             if let Some(pointer) = response.interact_pointer_pos() {
                 let canvas = self.camera.screen_to_canvas(pointer - origin);
                 self.patch.end_wire(canvas, &self.style);
+            }
+            self.moving = None;
+        }
+
+        // Keyboard: delete/duplicate the selection — unless a text field (e.g. the
+        // palette search box) owns the keyboard.
+        if !ui.ctx().egui_wants_keyboard_input() {
+            let (delete, duplicate) = ui.input(|i| {
+                (
+                    i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
+                    i.modifiers.command && i.key_pressed(egui::Key::D),
+                )
+            });
+            if delete {
+                self.patch.remove_selected();
+            }
+            if duplicate {
+                self.patch.duplicate_selected();
             }
         }
 
