@@ -235,7 +235,7 @@ the definition of done.
 - [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
 - [ ] 000031 — Routing nodes: splitter, merger, selector 🧪
 - [ ] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪
-- [ ] 000033 — MIDI input: note on/off → gate/pitch/velocity 🧪
+- [x] 000033 — MIDI input: note on/off → gate/pitch/velocity 🧪
 - [ ] 000034 — Polyphony / voices (voice allocation) 🧪
 - [ ] 000035 — Effects: delay, reverb (basic) 🧪
 - [ ] 000036 — Effect: distortion / waveshaper 🧪
