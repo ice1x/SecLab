@@ -7,7 +7,15 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+crate-type = ["cdylib", "lib"]
+
 [dependencies]
+vb-core.workspace = true
+vb-nodes.workspace = true
+vb-runtime.workspace = true
+vb-project.workspace = true
+nih_plug.workspace = true
 
 [lints]
 workspace = true
