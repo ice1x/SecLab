@@ -244,7 +244,7 @@ the definition of done.
 
 ### Epic 4 — Node editor / UI (`vb-editor`, egui)
 
-- [ ] 000039 — `egui` window shell + infinite canvas (pan/zoom) 🧪
+- [x] 000039 — `egui` window shell + infinite canvas (pan/zoom) 🧪
 - [ ] 000040 — Node rendering (title, ports, body, selection) 🧪
 - [ ] 000041 — Draw and create wires by drag-and-drop between ports 🧪
 - [ ] 000042 — Connection validation while dragging (highlight compatible ports) 🧪
