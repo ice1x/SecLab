@@ -1,19 +1,12 @@
 //! `vb-editor` — egui node editor (canvas, wires, inspector, undo).
 //!
-//! Stub crate; the real implementation lands in Epic 4.
+//! Epic 4. This crate owns the visual editor: an infinite canvas viewed through a
+//! [`Camera`], with node rendering, wire drag-and-drop, the palette, and undo/redo
+//! layered on top task by task. The standalone and (later) the plugin embed
+//! [`EditorApp`]; `cargo run -p vb-editor` opens it as its own window.
 
-/// Returns this crate's name. Placeholder until the real API lands.
-#[must_use]
-pub fn crate_name() -> &'static str {
-    "vb-editor"
-}
+pub mod app;
+pub mod camera;
 
-#[cfg(test)]
-mod tests {
-    use super::crate_name;
-
-    #[test]
-    fn exposes_crate_name() {
-        assert_eq!(crate_name(), "vb-editor");
-    }
-}
+pub use app::{run, EditorApp};
+pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
