@@ -33,6 +33,9 @@ pub struct EditorApp {
     spawn_at: Pos2,
     /// Node being dragged across the canvas, if any.
     moving: Option<vb_core::NodeId>,
+    /// Macro-entry stack: each entry is (the parent patch, the macro node entered).
+    /// `patch` is always the ACTIVE patch; parents wait here until we go back up.
+    stack: Vec<(PatchView, vb_core::NodeId)>,
 }
 
 impl Default for EditorApp {
@@ -46,6 +49,7 @@ impl Default for EditorApp {
             palette_query: String::new(),
             spawn_at: Pos2::new(80.0, 220.0),
             moving: None,
+            stack: Vec::new(),
         }
     }
 }
@@ -240,6 +244,19 @@ impl EditorApp {
                 let canvas = self.camera.screen_to_canvas(pointer - origin);
                 self.patch.click(canvas, &self.style);
             }
+        }
+
+        // Double-click a macro node to step inside; Escape steps back out.
+        if response.double_clicked() {
+            if let Some(pointer) = response.interact_pointer_pos() {
+                let canvas = self.camera.screen_to_canvas(pointer - origin);
+                if let Some((id, _)) = self.patch.node_at(canvas, &self.style) {
+                    self.enter_macro(id);
+                }
+            }
+        }
+        if !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.leave_macro();
         }
 
         self.paint_grid(&painter, viewport);
@@ -441,6 +458,37 @@ impl EditorApp {
         self.camera.zoom_at(anchor, factor);
     }
 
+    /// How deep inside macros the editor currently is (0 = root).
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.stack.len()
+    }
+
+    /// Enters macro `id` of the active patch: its subpatch becomes the active patch.
+    /// Returns `false` if `id` is not a macro.
+    pub fn enter_macro(&mut self, id: vb_core::NodeId) -> bool {
+        let Some(sub) = self.patch.take_subpatch(id) else {
+            return false;
+        };
+        let parent = std::mem::replace(&mut self.patch, sub);
+        self.stack.push((parent, id));
+        self.moving = None;
+        true
+    }
+
+    /// Goes one level up, returning the edited subpatch to its macro node.
+    /// Returns `false` at the root.
+    pub fn leave_macro(&mut self) -> bool {
+        let Some((mut parent, id)) = self.stack.pop() else {
+            return false;
+        };
+        let sub = std::mem::replace(&mut self.patch, PatchView::new());
+        parent.restore_subpatch(id, sub);
+        self.patch = parent;
+        self.moving = None;
+        true
+    }
+
     /// Test/integration hook: clicks at a viewport-local screen position.
     pub fn click(&mut self, screen: Pos2) {
         let canvas = self.camera.screen_to_canvas(screen);
@@ -503,6 +551,10 @@ impl EditorApp {
     fn palette_ui(&mut self, ui: &mut Ui) {
         ui.heading("nodes");
         ui.text_edit_singleline(&mut self.palette_query);
+        if ui.button("+ macro").clicked() {
+            let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
+            self.patch.add_macro(self.spawn_at - half);
+        }
         ui.separator();
         let entries = palette_entries(&self.registry, &self.palette_query);
         if entries.is_empty() {
@@ -542,6 +594,31 @@ impl eframe::App for EditorApp {
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("VST_bomb");
+                ui.separator();
+                // Breadcrumbs: root / macro#n / … — click any level to jump back.
+                let depth = self.stack.len();
+                if ui
+                    .add_enabled(depth > 0, egui::Button::new("root").frame(false))
+                    .clicked()
+                {
+                    while self.leave_macro() {}
+                }
+                for level in 0..depth {
+                    ui.label("/");
+                    let id = self.stack[level].1;
+                    let last = level + 1 == depth;
+                    if ui
+                        .add_enabled(
+                            !last,
+                            egui::Button::new(format!("macro#{}", id.0)).frame(false),
+                        )
+                        .clicked()
+                    {
+                        while self.stack.len() > level + 1 {
+                            self.leave_macro();
+                        }
+                    }
+                }
                 ui.separator();
                 ui.label(format!("zoom {:.0}%", self.camera.zoom() * 100.0));
                 if ui.button("reset view").clicked() {
@@ -679,6 +756,31 @@ mod tests {
         assert!(!app.patch().can_undo(), "only the spawn was undoable");
         assert!(app.patch_mut().redo());
         assert_eq!(app.patch().graph().node_count(), before + 1);
+    }
+
+    #[test]
+    fn macros_can_be_entered_edited_and_left() {
+        let mut app = EditorApp::new();
+        let mac = app.patch_mut().add_macro(Pos2::new(500.0, 200.0));
+        assert!(app.patch().is_macro(mac));
+        assert_eq!(app.depth(), 0);
+
+        assert!(app.enter_macro(mac), "double-click path");
+        assert_eq!(app.depth(), 1);
+        // Inside: the boundary nodes are on the canvas; edits work as usual.
+        assert_eq!(app.patch().graph().node_count(), 2, "macro-in + macro-out");
+        let spawned = app.spawn_node("gain").expect("editing inside works");
+        assert!(app.patch().graph().node(spawned).is_some());
+
+        // A non-macro node cannot be entered.
+        assert!(!app.enter_macro(spawned));
+
+        assert!(app.leave_macro());
+        assert_eq!(app.depth(), 0);
+        // The edit survived the round trip.
+        let sub = app.patch().subpatch(mac).expect("subpatch back in place");
+        assert_eq!(sub.graph().node_count(), 3);
+        assert!(!app.leave_macro(), "already at root");
     }
 
     #[test]

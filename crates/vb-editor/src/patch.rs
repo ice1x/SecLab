@@ -12,6 +12,21 @@ use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
 
+/// Node kind of a macro (a nested subgraph shown as one node).
+pub const MACRO_KIND: &str = "macro";
+/// Kind of the inner node standing for the macro's inputs.
+pub const MACRO_IN_KIND: &str = "macro-in";
+/// Kind of the inner node collecting the macro's outputs.
+pub const MACRO_OUT_KIND: &str = "macro-out";
+
+fn audio_in(name: &str) -> vb_core::Port {
+    vb_core::Port::input(name, vb_core::SignalType::Audio)
+}
+
+fn audio_out(name: &str) -> vb_core::Port {
+    vb_core::Port::output(name, vb_core::SignalType::Audio)
+}
+
 /// An in-progress wire drag: the port it started from.
 ///
 /// Either end can start the drag; [`PatchView::end_wire`] normalizes the direction so
@@ -100,6 +115,8 @@ pub struct PatchView {
     drag: Option<WireDrag>,
     /// Editable parameter values per node, in the descriptor's UI order.
     params: HashMap<NodeId, Vec<ParamSlot>>,
+    /// Inner patches of macro nodes, keyed by the macro node's id.
+    subpatches: HashMap<NodeId, PatchView>,
     /// Undo/redo state.
     history: History,
     /// Bumped on every audible mutation (structure, params, undo/redo) so embedders
@@ -167,6 +184,63 @@ impl PatchView {
     #[must_use]
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Adds a macro node at `pos`: one audio in, one audio out, with a fresh inner
+    /// patch pre-seeded with its `macro-in` / `macro-out` boundary nodes.
+    ///
+    /// Subpatch edits keep their own undo history; deleting the macro node drops the
+    /// subpatch (not undoable — documented MVP limitation of nested histories).
+    pub fn add_macro(&mut self, pos: Pos2) -> NodeId {
+        let id = self.add_node(
+            GraphNode::new(
+                MACRO_KIND,
+                vec![crate::patch::audio_in("in")],
+                vec![crate::patch::audio_out("out")],
+            ),
+            pos,
+        );
+        let mut sub = PatchView::new();
+        sub.add_node(
+            GraphNode::new(MACRO_IN_KIND, vec![], vec![audio_out("in0")]),
+            Pos2::new(0.0, 0.0),
+        );
+        sub.add_node(
+            GraphNode::new(
+                MACRO_OUT_KIND,
+                vec![audio_in("out0")],
+                vec![audio_out("out")],
+            ),
+            Pos2::new(360.0, 0.0),
+        );
+        sub.clear_history();
+        self.subpatches.insert(id, sub);
+        id
+    }
+
+    /// Whether `id` is a macro node with an inner patch.
+    #[must_use]
+    pub fn is_macro(&self, id: NodeId) -> bool {
+        self.subpatches.contains_key(&id)
+    }
+
+    /// The inner patch of macro `id`.
+    #[must_use]
+    pub fn subpatch(&self, id: NodeId) -> Option<&PatchView> {
+        self.subpatches.get(&id)
+    }
+
+    /// Removes the inner patch of macro `id` for editing; put it back with
+    /// [`PatchView::restore_subpatch`]. The swap keeps every existing editing code
+    /// path working on a plain `PatchView`.
+    pub fn take_subpatch(&mut self, id: NodeId) -> Option<PatchView> {
+        self.subpatches.remove(&id)
+    }
+
+    /// Returns an edited inner patch to macro `id` and marks the change audible.
+    pub fn restore_subpatch(&mut self, id: NodeId, sub: PatchView) {
+        self.subpatches.insert(id, sub);
+        self.touch();
     }
 
     /// Ends the current continuous gesture (mouse released): the next move or
@@ -428,6 +502,7 @@ impl PatchView {
         self.positions.remove(&id);
         self.order.retain(|n| *n != id);
         self.params.remove(&id);
+        self.subpatches.remove(&id);
         if self.selected == Some(id) {
             self.selected = None;
         }
