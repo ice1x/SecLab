@@ -19,6 +19,11 @@ pub struct GraphNode {
     pub inputs: Vec<Port>,
     /// Output ports, addressed by index via [`crate::port::PortId`].
     pub outputs: Vec<Port>,
+    /// A feedback boundary: this node's inputs read the *previous* block, so cycles
+    /// running through them are legal (they carry one block of latency instead of an
+    /// unsolvable instantaneous loop). Delay-line nodes set this.
+    #[serde(default)]
+    pub feedback: bool,
 }
 
 impl GraphNode {
@@ -29,6 +34,17 @@ impl GraphNode {
             kind: kind.into(),
             inputs,
             outputs,
+            feedback: false,
+        }
+    }
+
+    /// Creates a feedback-boundary node: cycles through its inputs are allowed and
+    /// arrive one block late.
+    #[must_use]
+    pub fn feedback_node(kind: impl Into<String>, inputs: Vec<Port>, outputs: Vec<Port>) -> Self {
+        Self {
+            feedback: true,
+            ..Self::new(kind, inputs, outputs)
         }
     }
 }

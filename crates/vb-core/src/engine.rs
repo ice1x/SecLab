@@ -359,4 +359,86 @@ mod tests {
         engine.process(&ctx(1));
         assert_eq!(engine.node_output(n).unwrap().channel(0).unwrap(), &[1.0]);
     }
+
+    /// Emits 1.0 on the very first sample it ever produces, then silence.
+    struct ImpulseOnce {
+        fired: bool,
+    }
+    impl Processor for ImpulseOnce {
+        fn process(&mut self, ctx: &ProcessContext, _in: &[&[f32]], out: &mut [&mut [f32]]) {
+            out[0][..ctx.frames].fill(0.0);
+            if !self.fired {
+                out[0][0] = 1.0;
+                self.fired = true;
+            }
+        }
+    }
+
+    /// out = in0 + 0.5 * in1 — the summing half of a feedback loop.
+    struct SumHalf;
+    impl Processor for SumHalf {
+        fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], out: &mut [&mut [f32]]) {
+            for i in 0..ctx.frames {
+                out[0][i] = inputs[0][i] + 0.5 * inputs[1][i];
+            }
+        }
+    }
+
+    /// Copies its input — placed on the feedback boundary.
+    struct Passthrough;
+    impl Processor for Passthrough {
+        fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], out: &mut [&mut [f32]]) {
+            out[0][..ctx.frames].copy_from_slice(&inputs[0][..ctx.frames]);
+        }
+    }
+
+    #[test]
+    fn feedback_loops_run_one_block_late_and_decay() {
+        // impulse → sum(in0) ; sum → fb ; fb → sum(in1) * 0.5 (inside SumHalf).
+        let mut g = Graph::new();
+        let imp = g.add_node(GraphNode::new(
+            "impulse",
+            vec![],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let sum = g.add_node(GraphNode::new(
+            "sum-half",
+            vec![
+                Port::input("a", SignalType::Audio),
+                Port::input("b", SignalType::Audio),
+            ],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let fb = g.add_node(GraphNode::feedback_node(
+            "fb",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(imp, PortId(0), sum, PortId(0)).unwrap();
+        g.connect(fb, PortId(0), sum, PortId(1)).unwrap();
+        g.connect(sum, PortId(0), fb, PortId(0)).unwrap(); // the loop
+
+        let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+        procs.insert(imp, Box::new(ImpulseOnce { fired: false }));
+        procs.insert(sum, Box::new(SumHalf));
+        procs.insert(fb, Box::new(Passthrough));
+        let mut engine = Engine::compile(&g, procs, 4).expect("feedback graph compiles");
+
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 4,
+        };
+        // Each block the impulse energy comes back around once more, halved:
+        // block 0: 1.0, block 1: 0.5, block 2: 0.25 …
+        for expected in [1.0_f32, 0.5, 0.25, 0.125] {
+            engine.process(&ctx);
+            let out = engine.node_output(sum).unwrap().channel(0).unwrap();
+            assert!(
+                (out[0] - expected).abs() < 1e-6,
+                "expected {expected}, got {}",
+                out[0]
+            );
+            assert!(out[1..].iter().all(|&s| s == 0.0));
+        }
+    }
 }

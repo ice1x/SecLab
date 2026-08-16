@@ -234,3 +234,77 @@ fn matches_the_reference_engine_on_a_real_patch() {
         "patch should carry signal"
     );
 }
+
+/// Emits 1.0 on its very first sample, then silence.
+struct ImpulseOnce {
+    fired: bool,
+}
+impl Processor for ImpulseOnce {
+    fn process(&mut self, ctx: &ProcessContext, _in: &[&[f32]], out: &mut [&mut [f32]]) {
+        out[0][..ctx.frames].fill(0.0);
+        if !self.fired {
+            out[0][0] = 1.0;
+            self.fired = true;
+        }
+    }
+}
+
+/// out = in0 + 0.5 * in1.
+struct SumHalf;
+impl Processor for SumHalf {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], out: &mut [&mut [f32]]) {
+        for i in 0..ctx.frames {
+            out[0][i] = inputs[0][i] + 0.5 * inputs[1][i];
+        }
+    }
+}
+
+/// Copies input to output (sits on the feedback boundary).
+struct Passthrough;
+impl Processor for Passthrough {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], out: &mut [&mut [f32]]) {
+        out[0][..ctx.frames].copy_from_slice(&inputs[0][..ctx.frames]);
+    }
+}
+
+#[test]
+fn rt_engine_runs_feedback_loops_one_block_late() {
+    let mut g = Graph::new();
+    let imp = g.add_node(GraphNode::new(
+        "impulse",
+        vec![],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    let sum = g.add_node(GraphNode::new(
+        "sum-half",
+        vec![
+            Port::input("a", SignalType::Audio),
+            Port::input("b", SignalType::Audio),
+        ],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    let fb = g.add_node(GraphNode::feedback_node(
+        "fb",
+        vec![Port::input("in", SignalType::Audio)],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    g.connect(imp, PortId(0), sum, PortId(0)).unwrap();
+    g.connect(fb, PortId(0), sum, PortId(1)).unwrap();
+    g.connect(sum, PortId(0), fb, PortId(0)).unwrap();
+
+    let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+    procs.insert(imp, Box::new(ImpulseOnce { fired: false }));
+    procs.insert(sum, Box::new(SumHalf));
+    procs.insert(fb, Box::new(Passthrough));
+    let mut rt = RtEngine::compile(&g, procs, 4).expect("feedback graph compiles in RT");
+
+    for expected in [1.0_f32, 0.5, 0.25, 0.125] {
+        rt.process(&ctx(4));
+        let out = rt.node_output(sum).unwrap().channel(0).unwrap();
+        assert!(
+            (out[0] - expected).abs() < 1e-6,
+            "expected {expected}, got {}",
+            out[0]
+        );
+    }
+}

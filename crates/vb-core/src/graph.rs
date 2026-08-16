@@ -167,6 +167,11 @@ impl Graph {
         to_port: PortId,
     ) -> Result<(), GraphError> {
         self.check_endpoints(from_node, from_port, to_node, to_port)?;
+        // Wiring into a feedback boundary may close a loop: it reads the previous
+        // block, so the loop is legal (and one block late) by construction.
+        if self.node(to_node).is_some_and(|n| n.feedback) {
+            return Ok(());
+        }
         // The new edge runs from_node → to_node; it closes a loop iff from_node is
         // already reachable from to_node (self-loops included).
         if from_node == to_node || self.reaches(to_node, from_node) {
@@ -483,5 +488,30 @@ mod tests {
         g.connect(b, PortId(0), a, PortId(0))
             .expect("connect still builds the cyclic graph");
         assert!(g.has_cycle());
+    }
+
+    #[test]
+    fn can_connect_allows_loops_into_feedback_nodes() {
+        let mut g = Graph::new();
+        let amp = g.add_node(gain());
+        let fb = g.add_node(GraphNode::feedback_node(
+            "fb",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(fb, PortId(0), amp, PortId(0)).unwrap();
+
+        // Closing the loop into the feedback input is fine…
+        assert_eq!(g.can_connect(amp, PortId(0), fb, PortId(0)), Ok(()));
+
+        // …but a loop over normal inputs only is still a cycle: c1 → c2, then
+        // closing c2 → c1 into c1's free input is rejected.
+        let c1 = g.add_node(gain());
+        let c2 = g.add_node(gain());
+        g.connect(c1, PortId(0), c2, PortId(0)).unwrap();
+        assert_eq!(
+            g.can_connect(c2, PortId(0), c1, PortId(0)),
+            Err(GraphError::Cycle)
+        );
     }
 }

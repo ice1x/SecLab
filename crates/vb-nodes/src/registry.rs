@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
+use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::lfo::{Division, Lfo};
@@ -369,6 +370,23 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 3, 0.2),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "fb-delay",
+            "effect",
+            || {
+                // A feedback boundary: loops wired through this input are legal and
+                // arrive one block late.
+                GraphNode::feedback_node("fb-delay", vec![audio_in("in")], vec![audio_out("out")])
+            },
+            || Box::new(FbDelay::new(0.25, 0.4)),
+            || {
+                vec![
+                    Parameter::new("delay_s", 0.001, MAX_DELAY_S, 0.25),
+                    Parameter::new("feedback", 0.0, 0.95, 0.4),
+                ]
+            },
+            |_, v| Box::new(FbDelay::new(arg(v, 0, 0.25), arg(v, 1, 0.4))),
         ),
         NodeDescriptor::new(
             "waveshaper",
