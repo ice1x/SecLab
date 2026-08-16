@@ -475,6 +475,23 @@ impl PatchView {
         Some(self.graph.can_connect(from.0, from.1, to.0, to.1).is_ok())
     }
 
+    /// Snaps a node's position to the nearest multiple of `step` (canvas units).
+    /// Not recorded as its own undo step: callers snap at the end of a move gesture,
+    /// so the whole drag-plus-snap coalesces into one entry.
+    pub fn snap_node(&mut self, id: NodeId, step: f32) -> bool {
+        if step <= 0.0 {
+            return false;
+        }
+        match self.positions.get_mut(&id) {
+            Some(pos) => {
+                pos.x = (pos.x / step).round() * step;
+                pos.y = (pos.y / step).round() * step;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Moves a node by a canvas-space delta. Returns `false` for unknown nodes.
     pub fn move_node(&mut self, id: NodeId, delta: Vec2) -> bool {
         if !self.positions.contains_key(&id) {
@@ -852,6 +869,17 @@ mod tests {
         let mut patch = PatchView::new();
         let id = patch.add_node(gain(), Pos2::ZERO);
         assert!(patch.params(id).is_empty());
+    }
+
+    #[test]
+    fn snap_rounds_to_the_grid() {
+        let (mut patch, a, _) = two_gains();
+        patch.move_node(a, Vec2::new(37.0, -22.0));
+        assert!(patch.snap_node(a, 16.0));
+        assert_eq!(patch.position(a), Some(Pos2::new(32.0, -16.0)));
+        // Zero/negative steps and unknown nodes are refused.
+        assert!(!patch.snap_node(a, 0.0));
+        assert!(!patch.snap_node(NodeId(999), 16.0));
     }
 
     #[test]
