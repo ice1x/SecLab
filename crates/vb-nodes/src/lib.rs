@@ -8,6 +8,7 @@ pub mod envelope;
 pub mod filter;
 pub mod math;
 pub mod midi;
+pub mod noise;
 pub mod oscillator;
 pub mod registry;
 
@@ -15,5 +16,6 @@ pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
 pub use math::{Add, Clamp, Gain, Mix, Mul};
 pub use midi::{midi_note_to_hz, BuildContext, MidiIn, NoteSource};
+pub use noise::{Noise, NoiseKind};
 pub use oscillator::{Oscillator, Waveform};
 pub use registry::{NodeDescriptor, Registry};

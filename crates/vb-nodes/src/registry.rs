@@ -13,6 +13,7 @@ use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
+use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
 
 /// Metadata and factories for one node kind.
@@ -101,6 +102,15 @@ fn waveform_from(v: f32) -> Waveform {
         2 => Waveform::Square,
         3 => Waveform::Triangle,
         _ => Waveform::Sine,
+    }
+}
+
+/// Maps a stepped float to a [`NoiseKind`] (0 white, 1 pink).
+fn noise_kind_from(v: f32) -> NoiseKind {
+    if v.round() as i32 == 1 {
+        NoiseKind::Pink
+    } else {
+        NoiseKind::White
     }
 }
 
@@ -312,6 +322,19 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 3, 0.2),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "noise",
+            "generator",
+            || GraphNode::new("noise", vec![], vec![audio_out("out")]),
+            || Box::new(Noise::new(NoiseKind::White, 0.5)),
+            || {
+                vec![
+                    Parameter::new("kind", 0.0, 1.0, 0.0),
+                    Parameter::new("level", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| Box::new(Noise::new(noise_kind_from(arg(v, 0, 0.0)), arg(v, 1, 0.5))),
         ),
         NodeDescriptor::new(
             "midi-in",

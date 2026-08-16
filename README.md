@@ -227,7 +227,7 @@ the definition of done.
 ### Epic 3 — Node library (`vb-nodes`)
 
 - [x] 000024 — Generator: oscillator (sine/saw/square/triangle) with anti-aliasing 🧪
-- [ ] 000025 — Noise generator (white/pink) 🧪
+- [x] 000025 — Noise generator (white/pink) 🧪
 - [x] 000026 — Filter: biquad (LP/HP/BP/notch) 🧪
 - [ ] 000027 — Filter: state-variable / ladder 🧪
 - [x] 000028 — ADSR envelope 🧪
