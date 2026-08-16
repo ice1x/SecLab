@@ -13,10 +13,10 @@
 
 pub mod engine_builder;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::num::NonZeroU32;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use nih_plug::prelude::*;
 use vb_core::NodeId;
@@ -31,8 +31,9 @@ pub use engine_builder::{default_patch, engine_from_doc, engine_from_doc_with_va
 /// The VST_bomb instrument plugin.
 pub struct VstBomb {
     params: Arc<VstBombParams>,
-    /// The project this instance plays.
-    doc: Arc<ProjectDoc>,
+    /// The project this instance plays. Shared with the rebuild executor and
+    /// replaceable when a state load restores a different patch.
+    doc: Arc<Mutex<Arc<ProjectDoc>>>,
     registry: Arc<Registry>,
     build_ctx: BuildContext,
     /// Compiled in `initialize` (needs the host's buffer size), used in `process`.
@@ -65,13 +66,27 @@ struct BoundParam {
 #[derive(Default)]
 pub struct VstBombParams {
     bound: Vec<BoundParam>,
+    /// The patch itself, serialized as RON — persisted inside the host's preset
+    /// state so a saved DAW project carries the whole graph, not just knob values.
+    patch_ron: Mutex<String>,
 }
 
 impl VstBombParams {
+    /// The patch stored in this state, if it parses and validates.
+    #[must_use]
+    pub fn stored_patch(&self) -> Option<ProjectDoc> {
+        let ron = self.patch_ron.lock().ok()?;
+        if ron.is_empty() {
+            return None;
+        }
+        vb_project::open_ron(&ron).ok()
+    }
+
     /// Builds the parameter set for `doc` from the registry metadata. Unknown node
     /// kinds contribute nothing (the engine builder rejects them separately).
     #[must_use]
     pub fn for_doc(doc: &ProjectDoc, registry: &Registry) -> Self {
+        let patch_ron = Mutex::new(vb_project::to_ron(doc).unwrap_or_default());
         let mut bound = Vec::new();
         for entry in &doc.nodes {
             let Some(descriptor) = registry.get(&entry.node.kind) else {
@@ -106,7 +121,7 @@ impl VstBombParams {
                 });
             }
         }
-        Self { bound }
+        Self { bound, patch_ron }
     }
 
     /// Current values grouped per node, in registry `params()` order — the shape
@@ -142,6 +157,26 @@ unsafe impl Params for VstBombParams {
             .iter()
             .map(|b| (b.id.clone(), b.param.as_ptr(), String::new()))
             .collect()
+    }
+
+    fn serialize_fields(&self) -> BTreeMap<String, String> {
+        let mut fields = BTreeMap::new();
+        if let Ok(ron) = self.patch_ron.lock() {
+            if !ron.is_empty() {
+                fields.insert("patch".to_owned(), ron.clone());
+            }
+        }
+        fields
+    }
+
+    fn deserialize_fields(&self, serialized: &BTreeMap<String, String>) {
+        if let (Some(ron), Ok(mut slot)) = (serialized.get("patch"), self.patch_ron.lock()) {
+            // Only accept a patch that actually parses and validates; a corrupt
+            // preset keeps the current graph instead of breaking the instance.
+            if vb_project::open_ron(ron).is_ok() {
+                *slot = ron.clone();
+            }
+        }
     }
 }
 
@@ -208,7 +243,7 @@ impl Default for VstBomb {
         let (tx, rx) = engine_swap();
         Self {
             params: Arc::new(params),
-            doc: Arc::new(doc),
+            doc: Arc::new(Mutex::new(Arc::new(doc))),
             registry: Arc::new(registry),
             build_ctx: BuildContext::default(),
             engine: None,
@@ -261,10 +296,13 @@ impl Plugin for VstBomb {
                 if block == 0 {
                     return; // not initialized yet
                 }
+                let Ok(current_doc) = doc.lock().map(|d| d.clone()) else {
+                    return;
+                };
                 tx.collect();
                 let values = params.values_by_node();
                 if let Ok((engine, _)) =
-                    engine_from_doc_with_values(&doc, &registry, &build_ctx, block, &values)
+                    engine_from_doc_with_values(&current_doc, &registry, &build_ctx, block, &values)
                 {
                     tx.install(engine);
                 }
@@ -281,12 +319,25 @@ impl Plugin for VstBomb {
         self.sample_rate = buffer_config.sample_rate;
         let frames = buffer_config.max_buffer_size as usize;
         self.frames.store(frames, Ordering::Release);
+        // A state load may have delivered a different patch: nih-plug reinitializes
+        // after set_state, so this is where the restored graph takes over.
+        let current_doc = {
+            let Ok(mut slot) = self.doc.lock() else {
+                return false;
+            };
+            if let Some(restored) = self.params.stored_patch() {
+                if vb_project::to_ron(&restored).ok() != vb_project::to_ron(&slot).ok() {
+                    *slot = Arc::new(restored);
+                }
+            }
+            slot.clone()
+        };
         let values = self.params.values_by_node();
         for (slot, b) in self.built_values.iter_mut().zip(&self.params.bound) {
             *slot = b.param.value();
         }
         match engine_from_doc_with_values(
-            &self.doc,
+            &current_doc,
             &self.registry,
             &self.build_ctx,
             frames,
@@ -416,10 +467,8 @@ mod tests {
     #[test]
     fn the_plugin_constructs_with_the_default_patch() {
         let plugin = VstBomb::default();
-        assert!(
-            !plugin.doc.nodes.is_empty(),
-            "default patch has nodes to play"
-        );
+        let doc = plugin.doc.lock().unwrap().clone();
+        assert!(!doc.nodes.is_empty(), "default patch has nodes to play");
         assert!(plugin.engine.is_none(), "engine waits for initialize");
     }
 
@@ -529,6 +578,52 @@ mod tests {
     }
 
     #[test]
+    fn preset_state_carries_the_whole_patch() {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+
+        // Save: the serialized fields embed the patch RON.
+        let fields = params.serialize_fields();
+        let ron = fields.get("patch").expect("patch field present");
+        assert!(vb_project::open_ron(ron).is_ok(), "stored patch is valid");
+
+        // Restore into a fresh instance built around a DIFFERENT (smaller) patch.
+        let mut other_graph = vb_core::Graph::new();
+        other_graph.add_node(registry.graph_node("oscillator").unwrap());
+        let other_doc = ProjectDoc::from_graph(&other_graph);
+        let fresh = VstBombParams::for_doc(&other_doc, &registry);
+        fresh.deserialize_fields(&fields);
+
+        let restored = fresh.stored_patch().expect("patch restored");
+        assert_eq!(
+            restored.nodes.len(),
+            doc.nodes.len(),
+            "full graph came back"
+        );
+        assert_eq!(restored.edges.len(), doc.edges.len());
+    }
+
+    #[test]
+    fn corrupt_preset_patches_are_rejected() {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+        let before = params.stored_patch().expect("valid initial patch");
+
+        let mut corrupt = BTreeMap::new();
+        corrupt.insert("patch".to_owned(), "garbage(".to_owned());
+        params.deserialize_fields(&corrupt);
+
+        let after = params.stored_patch().expect("still the previous patch");
+        assert_eq!(
+            before.nodes.len(),
+            after.nodes.len(),
+            "corrupt state ignored"
+        );
+    }
+
+    #[test]
     fn bundle_resource_path_is_derived_from_the_dylib_location() {
         use std::path::Path;
         let dylib = Path::new("/Library/Audio/vb.clap/Contents/MacOS/vb-plugin");
@@ -547,8 +642,9 @@ mod tests {
     fn engine_compiles_at_host_buffer_sizes() {
         // The initialize path without the nih-plug harness: same builder, same doc.
         let plugin = VstBomb::default();
+        let doc = plugin.doc.lock().unwrap().clone();
         for frames in [64_usize, 256, 1_024, 4_096] {
-            let built = engine_from_doc(&plugin.doc, &plugin.registry, &plugin.build_ctx, frames);
+            let built = engine_from_doc(&doc, &plugin.registry, &plugin.build_ctx, frames);
             assert!(built.is_ok(), "buffer size {frames}");
         }
     }
