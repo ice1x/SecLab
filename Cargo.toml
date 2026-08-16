@@ -26,6 +26,7 @@ vb-runtime = { path = "crates/vb-runtime" }
 vb-editor = { path = "crates/vb-editor" }
 cpal = "0.18"
 midir = "0.11"
+criterion = "0.8"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 egui = "0.36"
