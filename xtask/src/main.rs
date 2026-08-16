@@ -15,6 +15,11 @@
 //! - `cargo xtask validate` — bundles the release plugin and runs `clap-validator`
 //!   over it (install once with
 //!   `cargo install --git https://github.com/free-audio/clap-validator.git`).
+//! - `cargo xtask bundle-vst3` — builds the VST3 via clap-wrapper (cloned and
+//!   cached under `target/`; needs `cmake` and network on first run). The produced
+//!   `vb-plugin.vst3` dynamically loads `vb-plugin.clap` from the standard CLAP
+//!   locations, so install both: the `.clap` into `~/Library/Audio/Plug-Ins/CLAP`
+//!   and the `.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
 //!
 //! Everything else is forwarded to nih-plug's xtask untouched.
 
@@ -31,6 +36,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("validate") => {
             args.next();
             validate()
+        }
+        Some("bundle-vst3") => {
+            args.next();
+            bundle_vst3()
         }
         Some("demo-patch") => {
             args.next();
@@ -84,6 +93,99 @@ fn validate() -> Result<(), Box<dyn std::error::Error>> {
         return Err(format!("clap-validator failed on {}", bundle.display()).into());
     }
     println!("clap-validator passed: {}", bundle.display());
+    Ok(())
+}
+
+/// The clap-wrapper revision we build against (pinned for reproducibility).
+const CLAP_WRAPPER_REPO: &str = "https://github.com/free-audio/clap-wrapper.git";
+
+/// Builds the release CLAP, then wraps it into a VST3 via clap-wrapper.
+fn bundle_vst3() -> Result<(), Box<dyn std::error::Error>> {
+    nih_plug_xtask::main_with_args(
+        "cargo xtask",
+        ["bundle", "vb-plugin", "--release"]
+            .into_iter()
+            .map(String::from),
+    )?;
+    let root = workspace_root()?;
+    let clap_bundle = bundle_dir()?;
+
+    // Clone once, reuse forever (delete target/clap-wrapper to refresh).
+    let wrapper_src = root.join("target").join("clap-wrapper");
+    if !wrapper_src.exists() {
+        run(
+            std::process::Command::new("git")
+                .args(["clone", "--depth", "1", CLAP_WRAPPER_REPO])
+                .arg(&wrapper_src),
+            "git clone clap-wrapper",
+        )?;
+    }
+
+    let build_dir = wrapper_src.join("build-vst3");
+    run(
+        std::process::Command::new("cmake")
+            .arg("-S")
+            .arg(&wrapper_src)
+            .arg("-B")
+            .arg(&build_dir)
+            .args([
+                "-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=ON",
+                "-DCLAP_WRAPPER_OUTPUT_NAME=vb-plugin",
+                "-DCMAKE_BUILD_TYPE=Release",
+                // Match the Rust cdylib's architecture: an x86_64 cmake (Rosetta)
+                // would otherwise build a wrapper that cannot dlopen our clap.
+                #[cfg(target_arch = "aarch64")]
+                "-DCMAKE_OSX_ARCHITECTURES=arm64",
+                #[cfg(target_arch = "x86_64")]
+                "-DCMAKE_OSX_ARCHITECTURES=x86_64",
+            ]),
+        "cmake configure (needs network on first run)",
+    )?;
+    run(
+        std::process::Command::new("cmake")
+            .arg("--build")
+            .arg(&build_dir)
+            .args(["--config", "Release", "-j8"]),
+        "cmake build",
+    )?;
+
+    // Ship the wrapper next to the clap it loads.
+    let produced = build_dir.join("vb-plugin.vst3");
+    let dest = root.join("target").join("bundled").join("vb-plugin.vst3");
+    if dest.exists() {
+        std::fs::remove_dir_all(&dest)?;
+    }
+    copy_tree(&produced, &dest)?;
+    println!("built: {}", dest.display());
+    println!(
+        "install: cp -r {} ~/Library/Audio/Plug-Ins/CLAP/ && cp -r {} ~/Library/Audio/Plug-Ins/VST3/",
+        clap_bundle.display(),
+        dest.display()
+    );
+    Ok(())
+}
+
+/// Runs a command, turning non-zero exits into errors with context.
+fn run(cmd: &mut std::process::Command, what: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let status = cmd.status().map_err(|e| format!("{what}: {e}"))?;
+    if !status.success() {
+        return Err(format!("{what} failed with {status}").into());
+    }
+    Ok(())
+}
+
+/// Recursively copies a bundle directory.
+fn copy_tree(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let dest = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_tree(&entry.path(), &dest)?;
+        } else {
+            std::fs::copy(entry.path(), &dest)?;
+        }
+    }
     Ok(())
 }
 

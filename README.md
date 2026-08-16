@@ -288,7 +288,7 @@ the definition of done.
 - [x] 000066 — Handle MIDI/notes from the host in the plugin runtime 🧪
 - [ ] 000067 — Embed the GUI (egui editor or a simplified run-view) into the plugin window
 - [x] 000068 — Save/restore plugin state in the host (preset state) 🧪
-- [ ] 000069 — Integrate `clap-wrapper`: build **VST3** from CLAP
+- [x] 000069 — Integrate `clap-wrapper`: build **VST3** from CLAP 🧪
 - [ ] 000070 — Integrate `clap-wrapper`: build **AUv2** (macOS) from CLAP
 - [ ] 000071 — Build the standalone app via `clap-wrapper`
 - [x] 000072 — Export script/`xtask`: project graph → ready plugin bundle in one command 🧪
