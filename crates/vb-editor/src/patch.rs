@@ -102,6 +102,9 @@ pub struct PatchView {
     params: HashMap<NodeId, Vec<ParamSlot>>,
     /// Undo/redo state.
     history: History,
+    /// Bumped on every audible mutation (structure, params, undo/redo) so embedders
+    /// know when to rebuild the audio engine. Selection changes do not count.
+    revision: u64,
 }
 
 impl PatchView {
@@ -155,6 +158,17 @@ impl PatchView {
         self.history.last = Some(gesture);
     }
 
+    /// Marks the patch as audibly changed.
+    fn touch(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+    }
+
+    /// Monotonic counter of audible edits. Equal values mean "nothing to rebuild".
+    #[must_use]
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
     /// Ends the current continuous gesture (mouse released): the next move or
     /// parameter edit starts a fresh undo step.
     pub fn end_gesture(&mut self) {
@@ -186,6 +200,7 @@ impl PatchView {
                 let current = self.restore(snap);
                 self.history.redo.push(current);
                 self.history.last = None;
+                self.touch();
                 true
             }
             None => false,
@@ -199,6 +214,7 @@ impl PatchView {
                 let current = self.restore(snap);
                 self.history.undo.push(current);
                 self.history.last = None;
+                self.touch();
                 true
             }
             None => false,
@@ -219,6 +235,7 @@ impl PatchView {
         pos: Pos2,
     ) -> NodeId {
         self.record(Gesture::Discrete);
+        self.touch();
         let id = self.graph.add_node(node);
         self.positions.insert(id, pos);
         self.order.push(id);
@@ -247,6 +264,7 @@ impl PatchView {
             return None;
         }
         self.record(Gesture::Param(id, index));
+        self.touch();
         let slot = self.params.get_mut(&id)?.get_mut(index)?;
         slot.value = slot.param.clamp(value);
         Some(slot.value)
@@ -265,6 +283,7 @@ impl PatchView {
     ) -> Result<Edge, vb_core::GraphError> {
         self.graph.can_connect(from, from_port, to, to_port)?;
         self.record(Gesture::Discrete);
+        self.touch();
         self.graph.connect(from, from_port, to, to_port)
     }
 
@@ -355,6 +374,7 @@ impl PatchView {
         let (from, to) = normalize_wire(drag, target)?;
         self.graph.can_connect(from.0, from.1, to.0, to.1).ok()?;
         self.record(Gesture::Discrete);
+        self.touch();
         self.graph.connect(from.0, from.1, to.0, to.1).ok()
     }
 
@@ -401,6 +421,7 @@ impl PatchView {
             return false;
         }
         self.record(Gesture::Discrete);
+        self.touch();
         if self.graph.remove_node(id).is_none() {
             return false;
         }
@@ -425,6 +446,7 @@ impl PatchView {
         let node = self.graph.node(id)?.clone();
         let pos = *self.positions.get(&id)? + Vec2::new(24.0, 24.0);
         self.record(Gesture::Discrete);
+        self.touch();
         let slots = self.params.get(&id).cloned().unwrap_or_default();
         let copy = self.graph.add_node(node);
         self.positions.insert(copy, pos);
@@ -934,6 +956,37 @@ mod tests {
 
         patch.add_node(gain(), Pos2::new(600.0, 0.0));
         assert!(!patch.can_redo(), "diverging edit invalidates redo");
+    }
+
+    #[test]
+    fn revision_tracks_audible_edits_only() {
+        let mut patch = PatchView::new();
+        let r0 = patch.revision();
+
+        let a = patch.add_node(gain(), Pos2::ZERO);
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        assert!(patch.revision() > r0, "adding nodes is audible");
+
+        let r1 = patch.revision();
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+        assert!(patch.revision() > r1, "wiring is audible");
+
+        let r2 = patch.revision();
+        patch.click(Pos2::new(5.0, 5.0), &style());
+        patch.move_node(a, Vec2::new(50.0, 0.0));
+        assert_eq!(patch.revision(), r2, "selection and moves are not audible");
+
+        let r3 = patch.revision();
+        patch.set_param(b, 0, 0.5);
+        assert!(patch.revision() > r3, "param edits are audible");
+
+        let r4 = patch.revision();
+        assert!(patch.undo());
+        assert!(patch.revision() > r4, "undo changes what sounds");
     }
 
     #[test]

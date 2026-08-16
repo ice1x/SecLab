@@ -7,15 +7,57 @@
 //! channels. Everything it does per callback is allocation-free, and it polls the
 //! [`EngineReceiver`] at each block boundary so live graph edits are picked up.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+
 use vb_core::{NodeId, ProcessContext};
 use vb_runtime::{EngineReceiver, RtEngine};
+
+/// Shared, lock-free handle to the node the feeder plays.
+///
+/// The editor thread points it at a new sink when a rebuilt engine is installed; the
+/// audio thread reads it at each block boundary. `None` (no terminal audio node in
+/// the patch) plays silence.
+#[derive(Clone)]
+pub struct SinkHandle(Arc<AtomicU64>);
+
+/// Sentinel for "no sink": patches whose ids reach this are beyond any real session.
+const NO_SINK: u64 = u64::MAX;
+
+impl SinkHandle {
+    /// Creates a handle, initially pointing at `id`.
+    #[must_use]
+    pub fn new(id: Option<NodeId>) -> Self {
+        Self(Arc::new(AtomicU64::new(id.map_or(NO_SINK, |n| n.0))))
+    }
+
+    /// Retargets the feeder to `id` (or silence for `None`).
+    pub fn set(&self, id: Option<NodeId>) {
+        self.0.store(id.map_or(NO_SINK, |n| n.0), Ordering::Release);
+    }
+
+    /// The current sink, if any.
+    #[must_use]
+    pub fn get(&self) -> Option<NodeId> {
+        match self.0.load(Ordering::Acquire) {
+            NO_SINK => None,
+            id => Some(NodeId(id)),
+        }
+    }
+}
+
+impl From<NodeId> for SinkHandle {
+    fn from(id: NodeId) -> Self {
+        Self::new(Some(id))
+    }
+}
 
 /// Pulls fixed-size engine blocks and serves arbitrary-size interleaved requests.
 pub struct BlockFeeder {
     engine: RtEngine,
     receiver: Option<EngineReceiver>,
-    /// The node whose channel 0 is played.
-    sink: NodeId,
+    /// The node whose channel 0 is played (retargetable from the editor thread).
+    sink: SinkHandle,
     ctx: ProcessContext,
     /// One engine block of sink samples, refilled when exhausted. Allocated once here;
     /// the callback path only copies.
@@ -33,14 +75,14 @@ impl BlockFeeder {
     pub fn new(
         engine: RtEngine,
         receiver: Option<EngineReceiver>,
-        sink: NodeId,
+        sink: impl Into<SinkHandle>,
         sample_rate: f32,
     ) -> Self {
         let frames = engine.block_size();
         Self {
             engine,
             receiver,
-            sink,
+            sink: sink.into(),
             ctx: ProcessContext {
                 sample_rate,
                 frames,
@@ -61,8 +103,9 @@ impl BlockFeeder {
         }
         self.engine.process(&self.ctx);
         match self
-            .engine
-            .node_output(self.sink)
+            .sink
+            .get()
+            .and_then(|sink| self.engine.node_output(sink))
             .and_then(|b| b.channel(0))
         {
             Some(sink) => {
@@ -177,6 +220,28 @@ mod tests {
         feeder.fill(&mut after, 1);
         assert_eq!(after, [2.0; 4], "swap lands at the next block boundary");
         assert!(tx.collect());
+    }
+
+    #[test]
+    fn sink_handle_retargets_between_blocks() {
+        let (engine, sink) = engine_with(Box::new(Constant(1.0)), 4);
+        let handle = SinkHandle::new(Some(sink));
+        let mut feeder = BlockFeeder::new(engine, None, handle.clone(), 48_000.0);
+
+        let mut on = [0.0_f32; 4];
+        feeder.fill(&mut on, 1);
+        assert_eq!(on, [1.0; 4]);
+
+        // Point the handle at nothing: the next block is silence, not a panic.
+        handle.set(None);
+        let mut off = [9.0_f32; 4];
+        feeder.fill(&mut off, 1);
+        assert_eq!(off, [0.0; 4]);
+
+        handle.set(Some(sink));
+        let mut back = [0.0_f32; 4];
+        feeder.fill(&mut back, 1);
+        assert_eq!(back, [1.0; 4]);
     }
 
     #[test]
