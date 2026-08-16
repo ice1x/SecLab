@@ -292,7 +292,7 @@ the definition of done.
 - [ ] 000070 — Integrate `clap-wrapper`: build **AUv2** (macOS) from CLAP
 - [ ] 000071 — Build the standalone app via `clap-wrapper`
 - [x] 000072 — Export script/`xtask`: project graph → ready plugin bundle in one command 🧪
-- [ ] 000073 — Plugin validation: `clap-validator`, `pluginval` (VST3/AU) in CI
+- [x] 000073 — Plugin validation: `clap-validator`, `pluginval` (VST3/AU) in CI *(clap-validator live in CI; pluginval joins when VST3/AU exports land — 000069/000070)*
 - [ ] 000074 — Test loading the exported plugin in a real host (Reaper/Logic) — checklist
 - [ ] 000075 — Sign/notarize the AU bundle on macOS (document the process)
 

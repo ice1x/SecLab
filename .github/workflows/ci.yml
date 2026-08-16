@@ -36,3 +36,13 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace
+
+  # clap-validator is installed machine-wide on the runner
+  # (cargo install --git https://github.com/free-audio/clap-validator.git).
+  # pluginval joins for VST3/AU once those exports land (000069/000070).
+  plugin-validate:
+    name: clap-validator (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo xtask validate

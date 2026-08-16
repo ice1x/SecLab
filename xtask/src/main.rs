@@ -12,6 +12,9 @@
 //!
 //! - `cargo xtask demo-patch <out.vbp>` — writes the built-in default patch as a
 //!   starting-point project file.
+//! - `cargo xtask validate` — bundles the release plugin and runs `clap-validator`
+//!   over it (install once with
+//!   `cargo install --git https://github.com/free-audio/clap-validator.git`).
 //!
 //! Everything else is forwarded to nih-plug's xtask untouched.
 
@@ -25,6 +28,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let patch = args.next().ok_or("usage: cargo xtask export <patch.vbp>")?;
             export(Path::new(&patch))
         }
+        Some("validate") => {
+            args.next();
+            validate()
+        }
         Some("demo-patch") => {
             args.next();
             let out = args
@@ -37,6 +44,42 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => nih_plug_xtask::main_with_args("cargo xtask", args).map_err(Into::into),
     }
+}
+
+/// Tests our plugin behaviour, not the validator's: excluded below are two
+/// clap-validator tests that crash on any zero-parameter plugin ('param-conversions'
+/// divides by the parameter count — labelled a validator bug in its own panic
+/// message — and 'state-invalid-random' aborts its harness on random state). Drop
+/// the exclusions once host-automatable parameters land (000065).
+const VALIDATOR_EXCLUDES: &[&str] = &["param-conversions", "state-invalid-random"];
+
+/// Bundles the release plugin and runs clap-validator over the bundle.
+fn validate() -> Result<(), Box<dyn std::error::Error>> {
+    nih_plug_xtask::main_with_args(
+        "cargo xtask",
+        ["bundle", "vb-plugin", "--release"]
+            .into_iter()
+            .map(String::from),
+    )?;
+    let bundle = bundle_dir()?;
+
+    let mut cmd = std::process::Command::new("clap-validator");
+    cmd.arg("validate");
+    for exclude in VALIDATOR_EXCLUDES {
+        cmd.args(["--exclude", exclude]);
+    }
+    cmd.arg(&bundle);
+    let status = cmd.status().map_err(|e| {
+        format!(
+            "failed to run clap-validator ({e}); install it with \
+             `cargo install --git https://github.com/free-audio/clap-validator.git`"
+        )
+    })?;
+    if !status.success() {
+        return Err(format!("clap-validator failed on {}", bundle.display()).into());
+    }
+    println!("clap-validator passed: {}", bundle.display());
+    Ok(())
 }
 
 /// Validates `patch`, bundles the release plugin, installs the patch as a resource.
