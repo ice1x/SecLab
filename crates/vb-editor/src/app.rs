@@ -5,6 +5,7 @@
 //! - drag from a port — pull a wire; drop on a compatible port to connect
 //! - drag a node's title/body — move it; click — select (raises), click empty to clear
 //! - Delete/Backspace — remove the selection; Cmd/Ctrl+D — duplicate it
+//! - Cmd/Ctrl+Z — undo; Shift+Cmd/Ctrl+Z — redo (one step per completed gesture)
 //!
 //! Undo/redo and macro-node navigation land in the follow-up Epic 4 tasks; this shell
 //! owns the [`Camera`] and the [`PatchView`] they all draw through.
@@ -91,6 +92,8 @@ fn demo_patch(registry: &Registry) -> PatchView {
     patch
         .connect(flt, PortId(0), amp, PortId(0))
         .expect("demo filter→gain");
+    // Seeding is not a user edit: undo must not walk back into an empty canvas.
+    patch.clear_history();
     patch
 }
 
@@ -184,15 +187,18 @@ impl EditorApp {
                 self.patch.end_wire(canvas, &self.style);
             }
             self.moving = None;
+            self.patch.end_gesture();
         }
 
         // Keyboard: delete/duplicate the selection — unless a text field (e.g. the
         // palette search box) owns the keyboard.
         if !ui.ctx().egui_wants_keyboard_input() {
-            let (delete, duplicate) = ui.input(|i| {
+            let (delete, duplicate, undo, redo) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
                     i.modifiers.command && i.key_pressed(egui::Key::D),
+                    i.modifiers.command && !i.modifiers.shift && i.key_pressed(egui::Key::Z),
+                    i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z),
                 )
             });
             if delete {
@@ -200,6 +206,12 @@ impl EditorApp {
             }
             if duplicate {
                 self.patch.duplicate_selected();
+            }
+            if undo {
+                self.patch.undo();
+            }
+            if redo {
+                self.patch.redo();
             }
         }
 
@@ -468,11 +480,12 @@ impl EditorApp {
         for (i, slot) in slots.iter().enumerate() {
             let mut value = slot.value;
             let range = slot.param.min..=slot.param.max;
-            if ui
-                .add(egui::Slider::new(&mut value, range).text(&slot.param.name))
-                .changed()
-            {
+            let response = ui.add(egui::Slider::new(&mut value, range).text(&slot.param.name));
+            if response.changed() {
                 self.patch.set_param(id, i, value);
+            }
+            if response.drag_stopped() || response.lost_focus() {
+                self.patch.end_gesture();
             }
         }
     }
@@ -525,6 +538,19 @@ impl eframe::App for EditorApp {
                 ui.label(format!("zoom {:.0}%", self.camera.zoom() * 100.0));
                 if ui.button("reset view").clicked() {
                     self.camera = Camera::default();
+                }
+                ui.separator();
+                if ui
+                    .add_enabled(self.patch.can_undo(), egui::Button::new("undo"))
+                    .clicked()
+                {
+                    self.patch.undo();
+                }
+                if ui
+                    .add_enabled(self.patch.can_redo(), egui::Button::new("redo"))
+                    .clicked()
+                {
+                    self.patch.redo();
                 }
                 if let Some(id) = self.patch.selected() {
                     ui.separator();
@@ -629,6 +655,22 @@ mod tests {
         // The inspector writes through set_param, which clamps into range.
         assert_eq!(app.patch_mut().set_param(id, 1, 99_999.0), Some(20_000.0));
         assert!((app.patch().params(id)[1].value - 20_000.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn undo_cannot_walk_back_into_an_empty_canvas_but_undoes_spawns() {
+        let mut app = EditorApp::new();
+        assert!(!app.patch().can_undo(), "demo seeding left no history");
+
+        let before = app.patch().graph().node_count();
+        app.spawn_node("mix").expect("builtin");
+        assert_eq!(app.patch().graph().node_count(), before + 1);
+
+        assert!(app.patch_mut().undo());
+        assert_eq!(app.patch().graph().node_count(), before);
+        assert!(!app.patch().can_undo(), "only the spawn was undoable");
+        assert!(app.patch_mut().redo());
+        assert_eq!(app.patch().graph().node_count(), before + 1);
     }
 
     #[test]
