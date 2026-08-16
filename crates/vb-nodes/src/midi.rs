@@ -77,6 +77,8 @@ impl NoteSource {
 pub struct BuildContext {
     /// The note mailbox `midi-in` nodes listen to.
     pub notes: NoteSource,
+    /// The polyphonic mailbox `voice-in` nodes listen to.
+    pub poly: crate::poly::PolyNoteSource,
 }
 
 /// Processor emitting `gate` (0/1), `pitch_hz`, and `velocity` (0..1) control

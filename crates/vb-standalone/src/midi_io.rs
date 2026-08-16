@@ -5,7 +5,7 @@
 //! does an atomic store into the shared [`NoteSource`] — no locks, no allocation.
 
 use midir::{MidiInput, MidiInputConnection, MidiInputPort};
-use vb_nodes::NoteSource;
+use vb_nodes::{BuildContext, NoteSource, PolyNoteSource};
 
 /// A note event extracted from a raw MIDI message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,6 +49,16 @@ pub fn apply_note_event(notes: &NoteSource, event: NoteEvent) {
     }
 }
 
+/// Feeds a parsed event into the polyphonic mailbox.
+pub fn apply_poly_event(poly: &PolyNoteSource, event: NoteEvent) {
+    match event {
+        NoteEvent::On { note, velocity } => {
+            poly.note_on(note, velocity);
+        }
+        NoteEvent::Off { note } => poly.note_off(note),
+    }
+}
+
 /// Names of the currently available MIDI input ports.
 #[must_use]
 pub fn list_ports() -> Vec<String> {
@@ -64,7 +74,7 @@ pub fn list_ports() -> Vec<String> {
 
 /// Connects to the input port at `index` (as listed by [`list_ports`]) and routes
 /// its note events into `notes`. Dropping the returned connection disconnects.
-pub fn connect_port(index: usize, notes: NoteSource) -> Result<MidiInputConnection<()>, String> {
+pub fn connect_port(index: usize, ctx: BuildContext) -> Result<MidiInputConnection<()>, String> {
     let input = MidiInput::new("vb-standalone").map_err(|e| e.to_string())?;
     let ports = input.ports();
     let port: &MidiInputPort = ports.get(index).ok_or("MIDI port disappeared")?;
@@ -75,7 +85,9 @@ pub fn connect_port(index: usize, notes: NoteSource) -> Result<MidiInputConnecti
             &name,
             move |_timestamp, message, ()| {
                 if let Some(event) = parse_note_event(message) {
-                    apply_note_event(&notes, event);
+                    // Mono midi-in nodes and poly voice-in nodes both hear it.
+                    apply_note_event(&ctx.notes, event);
+                    apply_poly_event(&ctx.poly, event);
                 }
             },
             (),
@@ -125,6 +137,30 @@ mod tests {
         assert_eq!(parse_note_event(&[0xf8]), None, "clock");
         assert_eq!(parse_note_event(&[0x90, 60]), None, "truncated");
         assert_eq!(parse_note_event(&[]), None, "empty");
+    }
+
+    #[test]
+    fn events_drive_the_poly_source_with_voice_allocation() {
+        let poly = PolyNoteSource::new();
+        apply_poly_event(
+            &poly,
+            NoteEvent::On {
+                note: 60,
+                velocity: 100,
+            },
+        );
+        apply_poly_event(
+            &poly,
+            NoteEvent::On {
+                note: 64,
+                velocity: 80,
+            },
+        );
+        assert_eq!(poly.read(0), (true, 60, 100));
+        assert_eq!(poly.read(1), (true, 64, 80));
+        apply_poly_event(&poly, NoteEvent::Off { note: 60 });
+        assert!(!poly.read(0).0);
+        assert!(poly.read(1).0);
     }
 
     #[test]

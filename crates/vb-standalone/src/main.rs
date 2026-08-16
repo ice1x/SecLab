@@ -19,9 +19,7 @@ use std::collections::HashMap;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use vb_core::{Graph, GraphNode, NodeId, Port, PortId, Processor, SignalType};
 use vb_editor::EditorApp;
-use vb_nodes::{
-    Biquad, BuildContext, FilterKind, Gain, NoteSource, Oscillator, Registry, Waveform,
-};
+use vb_nodes::{Biquad, BuildContext, FilterKind, Gain, Oscillator, Registry, Waveform};
 use vb_runtime::{engine_swap, EngineSender, RtEngine};
 
 use audio::{BlockFeeder, LoadMonitor, SinkHandle};
@@ -247,7 +245,7 @@ impl LiveApp {
     /// Connects MIDI port `i`, replacing any current connection.
     fn connect_midi(&mut self, i: usize) {
         self.disconnect_midi();
-        match connect_port(i, self.build_ctx.notes.clone()) {
+        match connect_port(i, self.build_ctx.clone()) {
             Ok(conn) => {
                 self.midi_conn = Some(conn);
                 self.sel_midi = Some(i);
@@ -374,9 +372,7 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
 
     let editor = EditorApp::new();
     let registry = Registry::with_builtins();
-    let build_ctx = BuildContext {
-        notes: NoteSource::new(),
-    };
+    let build_ctx = BuildContext::default();
     let stack = start_stack(
         device,
         sel_rate,
