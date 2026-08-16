@@ -1,9 +1,10 @@
-//! Proves the central real-time claim: `RtEngine::process` performs no heap allocation.
+//! Proves the central real-time claim: the audio-thread path — `RtEngine::process`
+//! *and* `EngineReceiver::poll_swap` — performs no heap allocation and no deallocation.
 //!
 //! A counting global allocator is installed for this test binary. A global allocator sees
 //! *every* thread, including the test harness's own bookkeeping, so counting is armed per
-//! thread: only allocations made on the thread running the measured loop are tallied.
-//! Setup is free to allocate as much as it likes — the window opens after it.
+//! thread: only traffic on the thread running the measured loop is tallied. Setup is free
+//! to allocate as much as it likes — the window opens after it.
 
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
@@ -11,24 +12,26 @@ use std::collections::HashMap;
 
 use vb_core::{Graph, GraphNode, NodeId, Port, PortId, ProcessContext, Processor, SignalType};
 use vb_nodes::{Adsr, Biquad, FilterKind, Mul, Oscillator, Waveform};
-use vb_runtime::RtEngine;
+use vb_runtime::{engine_swap, RtEngine};
 
 thread_local! {
     /// Whether this thread is inside the measured window.
     static COUNTING: Cell<bool> = const { Cell::new(false) };
     /// Allocations this thread made while armed.
     static ALLOCATIONS: Cell<usize> = const { Cell::new(0) };
+    /// Deallocations this thread made while armed.
+    static DEALLOCATIONS: Cell<usize> = const { Cell::new(0) };
 }
 
-/// Records one allocation if this thread is armed.
+/// Bumps `counter` if this thread is armed.
 ///
-/// Both thread-locals are const-initialised and hold no destructor, so touching them
+/// The thread-locals are const-initialised and hold no destructor, so touching them
 /// cannot itself allocate or re-enter the allocator. `try_with` keeps this sound even
 /// during thread teardown, when the locals may already be gone.
-fn note_allocation() {
+fn note(counter: &'static std::thread::LocalKey<Cell<usize>>) {
     let armed = COUNTING.try_with(Cell::get).unwrap_or(false);
     if armed {
-        let _ = ALLOCATIONS.try_with(|n| n.set(n.get() + 1));
+        let _ = counter.try_with(|n| n.set(n.get() + 1));
     }
 }
 
@@ -38,21 +41,22 @@ struct CountingAllocator;
 // observe traffic and never affect the returned pointers.
 unsafe impl GlobalAlloc for CountingAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
+        note(&ALLOCATIONS);
         unsafe { System.alloc(layout) }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        note(&DEALLOCATIONS);
         unsafe { System.dealloc(ptr, layout) }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        note_allocation();
+        note(&ALLOCATIONS);
         unsafe { System.realloc(ptr, layout, new_size) }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        note_allocation();
+        note(&ALLOCATIONS);
         unsafe { System.alloc_zeroed(layout) }
     }
 }
@@ -120,23 +124,55 @@ fn processing_a_block_does_not_allocate() {
         frames: 256,
     };
 
+    // A replacement engine (same patch, silent oscillator level is irrelevant — only
+    // the swap mechanics matter), parked in the pending mailbox before the window so
+    // the measured loop performs one real swap plus many no-op polls.
+    let (tx, rx) = engine_swap();
+    let mut procs2: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+    procs2.insert(osc, Box::new(Oscillator::new(Waveform::Saw, 110.0)));
+    procs2.insert(
+        flt,
+        Box::new(Biquad::new(FilterKind::LowPass, 2_000.0, 0.707)),
+    );
+    procs2.insert(gate, Box::new(GateHigh));
+    procs2.insert(env, Box::new(Adsr::new(0.001, 0.001, 0.8, 0.01)));
+    procs2.insert(vca, Box::new(Mul));
+    tx.install(RtEngine::compile(&graph, procs2, 256).unwrap());
+
     // Warm up outside the measured window.
     engine.process(&ctx);
 
     ALLOCATIONS.with(|n| n.set(0));
+    DEALLOCATIONS.with(|n| n.set(0));
     COUNTING.with(|c| c.set(true));
+    let mut swaps = 0;
     for _ in 0..64 {
+        if rx.poll_swap(&mut engine) {
+            swaps += 1;
+        }
         engine.process(&ctx);
     }
     COUNTING.with(|c| c.set(false));
 
     assert_eq!(
+        swaps, 1,
+        "exactly one pending engine should have been swapped in"
+    );
+    assert_eq!(
         ALLOCATIONS.with(Cell::get),
         0,
-        "RtEngine::process must not allocate on the audio thread"
+        "the audio-thread path (process + poll_swap) must not allocate"
+    );
+    assert_eq!(
+        DEALLOCATIONS.with(Cell::get),
+        0,
+        "the audio-thread path must not free memory either — retirees are parked"
     );
 
     // And it still produced audio.
     let out = engine.node_output(vca).unwrap().channel(0).unwrap();
     assert!(out.iter().any(|&s| s.abs() > 0.01));
+
+    // The retired engine is freed on the editor side.
+    assert!(tx.collect());
 }
