@@ -289,7 +289,7 @@ the definition of done.
 - [ ] 000067 — Embed the GUI (egui editor or a simplified run-view) into the plugin window
 - [x] 000068 — Save/restore plugin state in the host (preset state) 🧪
 - [x] 000069 — Integrate `clap-wrapper`: build **VST3** from CLAP 🧪
-- [ ] 000070 — Integrate `clap-wrapper`: build **AUv2** (macOS) from CLAP
+- [x] 000070 — Integrate `clap-wrapper`: build **AUv2** (macOS) from CLAP 🧪
 - [ ] 000071 — Build the standalone app via `clap-wrapper`
 - [x] 000072 — Export script/`xtask`: project graph → ready plugin bundle in one command 🧪
 - [x] 000073 — Plugin validation: `clap-validator`, `pluginval` (VST3/AU) in CI *(clap-validator live in CI; pluginval joins when VST3/AU exports land — 000069/000070)*

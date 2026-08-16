@@ -20,6 +20,9 @@
 //!   `vb-plugin.vst3` dynamically loads `vb-plugin.clap` from the standard CLAP
 //!   locations, so install both: the `.clap` into `~/Library/Audio/Plug-Ins/CLAP`
 //!   and the `.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
+//! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
+//!   into `~/Library/Audio/Plug-Ins/Components`, validate with
+//!   `auval -v aumu gWrp clAd`).
 //!
 //! Everything else is forwarded to nih-plug's xtask untouched.
 
@@ -39,7 +42,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some("bundle-vst3") => {
             args.next();
-            bundle_vst3()
+            bundle_wrapped(WrappedFormat::Vst3)
+        }
+        Some("bundle-auv2") => {
+            args.next();
+            bundle_wrapped(WrappedFormat::Auv2)
         }
         Some("demo-patch") => {
             args.next();
@@ -99,8 +106,38 @@ fn validate() -> Result<(), Box<dyn std::error::Error>> {
 /// The clap-wrapper revision we build against (pinned for reproducibility).
 const CLAP_WRAPPER_REPO: &str = "https://github.com/free-audio/clap-wrapper.git";
 
-/// Builds the release CLAP, then wraps it into a VST3 via clap-wrapper.
-fn bundle_vst3() -> Result<(), Box<dyn std::error::Error>> {
+/// Which clap-wrapper output to build.
+#[derive(Clone, Copy)]
+enum WrappedFormat {
+    Vst3,
+    Auv2,
+}
+
+impl WrappedFormat {
+    fn build_dir(self) -> &'static str {
+        match self {
+            Self::Vst3 => "build-vst3",
+            Self::Auv2 => "build-auv2",
+        }
+    }
+
+    fn artifact(self) -> &'static str {
+        match self {
+            Self::Vst3 => "vb-plugin.vst3",
+            Self::Auv2 => "vb-plugin.component",
+        }
+    }
+
+    fn install_dir(self) -> &'static str {
+        match self {
+            Self::Vst3 => "~/Library/Audio/Plug-Ins/VST3/",
+            Self::Auv2 => "~/Library/Audio/Plug-Ins/Components/",
+        }
+    }
+}
+
+/// Builds the release CLAP, then wraps it into the requested format via clap-wrapper.
+fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error>> {
     nih_plug_xtask::main_with_args(
         "cargo xtask",
         ["bundle", "vb-plugin", "--release"]
@@ -121,24 +158,29 @@ fn bundle_vst3() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
 
-    let build_dir = wrapper_src.join("build-vst3");
+    let build_dir = wrapper_src.join(format.build_dir());
+    let mut configure = std::process::Command::new("cmake");
+    configure
+        .arg("-S")
+        .arg(&wrapper_src)
+        .arg("-B")
+        .arg(&build_dir)
+        .args([
+            "-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=ON",
+            "-DCLAP_WRAPPER_OUTPUT_NAME=vb-plugin",
+            "-DCMAKE_BUILD_TYPE=Release",
+            // Match the Rust cdylib's architecture: an x86_64 cmake (Rosetta)
+            // would otherwise build a wrapper that cannot dlopen our clap.
+            #[cfg(target_arch = "aarch64")]
+            "-DCMAKE_OSX_ARCHITECTURES=arm64",
+            #[cfg(target_arch = "x86_64")]
+            "-DCMAKE_OSX_ARCHITECTURES=x86_64",
+        ]);
+    if matches!(format, WrappedFormat::Auv2) {
+        configure.arg("-DCLAP_WRAPPER_BUILD_AUV2=ON");
+    }
     run(
-        std::process::Command::new("cmake")
-            .arg("-S")
-            .arg(&wrapper_src)
-            .arg("-B")
-            .arg(&build_dir)
-            .args([
-                "-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=ON",
-                "-DCLAP_WRAPPER_OUTPUT_NAME=vb-plugin",
-                "-DCMAKE_BUILD_TYPE=Release",
-                // Match the Rust cdylib's architecture: an x86_64 cmake (Rosetta)
-                // would otherwise build a wrapper that cannot dlopen our clap.
-                #[cfg(target_arch = "aarch64")]
-                "-DCMAKE_OSX_ARCHITECTURES=arm64",
-                #[cfg(target_arch = "x86_64")]
-                "-DCMAKE_OSX_ARCHITECTURES=x86_64",
-            ]),
+        &mut configure,
         "cmake configure (needs network on first run)",
     )?;
     run(
@@ -150,17 +192,18 @@ fn bundle_vst3() -> Result<(), Box<dyn std::error::Error>> {
     )?;
 
     // Ship the wrapper next to the clap it loads.
-    let produced = build_dir.join("vb-plugin.vst3");
-    let dest = root.join("target").join("bundled").join("vb-plugin.vst3");
+    let produced = build_dir.join(format.artifact());
+    let dest = root.join("target").join("bundled").join(format.artifact());
     if dest.exists() {
         std::fs::remove_dir_all(&dest)?;
     }
     copy_tree(&produced, &dest)?;
     println!("built: {}", dest.display());
     println!(
-        "install: cp -r {} ~/Library/Audio/Plug-Ins/CLAP/ && cp -r {} ~/Library/Audio/Plug-Ins/VST3/",
+        "install: cp -r {} ~/Library/Audio/Plug-Ins/CLAP/ && cp -r {} {}",
         clap_bundle.display(),
-        dest.display()
+        dest.display(),
+        format.install_dir()
     );
     Ok(())
 }
