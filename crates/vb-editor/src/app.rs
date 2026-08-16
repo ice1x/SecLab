@@ -9,7 +9,7 @@
 //! shell owns the [`Camera`] and the [`PatchView`] they all draw through.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
-use vb_core::{GraphNode, Port, SignalType};
+use vb_core::{GraphNode, Port, PortDirection, PortId, SignalType};
 
 use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
@@ -36,7 +36,7 @@ impl Default for EditorApp {
 /// oscillator → filter → gain shape the standalone plays.
 fn demo_patch() -> PatchView {
     let mut patch = PatchView::new();
-    patch.add_node(
+    let osc = patch.add_node(
         GraphNode::new(
             "oscillator",
             vec![],
@@ -44,7 +44,7 @@ fn demo_patch() -> PatchView {
         ),
         Pos2::new(0.0, 0.0),
     );
-    patch.add_node(
+    let flt = patch.add_node(
         GraphNode::new(
             "biquad",
             vec![
@@ -55,7 +55,7 @@ fn demo_patch() -> PatchView {
         ),
         Pos2::new(180.0, 10.0),
     );
-    patch.add_node(
+    let amp = patch.add_node(
         GraphNode::new(
             "gain",
             vec![Port::input("in", SignalType::Audio)],
@@ -64,6 +64,28 @@ fn demo_patch() -> PatchView {
         Pos2::new(360.0, 20.0),
     );
     patch
+        .connect(osc, PortId(0), flt, PortId(0))
+        .expect("demo osc→filter");
+    patch
+        .connect(flt, PortId(0), amp, PortId(0))
+        .expect("demo filter→gain");
+    patch
+}
+
+/// Draws one wire as a horizontal-tangent cubic Bézier between two screen points.
+fn draw_wire(painter: &egui::Painter, from: Pos2, to: Pos2, width: f32, color: Color32) {
+    let bend = ((to.x - from.x).abs() * 0.5).max(24.0);
+    painter.add(egui::epaint::CubicBezierShape::from_points_stroke(
+        [
+            from,
+            from + Vec2::new(bend, 0.0),
+            to - Vec2::new(bend, 0.0),
+            to,
+        ],
+        false,
+        Color32::TRANSPARENT,
+        Stroke::new(width, color),
+    ));
 }
 
 /// Port circle colour per signal type (audio = teal, control = amber, event = violet).
@@ -108,9 +130,21 @@ impl EditorApp {
         let viewport = response.rect;
         let origin = viewport.min.to_vec2();
 
-        // Pan: drag anywhere on the canvas.
-        if response.dragged() {
+        // A drag starting on a port pulls a wire; anywhere else it pans.
+        if response.drag_started() {
+            if let Some(pointer) = response.interact_pointer_pos() {
+                let canvas = self.camera.screen_to_canvas(pointer - origin);
+                self.patch.begin_wire(canvas, &self.style);
+            }
+        }
+        if response.dragged() && self.patch.wire_drag().is_none() {
             self.camera.pan_by(response.drag_delta());
+        }
+        if response.drag_stopped() {
+            if let Some(pointer) = response.interact_pointer_pos() {
+                let canvas = self.camera.screen_to_canvas(pointer - origin);
+                self.patch.end_wire(canvas, &self.style);
+            }
         }
 
         // Zoom: scroll/pinch, anchored at the pointer.
@@ -133,7 +167,54 @@ impl EditorApp {
         }
 
         self.paint_grid(&painter, viewport);
+        self.paint_wires(&painter, origin, response.hover_pos());
         self.paint_nodes(&painter, origin);
+    }
+
+    /// Paints every graph edge as a Bézier wire, plus the pending wire while dragging.
+    fn paint_wires(&self, painter: &egui::Painter, origin: Vec2, pointer: Option<Pos2>) {
+        let to_screen = |p: Pos2| self.camera.canvas_to_screen(p) + origin;
+        let stroke_w = (2.0 * self.camera.zoom()).clamp(1.0, 4.0);
+
+        for edge in self.patch.graph().edges() {
+            let (Some(from), Some(to)) = (
+                self.patch.port_anchor(
+                    edge.from_node,
+                    PortDirection::Output,
+                    edge.from_port,
+                    &self.style,
+                ),
+                self.patch.port_anchor(
+                    edge.to_node,
+                    PortDirection::Input,
+                    edge.to_port,
+                    &self.style,
+                ),
+            ) else {
+                continue;
+            };
+            let color = self
+                .patch
+                .graph()
+                .node(edge.from_node)
+                .and_then(|n| n.outputs.get(edge.from_port.0))
+                .map_or(Color32::from_gray(160), |p| signal_color(p.signal));
+            draw_wire(painter, to_screen(from), to_screen(to), stroke_w, color);
+        }
+
+        // The pending wire follows the pointer from the grabbed port.
+        if let (Some(drag), Some(pointer)) = (self.patch.wire_drag(), pointer) {
+            if let Some(anchor) =
+                self.patch
+                    .port_anchor(drag.node, drag.direction, drag.port, &self.style)
+            {
+                let (from, to) = match drag.direction {
+                    PortDirection::Output => (to_screen(anchor), pointer),
+                    PortDirection::Input => (pointer, to_screen(anchor)),
+                };
+                draw_wire(painter, from, to, stroke_w, Color32::from_gray(200));
+            }
+        }
     }
 
     /// Paints the adaptive background grid over `viewport`.
@@ -247,6 +328,14 @@ impl EditorApp {
         let canvas = self.camera.screen_to_canvas(screen);
         self.patch.click(canvas, &self.style);
     }
+
+    /// Test/integration hook: a full wire drag between two viewport-local positions.
+    pub fn drag_wire(&mut self, from_screen: Pos2, to_screen: Pos2) {
+        let from = self.camera.screen_to_canvas(from_screen);
+        let to = self.camera.screen_to_canvas(to_screen);
+        self.patch.begin_wire(from, &self.style);
+        self.patch.end_wire(to, &self.style);
+    }
 }
 
 impl eframe::App for EditorApp {
@@ -312,10 +401,54 @@ mod tests {
     }
 
     #[test]
-    fn the_demo_patch_is_on_the_canvas() {
+    fn the_demo_patch_is_on_the_canvas_and_wired() {
         let app = EditorApp::new();
         assert_eq!(app.patch().graph().node_count(), 3);
+        assert_eq!(app.patch().graph().edges().len(), 2, "osc→filter→gain");
         assert_eq!(app.patch().selected(), None);
+    }
+
+    #[test]
+    fn a_wire_can_be_dragged_between_ports_through_the_camera() {
+        let mut app = EditorApp::new();
+        app.pan(Vec2::new(25.0, 40.0));
+        app.zoom(Pos2::new(10.0, 10.0), 1.3);
+
+        // The demo gain node's output is free; wire it back is impossible (cycle), so
+        // add a fresh sink node and wire gain.out → sink.in.
+        let sink = app.patch_mut().add_node(
+            GraphNode::new("sink", vec![Port::input("in", SignalType::Audio)], vec![]),
+            Pos2::new(560.0, 30.0),
+        );
+        let edges_before = app.patch().graph().edges().len();
+
+        let gain = app
+            .patch()
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "gain")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        let from = app
+            .patch()
+            .port_anchor(
+                gain,
+                PortDirection::Output,
+                PortId(0),
+                &NodeStyle::default(),
+            )
+            .unwrap();
+        let to = app
+            .patch()
+            .port_anchor(sink, PortDirection::Input, PortId(0), &NodeStyle::default())
+            .unwrap();
+
+        let cam = *app.camera();
+        app.drag_wire(cam.canvas_to_screen(from), cam.canvas_to_screen(to));
+
+        let edges = app.patch().graph().edges();
+        assert_eq!(edges.len(), edges_before + 1);
+        let new = edges.last().unwrap();
+        assert_eq!((new.from_node, new.to_node), (gain, sink));
     }
 
     #[test]
