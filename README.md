@@ -231,7 +231,7 @@ the definition of done.
 - [x] 000026 — Filter: biquad (LP/HP/BP/notch) 🧪
 - [ ] 000027 — Filter: state-variable / ladder 🧪
 - [x] 000028 — ADSR envelope 🧪
-- [ ] 000029 — LFO (with tempo sync) 🧪
+- [x] 000029 — LFO (with tempo sync) 🧪
 - [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
 - [ ] 000031 — Routing nodes: splitter, merger, selector 🧪
 - [ ] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪

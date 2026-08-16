@@ -11,6 +11,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
+use crate::lfo::{Division, Lfo};
 use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
@@ -102,6 +103,17 @@ fn waveform_from(v: f32) -> Waveform {
         2 => Waveform::Square,
         3 => Waveform::Triangle,
         _ => Waveform::Sine,
+    }
+}
+
+/// Maps a stepped float to a [`Division`] (0 whole … 4 sixteenth).
+fn division_from(v: f32) -> Division {
+    match v.round() as i32 {
+        0 => Division::Whole,
+        1 => Division::Half,
+        3 => Division::Eighth,
+        4 => Division::Sixteenth,
+        _ => Division::Quarter,
     }
 }
 
@@ -321,6 +333,39 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 0.7),
                     arg(v, 3, 0.2),
                 ))
+            },
+        ),
+        NodeDescriptor::new(
+            "lfo",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "lfo",
+                    vec![],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Lfo::new(Waveform::Sine, 2.0)),
+            || {
+                vec![
+                    Parameter::new("waveform", 0.0, 3.0, 0.0),
+                    Parameter::new("sync", 0.0, 1.0, 0.0),
+                    Parameter::new("freq_hz", 0.01, 50.0, 2.0),
+                    Parameter::new("bpm", 20.0, 300.0, 120.0),
+                    Parameter::new("division", 0.0, 4.0, 2.0),
+                ]
+            },
+            |_, v| {
+                let waveform = waveform_from(arg(v, 0, 0.0));
+                if arg(v, 1, 0.0).round() as i32 == 1 {
+                    Box::new(Lfo::synced(
+                        waveform,
+                        arg(v, 3, 120.0),
+                        division_from(arg(v, 4, 2.0)),
+                    ))
+                } else {
+                    Box::new(Lfo::new(waveform, arg(v, 2, 2.0)))
+                }
             },
         ),
         NodeDescriptor::new(
