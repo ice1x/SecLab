@@ -12,6 +12,7 @@ pub mod midi;
 pub mod noise;
 pub mod oscillator;
 pub mod registry;
+pub mod svf;
 
 pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
@@ -21,3 +22,4 @@ pub use midi::{midi_note_to_hz, BuildContext, MidiIn, NoteSource};
 pub use noise::{Noise, NoiseKind};
 pub use oscillator::{Oscillator, Waveform};
 pub use registry::{NodeDescriptor, Registry};
+pub use svf::Svf;

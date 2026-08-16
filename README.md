@@ -229,7 +229,7 @@ the definition of done.
 - [x] 000024 — Generator: oscillator (sine/saw/square/triangle) with anti-aliasing 🧪
 - [x] 000025 — Noise generator (white/pink) 🧪
 - [x] 000026 — Filter: biquad (LP/HP/BP/notch) 🧪
-- [ ] 000027 — Filter: state-variable / ladder 🧪
+- [x] 000027 — Filter: state-variable / ladder 🧪
 - [x] 000028 — ADSR envelope 🧪
 - [x] 000029 — LFO (with tempo sync) 🧪
 - [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
