@@ -146,6 +146,14 @@ add API key ──▶ describe the device ──▶ critique & clarify ──▶
    same RON `ProjectDoc` the editor loads, so `vb-core` validation is the hard gate —
    an invalid proposal never reaches the canvas, it goes back to the model with the
    validator's issue list until it converges or the assistant admits defeat.
+   *Beyond MVP, grounding upgrades from a static card corpus to a **knowledge graph in
+   drevo**: the product docs are converted into typed ontology (node kinds, ports,
+   compatibility rules, DSP heuristics, example patches, linked by `has_port` /
+   `compatible_with` / `explains` edges), and the assistant retrieves only the slice a
+   question needs via `KnowledgeStore` — GraphRAG instead of prompt-stuffing, saving
+   tokens per exchange. The same graph doubles as a **drevo MCP server** for external
+   AI agents (dev tooling) — that server mode is an optional frontend and does not
+   change the in-app rule: embedded drevo via the direct Rust API.*
 3. **Skills & pre-prompts.** Reusable prompt assets shipped with the app: a system
    pre-prompt (role, output contract, refusal rules), per-task *skills* (synth design,
    effect design, patch explanation, patch repair), and DSP design heuristics (gain
@@ -382,8 +390,15 @@ the definition of done.
 - [ ] 000125 — End-to-end MVP scenario test: scripted dialogue (mock provider) → validated graph → exported CLAP/VST3 bundle (ties into Epic 7) 🧪
 - [ ] 000126 — 🧩 Golden-transcript tests for prompt assets: pre-prompt/skills regressions caught by fixture dialogues 🧪
 
+#### Knowledge graph grounding (docs → drevo → GraphRAG / MCP)
+
+- [ ] 000127 — Docs→graph pipeline: convert the product documentation (node reference from 000086/000115, port compatibility rules, DSP heuristics, example patches) into a typed drevo knowledge graph — `NodeKind` / `Port` / `Parameter` / `Concept` / `Heuristic` / `ExamplePatch` nodes with `has_port` / `compatible_with` / `in_category` / `explains` / `uses` edges 🧪
+- [ ] 000128 — Assistant retrieval over the graph: `KnowledgeStore` queries fetch only the ontology slice a question needs (FTS + vector + graph traversal), replacing the full node-card corpus in the prompt; measure the token savings per exchange 🧪
+- [ ] 000129 — 🧩 Expose the same knowledge graph via drevo's MCP/server mode for external AI agents (dev tooling); off by default, does not change the embedded in-app path
+- [ ] 000130 — 🧩 Keep the graph in sync: regenerate from the registry/docs on release, stale-graph diff check in CI 🧪
+
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000127, …); split a large task into 🧩 subtasks with
+the end with a new global number (000131, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
