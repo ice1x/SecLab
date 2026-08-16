@@ -99,7 +99,31 @@ impl Engine {
 
     /// Processes one block, updating every node's output buffer in topological order.
     pub fn process(&mut self, ctx: &ProcessContext) {
+        self.process_with_feeds(ctx, &[]);
+    }
+
+    /// Processes one block with some nodes fed from the outside.
+    ///
+    /// Each `(node, channels)` entry overrides that node: instead of running its
+    /// processor, its output buffer is filled from `channels` (one slice per output
+    /// port, extra ports fall silent). This is how composite executors inject data
+    /// at graph boundaries — a macro node feeding its subgraph's input node, or a
+    /// plugin host feeding the audio-in node.
+    pub fn process_with_feeds(&mut self, ctx: &ProcessContext, feeds: &[(NodeId, &[&[f32]])]) {
         for i in 0..self.order.len() {
+            let node_id = self.order[i];
+            if let Some((_, channels)) = feeds.iter().find(|(id, _)| *id == node_id) {
+                let out_buf = &mut self.outputs[i];
+                out_buf.clear();
+                for (c, dst) in out_buf.channels_mut().enumerate() {
+                    if let Some(src) = channels.get(c) {
+                        let n = src.len().min(dst.len());
+                        dst[..n].copy_from_slice(&src[..n]);
+                    }
+                }
+                continue;
+            }
+
             // Gather inputs as owned copies so writing `outputs[i]` can't alias a source.
             let inputs: Vec<Vec<f32>> = self.input_sources[i]
                 .iter()
