@@ -2392,6 +2392,7 @@ dependencies = [
  "eframe",
  "egui",
  "vb-core",
+ "vb-nodes",
 ]
 
 [[package]]

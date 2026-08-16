@@ -11,8 +11,11 @@
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use vb_core::{GraphNode, Port, PortDirection, PortId, SignalType};
 
+use vb_nodes::Registry;
+
 use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
+use crate::palette::palette_entries;
 use crate::patch::PatchView;
 
 /// Root application state for the node editor window.
@@ -20,6 +23,12 @@ pub struct EditorApp {
     camera: Camera,
     patch: PatchView,
     style: NodeStyle,
+    /// Node kinds the palette can spawn.
+    registry: Registry,
+    /// Live palette search text.
+    palette_query: String,
+    /// Canvas-space centre of the last painted viewport; new nodes spawn there.
+    spawn_at: Pos2,
 }
 
 impl Default for EditorApp {
@@ -28,6 +37,9 @@ impl Default for EditorApp {
             camera: Camera::default(),
             patch: demo_patch(),
             style: NodeStyle::default(),
+            registry: Registry::with_builtins(),
+            palette_query: String::new(),
+            spawn_at: Pos2::new(80.0, 220.0),
         }
     }
 }
@@ -129,6 +141,8 @@ impl EditorApp {
         let (response, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
         let viewport = response.rect;
         let origin = viewport.min.to_vec2();
+        // Palette spawns land in the middle of whatever is currently visible.
+        self.spawn_at = self.camera.screen_to_canvas(viewport.center() - origin);
 
         // A drag starting on a port pulls a wire; anywhere else it pans.
         if response.drag_started() {
@@ -371,6 +385,48 @@ impl EditorApp {
         self.patch.click(canvas, &self.style);
     }
 
+    /// Spawns a registry node of `kind` at the centre of the visible canvas and
+    /// selects it. Returns the new node's id, or `None` for an unknown kind.
+    pub fn spawn_node(&mut self, kind: &str) -> Option<vb_core::NodeId> {
+        let node = self.registry.graph_node(kind)?;
+        // Centre the node's frame on the spawn point.
+        let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
+        let id = self.patch.add_node(node, self.spawn_at - half);
+        self.patch
+            .click(self.spawn_at - half + Vec2::new(4.0, 4.0), &self.style);
+        Some(id)
+    }
+
+    /// Renders the palette panel contents: search box + one button per matching kind,
+    /// grouped by category.
+    fn palette_ui(&mut self, ui: &mut Ui) {
+        ui.heading("nodes");
+        ui.text_edit_singleline(&mut self.palette_query);
+        ui.separator();
+        let entries = palette_entries(&self.registry, &self.palette_query);
+        if entries.is_empty() {
+            ui.weak("no matches");
+            return;
+        }
+        let mut spawn: Option<&'static str> = None;
+        let mut last_category = "";
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for entry in &entries {
+                if entry.category != last_category {
+                    ui.add_space(4.0);
+                    ui.weak(entry.category);
+                    last_category = entry.category;
+                }
+                if ui.button(entry.kind).clicked() {
+                    spawn = Some(entry.kind);
+                }
+            }
+        });
+        if let Some(kind) = spawn {
+            self.spawn_node(kind);
+        }
+    }
+
     /// Test/integration hook: a full wire drag between two viewport-local positions.
     pub fn drag_wire(&mut self, from_screen: Pos2, to_screen: Pos2) {
         let from = self.camera.screen_to_canvas(from_screen);
@@ -397,6 +453,9 @@ impl eframe::App for EditorApp {
                 }
             });
         });
+        egui::Panel::left("palette")
+            .resizable(true)
+            .show(ui, |ui| self.palette_ui(ui));
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
             .show(ui, |ui| self.canvas_ui(ui));
@@ -448,6 +507,30 @@ mod tests {
         assert_eq!(app.patch().graph().node_count(), 3);
         assert_eq!(app.patch().graph().edges().len(), 2, "osc→filter→gain");
         assert_eq!(app.patch().selected(), None);
+    }
+
+    #[test]
+    fn spawn_node_adds_a_registry_node_and_selects_it() {
+        let mut app = EditorApp::new();
+        let before = app.patch().graph().node_count();
+
+        let id = app.spawn_node("adsr").expect("adsr is a builtin");
+        assert_eq!(app.patch().graph().node_count(), before + 1);
+        assert_eq!(app.patch().selected(), Some(id), "spawned node is selected");
+        let node = app.patch().graph().node(id).unwrap();
+        assert_eq!(node.kind, "adsr");
+        assert!(
+            !node.inputs.is_empty() || !node.outputs.is_empty(),
+            "registry nodes come with their real ports"
+        );
+
+        // The spawned frame is centred on the spawn point.
+        let pos = app.patch().position(id).unwrap();
+        let style = NodeStyle::default();
+        assert!((pos.x + style.width * 0.5 - app.spawn_at.x).abs() < 1.0);
+
+        assert_eq!(app.spawn_node("no-such-kind"), None);
+        assert_eq!(app.patch().graph().node_count(), before + 1);
     }
 
     #[test]
