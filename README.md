@@ -270,7 +270,7 @@ the definition of done.
 - [x] 000059 — `cpal` integration: audio output to the default device
 - [ ] 000060 — Choose audio device, sample rate, buffer size in the UI
 - [ ] 000061 — MIDI input from a device (`midir`) in standalone
-- [ ] 000062 — Wire editor + runtime together: graph changes are "audible" in real time
+- [ ] 000062 — Wire editor + runtime together: graph changes are "audible" in real time *(runtime side done: vb-standalone cycles patches live through the engine swap; awaits the egui editor from Epic 4)*
 - [ ] 000063 — Monitor CPU load and xruns 🧪
 
 ### Epic 7 — Plugin export (`vb-plugin`: CLAP → VST3/AU)
