@@ -14,6 +14,7 @@ pub mod oscillator;
 pub mod registry;
 pub mod routing;
 pub mod svf;
+pub mod waveshaper;
 
 pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
@@ -25,3 +26,4 @@ pub use oscillator::{Oscillator, Waveform};
 pub use registry::{NodeDescriptor, Registry};
 pub use routing::{Merger, Selector, Splitter};
 pub use svf::Svf;
+pub use waveshaper::{Shape, Waveshaper};
