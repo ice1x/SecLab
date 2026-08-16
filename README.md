@@ -233,7 +233,7 @@ the definition of done.
 - [x] 000028 — ADSR envelope 🧪
 - [x] 000029 — LFO (with tempo sync) 🧪
 - [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
-- [ ] 000031 — Routing nodes: splitter, merger, selector 🧪
+- [x] 000031 — Routing nodes: splitter, merger, selector 🧪
 - [ ] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪
 - [x] 000033 — MIDI input: note on/off → gate/pitch/velocity 🧪
 - [ ] 000034 — Polyphony / voices (voice allocation) 🧪
