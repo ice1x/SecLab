@@ -14,7 +14,10 @@ pub struct ProcessContext {
 /// the structural side (ports, wiring) lives in [`crate::node::GraphNode`] and
 /// [`crate::graph::Graph`]. Splitting the two keeps the model serializable and the
 /// processing trait free of graph concerns (SOLID / dependency inversion).
-pub trait Processor {
+///
+/// `Send` is part of the contract: engines are compiled on an editor thread and handed
+/// to the audio thread whole, so every processor must be movable across threads.
+pub trait Processor: Send {
     /// Processes one block. `inputs[c]` and `outputs[c]` are channel `c`'s buffers,
     /// each at least `ctx.frames` samples long.
     fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]);

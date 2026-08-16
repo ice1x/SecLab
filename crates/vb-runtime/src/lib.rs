@@ -11,5 +11,7 @@
 //! [`MAX_PORTS_PER_NODE`] ports per side.
 
 pub mod engine;
+pub mod swap;
 
 pub use engine::{RtEngine, RtEngineError, MAX_PORTS_PER_NODE};
+pub use swap::{engine_swap, EngineReceiver, EngineSender};
