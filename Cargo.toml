@@ -8,6 +8,7 @@ members = [
     "crates/vb-editor",
     "crates/vb-standalone",
     "crates/vb-plugin",
+    "xtask",
 ]
 
 # Shared package metadata inherited by every crate via `field.workspace = true`.
@@ -27,6 +28,7 @@ vb-editor = { path = "crates/vb-editor" }
 cpal = "0.18"
 midir = "0.11"
 criterion = "0.8"
+libc = "0.2"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", default-features = false, features = ["assert_process_allocs"] }
 vb-project = { path = "crates/vb-project" }
 serde = { version = "1", features = ["derive"] }
