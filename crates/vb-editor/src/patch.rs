@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use egui::Pos2;
-use vb_core::{Edge, Graph, GraphNode, NodeId, PortDirection, PortId};
+use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
 
@@ -43,6 +43,15 @@ fn normalize_wire(
     }
 }
 
+/// One editable parameter on a node: its descriptor plus the current value.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParamSlot {
+    /// Name, range and default (from the registry descriptor).
+    pub param: Parameter,
+    /// Current value, always inside the descriptor's range.
+    pub value: f32,
+}
+
 /// Editor-side view of a patch: graph + positions + selection.
 #[derive(Default)]
 pub struct PatchView {
@@ -53,6 +62,8 @@ pub struct PatchView {
     selected: Option<NodeId>,
     /// Wire drag in progress, if any.
     drag: Option<WireDrag>,
+    /// Editable parameter values per node, in the descriptor's UI order.
+    params: HashMap<NodeId, Vec<ParamSlot>>,
 }
 
 impl PatchView {
@@ -68,12 +79,46 @@ impl PatchView {
         &self.graph
     }
 
-    /// Adds `node` to the graph at canvas position `pos` (top of the draw order).
+    /// Adds `node` to the graph at canvas position `pos` (top of the draw order),
+    /// with no editable parameters.
     pub fn add_node(&mut self, node: GraphNode, pos: Pos2) -> NodeId {
+        self.add_node_with_params(node, Vec::new(), pos)
+    }
+
+    /// Adds `node` with its editable parameters, each starting at its default.
+    pub fn add_node_with_params(
+        &mut self,
+        node: GraphNode,
+        params: Vec<Parameter>,
+        pos: Pos2,
+    ) -> NodeId {
         let id = self.graph.add_node(node);
         self.positions.insert(id, pos);
         self.order.push(id);
+        let slots = params
+            .into_iter()
+            .map(|param| ParamSlot {
+                value: param.default,
+                param,
+            })
+            .collect();
+        self.params.insert(id, slots);
         id
+    }
+
+    /// The node's editable parameters with their current values.
+    #[must_use]
+    pub fn params(&self, id: NodeId) -> &[ParamSlot] {
+        self.params.get(&id).map_or(&[], Vec::as_slice)
+    }
+
+    /// Sets parameter `index` on `id`, clamped into the parameter's range.
+    ///
+    /// Returns the stored (clamped) value, or `None` for an unknown node/index.
+    pub fn set_param(&mut self, id: NodeId, index: usize, value: f32) -> Option<f32> {
+        let slot = self.params.get_mut(&id)?.get_mut(index)?;
+        slot.value = slot.param.clamp(value);
+        Some(slot.value)
     }
 
     /// Connects an output to an input directly (programmatic wiring, e.g. seeding).
@@ -483,6 +528,41 @@ mod tests {
             None,
             "out-of-range port"
         );
+    }
+
+    #[test]
+    fn params_seed_at_defaults_and_clamp_on_set() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![
+                Parameter::new("gain", 0.0, 2.0, 1.0),
+                Parameter::new("pan", -1.0, 1.0, 0.0),
+            ],
+            Pos2::ZERO,
+        );
+
+        let slots = patch.params(id);
+        assert_eq!(slots.len(), 2);
+        assert!(
+            (slots[0].value - 1.0).abs() < f32::EPSILON,
+            "starts at default"
+        );
+
+        assert_eq!(patch.set_param(id, 0, 5.0), Some(2.0), "clamped to max");
+        assert_eq!(patch.set_param(id, 1, -0.25), Some(-0.25));
+        assert!((patch.params(id)[0].value - 2.0).abs() < f32::EPSILON);
+
+        // Unknown index / node are refused without panicking.
+        assert_eq!(patch.set_param(id, 9, 1.0), None);
+        assert_eq!(patch.set_param(vb_core::NodeId(999), 0, 1.0), None);
+    }
+
+    #[test]
+    fn plain_add_node_has_no_params() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node(gain(), Pos2::ZERO);
+        assert!(patch.params(id).is_empty());
     }
 
     #[test]

@@ -249,7 +249,7 @@ the definition of done.
 - [x] 000041 — Draw and create wires by drag-and-drop between ports 🧪
 - [x] 000042 — Connection validation while dragging (highlight compatible ports) 🧪
 - [x] 000043 — Node palette/search and adding to the canvas from the registry 🧪
-- [ ] 000044 — Property inspector for the selected node (edit parameters) 🧪
+- [x] 000044 — Property inspector for the selected node (edit parameters) 🧪
 - [ ] 000045 — Select, move, delete, copy/paste nodes 🧪
 - [ ] 000046 — Undo/redo (command stack) 🧪
 - [ ] 000047 — Enter a macro-node and navigate the subgraph hierarchy 🧪
