@@ -16,6 +16,7 @@ use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::svf::Svf;
 
 /// Metadata and factories for one node kind.
 pub struct NodeDescriptor {
@@ -243,6 +244,29 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 0.707),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "svf",
+            "filter",
+            || {
+                GraphNode::new(
+                    "svf",
+                    vec![audio_in("in")],
+                    vec![
+                        audio_out("lowpass"),
+                        audio_out("bandpass"),
+                        audio_out("highpass"),
+                    ],
+                )
+            },
+            || Box::new(Svf::new(1_000.0, 0.707)),
+            || {
+                vec![
+                    Parameter::new("cutoff_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("q", 0.1, 20.0, 0.707),
+                ]
+            },
+            |_, v| Box::new(Svf::new(arg(v, 0, 1_000.0), arg(v, 1, 0.707))),
         ),
         NodeDescriptor::new(
             "gain",
