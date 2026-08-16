@@ -202,7 +202,8 @@ impl EditorApp {
             draw_wire(painter, to_screen(from), to_screen(to), stroke_w, color);
         }
 
-        // The pending wire follows the pointer from the grabbed port.
+        // The pending wire follows the pointer from the grabbed port, tinted by
+        // whether the port under the pointer would accept the drop.
         if let (Some(drag), Some(pointer)) = (self.patch.wire_drag(), pointer) {
             if let Some(anchor) =
                 self.patch
@@ -212,8 +213,28 @@ impl EditorApp {
                     PortDirection::Output => (to_screen(anchor), pointer),
                     PortDirection::Input => (pointer, to_screen(anchor)),
                 };
-                draw_wire(painter, from, to, stroke_w, Color32::from_gray(200));
+                let color = match self.drop_target_ok(pointer - origin) {
+                    Some(true) => Color32::from_rgb(0x4c, 0xd9, 0x64),
+                    Some(false) => Color32::from_rgb(0xe5, 0x48, 0x48),
+                    None => Color32::from_gray(200),
+                };
+                draw_wire(painter, from, to, stroke_w, color);
             }
+        }
+    }
+
+    /// Validity of the port under a viewport-local pointer as a drop target for the
+    /// active wire drag: `None` when not over a port (or no drag).
+    fn drop_target_ok(&self, screen: Pos2) -> Option<bool> {
+        let canvas = self.camera.screen_to_canvas(screen);
+        match self.patch.node_at(canvas, &self.style)? {
+            (node, crate::layout::NodeHit::Input(port)) => {
+                self.patch.wire_target_ok(node, PortDirection::Input, port)
+            }
+            (node, crate::layout::NodeHit::Output(port)) => {
+                self.patch.wire_target_ok(node, PortDirection::Output, port)
+            }
+            _ => None,
         }
     }
 
@@ -276,20 +297,41 @@ impl EditorApp {
 
             let port_r = self.style.port_radius * zoom;
             let label_font = FontId::proportional((10.0 * zoom).clamp(7.0, 20.0));
-            for (anchor, port, align) in l
+            for (i, (anchor, port, align, direction)) in l
                 .inputs
                 .iter()
                 .zip(&node.inputs)
-                .map(|(a, p)| (a, p, Align2::LEFT_CENTER))
+                .enumerate()
+                .map(|(i, (a, p))| (i, (a, p, Align2::LEFT_CENTER, PortDirection::Input)))
                 .chain(
                     l.outputs
                         .iter()
                         .zip(&node.outputs)
-                        .map(|(a, p)| (a, p, Align2::RIGHT_CENTER)),
+                        .enumerate()
+                        .map(|(i, (a, p))| {
+                            (i, (a, p, Align2::RIGHT_CENTER, PortDirection::Output))
+                        }),
                 )
             {
                 let at = to_screen(*anchor);
-                painter.circle_filled(at, port_r, signal_color(port.signal));
+                // While a wire is dragged, valid drop targets get a halo and invalid
+                // ports fade out; the grabbed port keeps its normal look.
+                let target_ok = self.patch.wire_target_ok(id, direction, PortId(i));
+                let is_grabbed = self.patch.wire_drag().is_some_and(|d| {
+                    d.node == id && d.direction == direction && d.port == PortId(i)
+                });
+                let mut fill = signal_color(port.signal);
+                if target_ok == Some(false) && !is_grabbed {
+                    fill = fill.gamma_multiply(0.3);
+                }
+                if target_ok == Some(true) {
+                    painter.circle_stroke(
+                        at,
+                        port_r + (3.0 * zoom).clamp(2.0, 6.0),
+                        Stroke::new(2.0, Color32::from_rgb(0x4c, 0xd9, 0x64)),
+                    );
+                }
+                painter.circle_filled(at, port_r, fill);
                 painter.circle_stroke(at, port_r, Stroke::new(1.0, Color32::from_gray(20)));
                 // Port names clutter at far zoom-out; show them once readable.
                 if zoom >= 0.6 {
@@ -406,6 +448,54 @@ mod tests {
         assert_eq!(app.patch().graph().node_count(), 3);
         assert_eq!(app.patch().graph().edges().len(), 2, "osc→filter→gain");
         assert_eq!(app.patch().selected(), None);
+    }
+
+    #[test]
+    fn dragging_a_wire_reports_drop_target_validity_through_the_camera() {
+        let mut app = EditorApp::new();
+        app.pan(Vec2::new(-15.0, 30.0));
+        app.zoom(Pos2::new(80.0, 40.0), 1.4);
+        let s = NodeStyle::default();
+
+        let gain = app
+            .patch()
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "gain")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        let osc = app
+            .patch()
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "oscillator")
+            .map(|(id, _, _)| id)
+            .unwrap();
+
+        // Not dragging: no verdict anywhere.
+        let cam = *app.camera();
+        let gain_in = app
+            .patch()
+            .port_anchor(gain, PortDirection::Input, PortId(0), &s)
+            .unwrap();
+        assert_eq!(app.drop_target_ok(cam.canvas_to_screen(gain_in)), None);
+
+        // Drag from the oscillator output: gain.in is occupied → invalid; the filter's
+        // free control input is a signal mismatch → invalid; empty canvas → None.
+        let osc_out = app
+            .patch()
+            .port_anchor(osc, PortDirection::Output, PortId(0), &s)
+            .unwrap();
+        app.patch_mut()
+            .begin_wire(osc_out, &s)
+            .expect("drag armed on the output port");
+        assert_eq!(
+            app.drop_target_ok(cam.canvas_to_screen(gain_in)),
+            Some(false),
+            "occupied input"
+        );
+        assert_eq!(
+            app.drop_target_ok(cam.canvas_to_screen(Pos2::new(-3_000.0, -3_000.0))),
+            None
+        );
     }
 
     #[test]
