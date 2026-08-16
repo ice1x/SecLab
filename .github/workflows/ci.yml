@@ -13,11 +13,12 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# Everything that can run on the self-hosted macOS/ARM64 runner does (fmt + the macOS
-# leg of the matrix). Ubuntu and Windows cannot execute on it natively, so those legs
-# stay on GitHub-hosted runners for cross-platform coverage. The self-hosted machine
-# has rustup/stable with rustfmt+clippy preinstalled and keeps a persistent work dir,
-# so it needs neither the toolchain action nor the cache action.
+# All required CI runs on the self-hosted macOS/ARM64 runner: GitHub-hosted runners are
+# currently unavailable for this private repo (account billing), so cloud legs would
+# never start. The machine has rustup/stable with rustfmt+clippy preinstalled and keeps
+# a persistent work dir, so it needs neither the toolchain action nor the cache action.
+# Cross-platform (Linux/Windows) coverage lives in cross-platform.yml, manually
+# dispatchable once billing is restored.
 jobs:
   fmt:
     name: rustfmt
@@ -27,28 +28,10 @@ jobs:
       - run: cargo fmt --all --check
 
   check:
-    name: clippy & test (${{ matrix.name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: macos-self-hosted
-            os: [self-hosted, macOS, ARM64]
-          - name: ubuntu
-            os: ubuntu-latest
-          - name: windows
-            os: windows-latest
+    name: clippy & test (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust toolchain (cloud runners)
-        if: runner.environment == 'github-hosted'
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - name: Cache dependencies (cloud runners)
-        if: runner.environment == 'github-hosted'
-        uses: Swatinem/rust-cache@v2
       - name: clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test

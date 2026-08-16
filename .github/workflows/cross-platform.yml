@@ -1,0 +1,30 @@
+name: Cross-platform
+
+# Linux/Windows coverage on GitHub-hosted runners. Manually dispatched only: the
+# account's cloud runner billing is currently broken, so these jobs would fail to start
+# if they ran on every PR. Trigger from the Actions tab (or `gh workflow run`) once
+# billing is restored; consider moving the legs back into ci.yml at that point.
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    name: clippy & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
