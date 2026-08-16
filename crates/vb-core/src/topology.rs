@@ -14,9 +14,15 @@ impl Graph {
     /// Returns [`GraphError::Cycle`] if the graph contains a cycle, in which case no
     /// processing order exists.
     pub fn topological_order(&self) -> Result<Vec<NodeId>, GraphError> {
-        // In-degree = number of incoming edges per node.
+        // In-degree = number of incoming edges per node. Edges into a feedback
+        // node are not dependencies: that node reads the previous block, so its
+        // sources do not need to run first.
+        let depends = |to: NodeId| !self.node(to).is_some_and(|n| n.feedback);
         let mut in_degree: HashMap<NodeId, usize> = self.node_ids().map(|id| (id, 0)).collect();
         for edge in self.edges() {
+            if !depends(edge.to_node) {
+                continue;
+            }
             if let Some(deg) = in_degree.get_mut(&edge.to_node) {
                 *deg += 1;
             }
@@ -35,6 +41,9 @@ impl Graph {
             order.push(id);
             let mut freed: Vec<NodeId> = Vec::new();
             for edge in self.edges().iter().filter(|e| e.from_node == id) {
+                if !depends(edge.to_node) {
+                    continue;
+                }
                 if let Some(deg) = in_degree.get_mut(&edge.to_node) {
                     *deg -= 1;
                     if *deg == 0 {
@@ -63,7 +72,7 @@ impl Graph {
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::Graph;
+    use crate::graph::{Graph, GraphError};
     use crate::node::{GraphNode, NodeId};
     use crate::port::{Port, PortId};
     use crate::signal::SignalType;
@@ -153,5 +162,50 @@ mod tests {
         let a = g.add_node(thru("a"));
         g.connect(a, PortId(0), a, PortId(0)).unwrap();
         assert!(g.has_cycle());
+    }
+
+    #[test]
+    fn cycles_through_a_feedback_node_are_ordered_not_rejected() {
+        let mut g = Graph::new();
+        let fb = g.add_node(GraphNode::feedback_node(
+            "fb",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let amp = g.add_node(GraphNode::new(
+            "gain",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(fb, PortId(0), amp, PortId(0)).unwrap();
+        g.connect(amp, PortId(0), fb, PortId(0)).unwrap(); // closes the loop
+
+        assert!(
+            !g.has_cycle(),
+            "the loop is broken by the feedback boundary"
+        );
+        let order = g.topological_order().unwrap();
+        // The feedback node has no live dependencies, so it runs first and reads
+        // the gain's previous block.
+        assert_eq!(order, vec![fb, amp]);
+    }
+
+    #[test]
+    fn delayless_cycles_are_still_rejected() {
+        let mut g = Graph::new();
+        let a = g.add_node(GraphNode::new(
+            "gain",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let b = g.add_node(GraphNode::new(
+            "gain",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        g.connect(b, PortId(0), a, PortId(0)).unwrap();
+        assert!(g.has_cycle());
+        assert_eq!(g.topological_order(), Err(GraphError::Cycle));
     }
 }
