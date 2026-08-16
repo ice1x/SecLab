@@ -21,6 +21,7 @@ pub struct NodeDescriptor {
     make_node: fn() -> GraphNode,
     make_processor: fn() -> Box<dyn Processor>,
     make_params: fn() -> Vec<Parameter>,
+    make_processor_with: fn(&[f32]) -> Box<dyn Processor>,
 }
 
 impl NodeDescriptor {
@@ -32,6 +33,7 @@ impl NodeDescriptor {
         make_node: fn() -> GraphNode,
         make_processor: fn() -> Box<dyn Processor>,
         make_params: fn() -> Vec<Parameter>,
+        make_processor_with: fn(&[f32]) -> Box<dyn Processor>,
     ) -> Self {
         Self {
             kind,
@@ -39,6 +41,7 @@ impl NodeDescriptor {
             make_node,
             make_processor,
             make_params,
+            make_processor_with,
         }
     }
 
@@ -73,6 +76,39 @@ impl NodeDescriptor {
     #[must_use]
     pub fn params(&self) -> Vec<Parameter> {
         (self.make_params)()
+    }
+
+    /// Builds a boxed [`Processor`] configured from `values`, one per parameter in
+    /// [`NodeDescriptor::params`] order. Missing values fall back to the parameter's
+    /// default, so a stale or truncated value list still builds a working processor.
+    #[must_use]
+    pub fn processor_with(&self, values: &[f32]) -> Box<dyn Processor> {
+        (self.make_processor_with)(values)
+    }
+}
+
+/// `values[i]` or `default` — keeps `processor_with` total on short value lists.
+fn arg(values: &[f32], i: usize, default: f32) -> f32 {
+    values.get(i).copied().unwrap_or(default)
+}
+
+/// Maps a stepped float to a [`Waveform`] (0 sine, 1 saw, 2 square, 3 triangle).
+fn waveform_from(v: f32) -> Waveform {
+    match v.round() as i32 {
+        1 => Waveform::Saw,
+        2 => Waveform::Square,
+        3 => Waveform::Triangle,
+        _ => Waveform::Sine,
+    }
+}
+
+/// Maps a stepped float to a [`FilterKind`] (0 LP, 1 HP, 2 BP, 3 notch).
+fn filter_kind_from(v: f32) -> FilterKind {
+    match v.round() as i32 {
+        1 => FilterKind::HighPass,
+        2 => FilterKind::BandPass,
+        3 => FilterKind::Notch,
+        _ => FilterKind::LowPass,
     }
 }
 
@@ -157,6 +193,12 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("freq_hz", 20.0, 20_000.0, 440.0),
                 ]
             },
+            |v| {
+                Box::new(Oscillator::new(
+                    waveform_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 440.0),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "biquad",
@@ -170,6 +212,13 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("q", 0.1, 10.0, 0.707),
                 ]
             },
+            |v| {
+                Box::new(Biquad::new(
+                    filter_kind_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 1_000.0),
+                    arg(v, 2, 0.707),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "gain",
@@ -177,6 +226,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             || GraphNode::new("gain", vec![audio_in("in")], vec![audio_out("out")]),
             || Box::new(Gain::new(1.0)),
             || vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            |v| Box::new(Gain::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "add",
@@ -190,6 +240,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Add),
             Vec::new,
+            |_| Box::new(Add),
         ),
         NodeDescriptor::new(
             "mul",
@@ -203,6 +254,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Mul),
             Vec::new,
+            |_| Box::new(Mul),
         ),
         NodeDescriptor::new(
             "mix",
@@ -216,6 +268,7 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
             || Box::new(Mix::new(0.5)),
             || vec![Parameter::new("t", 0.0, 1.0, 0.5)],
+            |v| Box::new(Mix::new(arg(v, 0, 0.5))),
         ),
         NodeDescriptor::new(
             "clamp",
@@ -228,6 +281,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("max", -1.0, 1.0, 1.0),
                 ]
             },
+            |v| Box::new(Clamp::new(arg(v, 0, -1.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "adsr",
@@ -247,6 +301,14 @@ fn builtins() -> Vec<NodeDescriptor> {
                     Parameter::new("sustain", 0.0, 1.0, 0.7),
                     Parameter::new("release_s", 0.0, 5.0, 0.2),
                 ]
+            },
+            |v| {
+                Box::new(Adsr::new(
+                    arg(v, 0, 0.01),
+                    arg(v, 1, 0.1),
+                    arg(v, 2, 0.7),
+                    arg(v, 3, 0.2),
+                ))
             },
         ),
     ]
@@ -359,5 +421,64 @@ mod tests {
         // Pure combinators have nothing to edit.
         assert!(r.get("add").unwrap().params().is_empty());
         assert!(r.get("mul").unwrap().params().is_empty());
+    }
+
+    /// Runs a lone source processor for one block and returns its output.
+    fn run_source(mut p: Box<dyn Processor>, frames: usize) -> Vec<f32> {
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames,
+        };
+        let mut out = vec![0.0; frames];
+        p.process(&ctx, &[], &mut [&mut out]);
+        out
+    }
+
+    /// Runs a one-in/one-out processor over `input` and returns its output.
+    fn run_effect(mut p: Box<dyn Processor>, input: &[f32]) -> Vec<f32> {
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames: input.len(),
+        };
+        let mut out = vec![0.0; input.len()];
+        p.process(&ctx, &[input], &mut [&mut out]);
+        out
+    }
+
+    #[test]
+    fn processor_with_applies_param_values() {
+        let r = Registry::with_builtins();
+        let input = vec![1.0_f32; 64];
+
+        // gain 0.5 halves the signal; default gain passes it through.
+        let halved = run_effect(r.get("gain").unwrap().processor_with(&[0.5]), &input);
+        assert!(halved.iter().all(|&s| (s - 0.5).abs() < 1e-6));
+        let default = run_effect(r.get("gain").unwrap().processor(), &input);
+        assert!(default.iter().all(|&s| (s - 1.0).abs() < 1e-6));
+
+        // A 100 Hz sine crosses zero going upward once per 480 samples at 48 kHz;
+        // a 1000 Hz one ten times as often — the freq value audibly matters.
+        let slow = run_source(
+            r.get("oscillator").unwrap().processor_with(&[0.0, 100.0]),
+            4_800,
+        );
+        let fast = run_source(
+            r.get("oscillator").unwrap().processor_with(&[0.0, 1_000.0]),
+            4_800,
+        );
+        let crossings = |xs: &[f32]| xs.windows(2).filter(|w| w[0] < 0.0 && w[1] >= 0.0).count();
+        assert!(crossings(&fast) > crossings(&slow) * 5);
+    }
+
+    #[test]
+    fn processor_with_falls_back_to_defaults_on_short_values() {
+        let r = Registry::with_builtins();
+        let input = vec![1.0_f32; 32];
+        // No values at all: behaves like the default constructor.
+        let out = run_effect(r.get("gain").unwrap().processor_with(&[]), &input);
+        assert!(out.iter().all(|&s| (s - 1.0).abs() < 1e-6));
+        // Enum mappers accept any float without panicking.
+        let _ = r.get("biquad").unwrap().processor_with(&[99.0]);
+        let _ = r.get("oscillator").unwrap().processor_with(&[-7.0, 55.0]);
     }
 }

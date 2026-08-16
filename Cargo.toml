@@ -23,6 +23,7 @@ authors = ["ice1x"]
 vb-core = { path = "crates/vb-core" }
 vb-nodes = { path = "crates/vb-nodes" }
 vb-runtime = { path = "crates/vb-runtime" }
+vb-editor = { path = "crates/vb-editor" }
 cpal = "0.18"
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"

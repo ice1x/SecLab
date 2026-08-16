@@ -2428,7 +2428,10 @@ name = "vb-standalone"
 version = "0.0.0"
 dependencies = [
  "cpal",
+ "eframe",
+ "egui",
  "vb-core",
+ "vb-editor",
  "vb-nodes",
  "vb-runtime",
 ]

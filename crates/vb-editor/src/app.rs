@@ -7,8 +7,8 @@
 //! - Delete/Backspace — remove the selection; Cmd/Ctrl+D — duplicate it
 //! - Cmd/Ctrl+Z — undo; Shift+Cmd/Ctrl+Z — redo (one step per completed gesture)
 //!
-//! Undo/redo and macro-node navigation land in the follow-up Epic 4 tasks; this shell
-//! owns the [`Camera`] and the [`PatchView`] they all draw through.
+//! This shell owns the [`Camera`] and the [`PatchView`] everything draws through;
+//! `vb-standalone` embeds it and keeps a live audio engine in sync with the patch.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use vb_core::{GraphNode, Port, PortDirection, PortId, SignalType};
@@ -92,6 +92,14 @@ fn demo_patch(registry: &Registry) -> PatchView {
     patch
         .connect(flt, PortId(0), amp, PortId(0))
         .expect("demo filter→gain");
+    // Ears-friendly starting level: the registry default (1.0) is full scale.
+    let gain_index = patch
+        .params(amp)
+        .iter()
+        .position(|s| s.param.name == "gain");
+    if let Some(i) = gain_index {
+        patch.set_param(amp, i, 0.2);
+    }
     // Seeding is not a user edit: undo must not walk back into an empty canvas.
     patch.clear_history();
     patch
