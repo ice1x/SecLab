@@ -279,7 +279,7 @@ the definition of done.
 - [x] 000060 — Choose audio device, sample rate, buffer size in the UI 🧪
 - [ ] 000061 — MIDI input from a device (`midir`) in standalone
 - [x] 000062 — Wire editor + runtime together: graph changes are "audible" in real time 🧪
-- [ ] 000063 — Monitor CPU load and xruns 🧪
+- [x] 000063 — Monitor CPU load and xruns 🧪
 
 ### Epic 7 — Plugin export (`vb-plugin`: CLAP → VST3/AU)
 

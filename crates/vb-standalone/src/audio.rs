@@ -7,11 +7,59 @@
 //! channels. Everything it does per callback is allocation-free, and it polls the
 //! [`EngineReceiver`] at each block boundary so live graph edits are picked up.
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 
 use vb_core::{NodeId, ProcessContext};
 use vb_runtime::{EngineReceiver, RtEngine};
+
+/// Lock-free DSP load and xrun counters, shared between the audio and UI threads.
+///
+/// The audio thread publishes how much of each block's real-time budget the engine
+/// consumed (smoothed) and counts blocks that blew the budget entirely (xruns). The
+/// UI thread only reads. No locks, no allocation on the publishing side.
+#[derive(Clone, Default)]
+pub struct LoadMonitor {
+    inner: Arc<LoadShared>,
+}
+
+#[derive(Default)]
+struct LoadShared {
+    /// Smoothed load in permille of the block budget (1000 = exactly real time).
+    load_permille: AtomicU32,
+    /// Blocks whose processing took longer than their real-time budget.
+    xruns: AtomicU32,
+}
+
+impl LoadMonitor {
+    /// Creates a monitor with zeroed counters.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Smoothed DSP load as a fraction of the block budget (1.0 = exactly real time).
+    #[must_use]
+    pub fn load(&self) -> f32 {
+        self.inner.load_permille.load(Ordering::Relaxed) as f32 / 1000.0
+    }
+
+    /// Number of blocks that overran their real-time budget.
+    #[must_use]
+    pub fn xruns(&self) -> u32 {
+        self.inner.xruns.load(Ordering::Relaxed)
+    }
+
+    /// Publishes one block's measurement (audio-thread side, allocation-free).
+    fn publish(&self, smoothed_fraction: f32, overran: bool) {
+        let permille = (smoothed_fraction * 1000.0).clamp(0.0, u32::MAX as f32) as u32;
+        self.inner.load_permille.store(permille, Ordering::Relaxed);
+        if overran {
+            self.inner.xruns.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+}
 
 /// Shared, lock-free handle to the node the feeder plays.
 ///
@@ -64,6 +112,10 @@ pub struct BlockFeeder {
     carry: Vec<f32>,
     /// Next unread index into `carry`; `carry.len()` means "empty, refill".
     carry_pos: usize,
+    /// Load/xrun reporting, if attached.
+    monitor: Option<LoadMonitor>,
+    /// Exponentially smoothed load fraction (audio-thread local).
+    smoothed_load: f32,
 }
 
 impl BlockFeeder {
@@ -89,7 +141,16 @@ impl BlockFeeder {
             },
             carry: vec![0.0; frames],
             carry_pos: frames, // start empty
+            monitor: None,
+            smoothed_load: 0.0,
         }
+    }
+
+    /// Attaches a load/xrun monitor; measurements start with the next block.
+    #[must_use]
+    pub fn with_monitor(mut self, monitor: LoadMonitor) -> Self {
+        self.monitor = Some(monitor);
+        self
     }
 
     /// Runs one engine block into the carry buffer.
@@ -101,7 +162,15 @@ impl BlockFeeder {
         if let Some(rx) = &self.receiver {
             rx.poll_swap(&mut self.engine);
         }
+        let started = self.monitor.is_some().then(Instant::now);
         self.engine.process(&self.ctx);
+        if let (Some(monitor), Some(started)) = (&self.monitor, started) {
+            let budget_s = self.ctx.frames as f32 / self.ctx.sample_rate.max(1.0);
+            let fraction = started.elapsed().as_secs_f32() / budget_s;
+            // Light smoothing so the meter reads steadily instead of flickering.
+            self.smoothed_load = 0.9 * self.smoothed_load + 0.1 * fraction;
+            monitor.publish(self.smoothed_load, fraction > 1.0);
+        }
         match self
             .sink
             .get()
@@ -242,6 +311,57 @@ mod tests {
         let mut back = [0.0_f32; 4];
         feeder.fill(&mut back, 1);
         assert_eq!(back, [1.0; 4]);
+    }
+
+    /// Burns wall-clock time each block to overrun the real-time budget.
+    struct Slow(std::time::Duration);
+    impl Processor for Slow {
+        fn process(&mut self, _ctx: &ProcessContext, _in: &[&[f32]], out: &mut [&mut [f32]]) {
+            std::thread::sleep(self.0);
+            out[0].fill(0.5);
+        }
+    }
+
+    #[test]
+    fn monitor_reads_zero_before_any_block() {
+        let monitor = LoadMonitor::new();
+        assert_eq!(monitor.load(), 0.0);
+        assert_eq!(monitor.xruns(), 0);
+    }
+
+    #[test]
+    fn fast_blocks_report_low_load_and_no_xruns() {
+        let (engine, sink) = engine_with(Box::new(Constant(1.0)), 64);
+        let monitor = LoadMonitor::new();
+        let mut feeder =
+            BlockFeeder::new(engine, None, sink, 48_000.0).with_monitor(monitor.clone());
+
+        let mut data = [0.0_f32; 256];
+        feeder.fill(&mut data, 1); // 4 blocks of 64 frames
+
+        // A constant-fill engine is far faster than real time: 64 frames @ 48 kHz
+        // is a 1.33 ms budget.
+        assert!(
+            monitor.load() >= 0.0 && monitor.load() < 1.0,
+            "{}",
+            monitor.load()
+        );
+        assert_eq!(monitor.xruns(), 0);
+    }
+
+    #[test]
+    fn overrunning_blocks_count_as_xruns() {
+        // 64 frames @ 48 kHz = 1.33 ms budget; each block burns ~10 ms.
+        let (engine, sink) = engine_with(Box::new(Slow(std::time::Duration::from_millis(10))), 64);
+        let monitor = LoadMonitor::new();
+        let mut feeder =
+            BlockFeeder::new(engine, None, sink, 48_000.0).with_monitor(monitor.clone());
+
+        let mut data = [0.0_f32; 192];
+        feeder.fill(&mut data, 1); // 3 blocks, each overruns
+
+        assert_eq!(monitor.xruns(), 3);
+        assert!(monitor.load() > 1.0, "{}", monitor.load());
     }
 
     #[test]
