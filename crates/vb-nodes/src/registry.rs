@@ -18,6 +18,7 @@ use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
 use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
+use crate::waveshaper::{Shape, Waveshaper};
 
 /// Metadata and factories for one node kind.
 pub struct NodeDescriptor {
@@ -116,6 +117,15 @@ fn division_from(v: f32) -> Division {
         3 => Division::Eighth,
         4 => Division::Sixteenth,
         _ => Division::Quarter,
+    }
+}
+
+/// Maps a stepped float to a [`Shape`] (0 saturate, 1 hard clip, 2 foldback).
+fn shape_from(v: f32) -> Shape {
+    match v.round() as i32 {
+        1 => Shape::HardClip,
+        2 => Shape::Foldback,
+        _ => Shape::Saturate,
     }
 }
 
@@ -357,6 +367,26 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 1, 0.1),
                     arg(v, 2, 0.7),
                     arg(v, 3, 0.2),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "waveshaper",
+            "effect",
+            || GraphNode::new("waveshaper", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Waveshaper::new(Shape::Saturate, 2.0, 0.8)),
+            || {
+                vec![
+                    Parameter::new("shape", 0.0, 2.0, 0.0),
+                    Parameter::new("drive", 0.1, 20.0, 2.0),
+                    Parameter::new("level", 0.0, 1.0, 0.8),
+                ]
+            },
+            |_, v| {
+                Box::new(Waveshaper::new(
+                    shape_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 2.0),
+                    arg(v, 2, 0.8),
                 ))
             },
         ),
