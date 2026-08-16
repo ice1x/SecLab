@@ -308,3 +308,64 @@ fn rt_engine_runs_feedback_loops_one_block_late() {
         );
     }
 }
+
+#[test]
+fn a_macro_node_runs_inside_the_rt_engine() {
+    use vb_core::{MacroProcessor, MacroSpec};
+
+    // Inner subgraph: boundary → double gain (via two 0.5-inverse… use Gain 2.0
+    // from vb-nodes) → out.
+    let mut inner = Graph::new();
+    let boundary = inner.add_node(GraphNode::new(
+        "macro-in",
+        vec![],
+        vec![Port::output("in0", SignalType::Audio)],
+    ));
+    let amp = inner.add_node(GraphNode::new(
+        "gain",
+        vec![Port::input("in", SignalType::Audio)],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    inner.connect(boundary, PortId(0), amp, PortId(0)).unwrap();
+    let mut inner_procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+    inner_procs.insert(amp, Box::new(Gain::new(2.0)));
+    let macro_proc = MacroProcessor::compile(
+        MacroSpec {
+            graph: inner,
+            input_node: boundary,
+            outputs: vec![(amp, PortId(0))],
+        },
+        inner_procs,
+        64,
+    )
+    .unwrap();
+
+    // Outer RT graph: constant source → macro → sink read.
+    struct Constant(f32);
+    impl Processor for Constant {
+        fn process(&mut self, ctx: &ProcessContext, _i: &[&[f32]], out: &mut [&mut [f32]]) {
+            out[0][..ctx.frames].fill(self.0);
+        }
+    }
+    let mut outer = Graph::new();
+    let src = outer.add_node(GraphNode::new(
+        "const",
+        vec![],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    let mac = outer.add_node(GraphNode::new(
+        "macro",
+        vec![Port::input("in", SignalType::Audio)],
+        vec![Port::output("out", SignalType::Audio)],
+    ));
+    outer.connect(src, PortId(0), mac, PortId(0)).unwrap();
+
+    let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+    procs.insert(src, Box::new(Constant(0.25)));
+    procs.insert(mac, Box::new(macro_proc));
+    let mut rt = RtEngine::compile(&outer, procs, 64).unwrap();
+
+    rt.process(&ctx(64));
+    let out = rt.node_output(mac).unwrap().channel(0).unwrap();
+    assert!(out.iter().all(|&s| (s - 0.5).abs() < 1e-6), "0.25 * 2.0");
+}

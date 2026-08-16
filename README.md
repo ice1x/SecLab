@@ -240,7 +240,7 @@ the definition of done.
 - [x] 000035 — Effects: delay, reverb (basic) 🧪
 - [x] 000036 — Effect: distortion / waveshaper 🧪
 - [x] 000037 — 🧩 Node registry (registration + metadata for the UI: name, ports, category)
-- [ ] 000038 — Macro-node (nested subgraph as a single node) — the foundation for the Reaktor style 🧪
+- [x] 000038 — Macro-node (nested subgraph as a single node) — the foundation for the Reaktor style 🧪
 
 ### Epic 4 — Node editor / UI (`vb-editor`, egui)
 
