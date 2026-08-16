@@ -21,7 +21,7 @@ use vb_editor::EditorApp;
 use vb_nodes::{Biquad, FilterKind, Gain, Oscillator, Registry, Waveform};
 use vb_runtime::{engine_swap, EngineSender, RtEngine};
 
-use audio::{BlockFeeder, SinkHandle};
+use audio::{BlockFeeder, LoadMonitor, SinkHandle};
 use live::build_live_engine;
 use settings::{rates_within, BLOCK_OPTIONS};
 
@@ -32,6 +32,8 @@ const BLOCK_FRAMES: usize = 256;
 struct AudioStack {
     tx: EngineSender,
     sink: SinkHandle,
+    /// DSP load / xrun counters published by the audio thread.
+    monitor: LoadMonitor,
     /// Keeps the cpal stream alive for the stack's lifetime.
     _stream: cpal::Stream,
 }
@@ -60,7 +62,9 @@ fn start_stack(
         .ok_or("the patch failed to compile")?;
     let (tx, rx) = engine_swap();
     let sink = SinkHandle::new(sink_id);
-    let mut feeder = BlockFeeder::new(engine, Some(rx), sink.clone(), sample_rate as f32);
+    let monitor = LoadMonitor::new();
+    let mut feeder = BlockFeeder::new(engine, Some(rx), sink.clone(), sample_rate as f32)
+        .with_monitor(monitor.clone());
 
     let config = cpal::StreamConfig {
         channels: default.channels(),
@@ -79,6 +83,7 @@ fn start_stack(
     Ok(AudioStack {
         tx,
         sink,
+        monitor,
         _stream: stream,
     })
 }
@@ -219,6 +224,38 @@ impl LiveApp {
 
 impl eframe::App for LiveApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // Status strip first so the editor gets the remaining space.
+        egui::Panel::bottom("status").show(ui, |ui| {
+            ui.horizontal(|ui| {
+                let load = self.stack.monitor.load();
+                let xruns = self.stack.monitor.xruns();
+                ui.label(format!("dsp {:.0}%", load * 100.0));
+                if load > 0.8 {
+                    ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), "overload");
+                }
+                ui.separator();
+                let xrun_text = format!("xruns {xruns}");
+                if xruns > 0 {
+                    ui.colored_label(egui::Color32::from_rgb(0xd9, 0xa4, 0x2b), xrun_text);
+                } else {
+                    ui.label(xrun_text);
+                }
+                ui.separator();
+                ui.label(
+                    self.device_names
+                        .get(self.sel_device)
+                        .map_or("?", String::as_str),
+                );
+                ui.label(format!(
+                    "@ {} Hz / {} frames",
+                    self.sel_rate, self.sel_block
+                ));
+            });
+        });
+        // Keep the meter moving even when the user is idle.
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(150));
+
         eframe::App::ui(&mut self.editor, ui, frame);
         self.audio_settings_ui(&ui.ctx().clone());
 
