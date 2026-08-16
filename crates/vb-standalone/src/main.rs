@@ -11,6 +11,7 @@
 
 mod audio;
 mod live;
+mod midi_io;
 mod settings;
 
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ use vb_runtime::{engine_swap, EngineSender, RtEngine};
 
 use audio::{BlockFeeder, LoadMonitor, SinkHandle};
 use live::build_live_engine;
+use midi_io::{connect_port, list_ports};
 use settings::{rates_within, BLOCK_OPTIONS};
 
 /// Engine block size in frames. The feeder bridges this to whatever the device asks.
@@ -142,6 +144,14 @@ struct LiveApp {
     compiled_revision: u64,
     /// Why the last apply failed, if it did.
     audio_error: Option<String>,
+    /// MIDI input ports as last enumerated.
+    midi_ports: Vec<String>,
+    /// Index of the connected port in `midi_ports`.
+    sel_midi: Option<usize>,
+    /// The live MIDI connection; dropping it disconnects.
+    midi_conn: Option<midir::MidiInputConnection<()>>,
+    /// Why the last MIDI connect failed, if it did.
+    midi_error: Option<String>,
 }
 
 impl LiveApp {
@@ -200,7 +210,62 @@ impl LiveApp {
                 if let Some(err) = &self.audio_error {
                     ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
                 }
+
+                ui.separator();
+                ui.horizontal(|ui| {
+                    ui.label("MIDI");
+                    if ui.button("rescan").clicked() {
+                        self.midi_ports = list_ports();
+                        // The connected index may now point at a different port.
+                        self.disconnect_midi();
+                    }
+                });
+                if self.midi_ports.is_empty() {
+                    ui.weak("no MIDI inputs");
+                } else {
+                    let mut clicked: Option<usize> = None;
+                    for (i, name) in self.midi_ports.iter().enumerate() {
+                        let connected = self.sel_midi == Some(i);
+                        if ui.selectable_label(connected, name).clicked() {
+                            clicked = Some(i);
+                        }
+                    }
+                    if let Some(i) = clicked {
+                        if self.sel_midi == Some(i) {
+                            self.disconnect_midi();
+                        } else {
+                            self.connect_midi(i);
+                        }
+                    }
+                }
+                if let Some(err) = &self.midi_error {
+                    ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
+                }
             });
+    }
+
+    /// Connects MIDI port `i`, replacing any current connection.
+    fn connect_midi(&mut self, i: usize) {
+        self.disconnect_midi();
+        match connect_port(i, self.build_ctx.notes.clone()) {
+            Ok(conn) => {
+                self.midi_conn = Some(conn);
+                self.sel_midi = Some(i);
+                self.midi_error = None;
+            }
+            Err(err) => self.midi_error = Some(err),
+        }
+    }
+
+    /// Drops the current MIDI connection and releases any held note.
+    fn disconnect_midi(&mut self) {
+        self.midi_conn = None;
+        self.sel_midi = None;
+        // The keyboard is gone: whatever note it held must not drone forever.
+        let (gate, note, _) = self.build_ctx.notes.read();
+        if gate {
+            self.build_ctx.notes.note_off(note);
+        }
     }
 
     /// Tears down the running stream and starts one with the selected settings.
@@ -327,7 +392,8 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
         device_names[sel_device]
     );
 
-    let app = LiveApp {
+    let midi_ports = list_ports();
+    let mut app = LiveApp {
         editor,
         registry,
         build_ctx,
@@ -340,7 +406,18 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
         stack,
         compiled_revision,
         audio_error: None,
+        midi_ports,
+        sel_midi: None,
+        midi_conn: None,
+        midi_error: None,
     };
+    // Plug in the first keyboard found; the audio window can switch or disconnect.
+    if !app.midi_ports.is_empty() {
+        app.connect_midi(0);
+        if let Some(port) = app.sel_midi.and_then(|i| app.midi_ports.get(i)) {
+            println!("midi input: '{port}'");
+        }
+    }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("VST_bomb")
