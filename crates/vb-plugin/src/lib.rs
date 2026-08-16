@@ -76,6 +76,9 @@ impl Plugin for VstBomb {
         ..AudioIOLayout::const_default()
     }];
 
+    // Note on/off from the host reach the patch's midi-in / voice-in nodes.
+    const MIDI_INPUT: MidiConfig = MidiConfig::Basic;
+
     type SysExMessage = ();
     type BackgroundTask = ();
 
@@ -114,11 +117,25 @@ impl Plugin for VstBomb {
         &mut self,
         buffer: &mut Buffer,
         _aux: &mut AuxiliaryBuffers,
-        _context: &mut impl ProcessContext<Self>,
+        context: &mut impl ProcessContext<Self>,
     ) -> ProcessStatus {
         let Some(engine) = &mut self.engine else {
             return ProcessStatus::Error("engine not initialized");
         };
+        // Drain the host's note events into the shared mailboxes; midi-in and
+        // voice-in processors read them at the coming engine pass. Timing is
+        // block-level for now (sample-accurate splitting is later polish).
+        while let Some(event) = context.next_event() {
+            match event {
+                NoteEvent::NoteOn { note, velocity, .. } => {
+                    route_note(&self.build_ctx, note, velocity, true);
+                }
+                NoteEvent::NoteOff { note, .. } => {
+                    route_note(&self.build_ctx, note, 0.0, false);
+                }
+                _ => {}
+            }
+        }
         let frames = buffer.samples();
         engine.process(&vb_core::ProcessContext {
             sample_rate: self.sample_rate,
@@ -161,6 +178,21 @@ impl ClapPlugin for VstBomb {
     ];
 }
 
+/// Routes one host note event into both note mailboxes (mono + poly).
+///
+/// nih-plug velocities are `[0, 1]`; the mailboxes speak MIDI bytes, so the value is
+/// scaled to `0..=127` with rounding and clamping.
+fn route_note(ctx: &BuildContext, note: u8, velocity: f32, on: bool) {
+    if on {
+        let vel = (velocity.clamp(0.0, 1.0) * 127.0).round() as u8;
+        ctx.notes.note_on(note, vel);
+        ctx.poly.note_on(note, vel);
+    } else {
+        ctx.notes.note_off(note);
+        ctx.poly.note_off(note);
+    }
+}
+
 nih_export_clap!(VstBomb);
 
 #[cfg(test)]
@@ -175,6 +207,36 @@ mod tests {
             "default patch has nodes to play"
         );
         assert!(plugin.engine.is_none(), "engine waits for initialize");
+    }
+
+    #[test]
+    fn host_notes_reach_both_mailboxes() {
+        let ctx = BuildContext::default();
+
+        route_note(&ctx, 69, 1.0, true);
+        assert_eq!(
+            ctx.notes.read(),
+            (true, 69, 127),
+            "full velocity maps to 127"
+        );
+        assert_eq!(ctx.poly.read(0), (true, 69, 127));
+
+        route_note(&ctx, 72, 0.5, true);
+        let (_, _, vel) = ctx.poly.read(1);
+        assert_eq!(vel, 64, "0.5 rounds to 64");
+
+        route_note(&ctx, 69, 0.0, false);
+        assert!(
+            !ctx.notes.read().0 || ctx.notes.read().1 != 69,
+            "mono released or replaced"
+        );
+        assert!(!ctx.poly.read(0).0, "voice 0 released");
+        assert!(ctx.poly.read(1).0, "voice 1 still sounding");
+
+        // Out-of-range velocities clamp instead of wrapping.
+        route_note(&ctx, 60, 7.5, true);
+        let (_, _, vel) = ctx.poly.read(0);
+        assert_eq!(vel, 127);
     }
 
     #[test]
