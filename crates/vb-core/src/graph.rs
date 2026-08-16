@@ -135,6 +135,55 @@ impl Graph {
         to_node: NodeId,
         to_port: PortId,
     ) -> Result<Edge, GraphError> {
+        self.check_endpoints(from_node, from_port, to_node, to_port)?;
+        let edge = Edge {
+            from_node,
+            from_port,
+            to_node,
+            to_port,
+        };
+        self.edges.push(edge);
+        Ok(edge)
+    }
+
+    /// Checks whether [`Graph::connect`] would accept this edge *and* the result would
+    /// still have a valid processing order — without mutating the graph.
+    ///
+    /// This is stricter than `connect`: it also returns [`GraphError::Cycle`] if the
+    /// edge would close a loop. `connect` stays permissive there on purpose (project
+    /// files with cycles must be constructible so diagnostics can report them); live
+    /// editing goes through this check first so the user can never wire a patch the
+    /// engine cannot compile.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same [`GraphError`] `connect` would, or [`GraphError::Cycle`] if
+    /// the edge would create one.
+    pub fn can_connect(
+        &self,
+        from_node: NodeId,
+        from_port: PortId,
+        to_node: NodeId,
+        to_port: PortId,
+    ) -> Result<(), GraphError> {
+        self.check_endpoints(from_node, from_port, to_node, to_port)?;
+        // The new edge runs from_node → to_node; it closes a loop iff from_node is
+        // already reachable from to_node (self-loops included).
+        if from_node == to_node || self.reaches(to_node, from_node) {
+            return Err(GraphError::Cycle);
+        }
+        Ok(())
+    }
+
+    /// Endpoint validation shared by [`Graph::connect`] and [`Graph::can_connect`]:
+    /// nodes and ports exist, signals are compatible, the input is free.
+    fn check_endpoints(
+        &self,
+        from_node: NodeId,
+        from_port: PortId,
+        to_node: NodeId,
+        to_port: PortId,
+    ) -> Result<(), GraphError> {
         let source = self
             .nodes
             .get(&from_node)
@@ -177,15 +226,27 @@ impl Graph {
                 port: to_port,
             });
         }
+        Ok(())
+    }
 
-        let edge = Edge {
-            from_node,
-            from_port,
-            to_node,
-            to_port,
-        };
-        self.edges.push(edge);
-        Ok(edge)
+    /// Whether `target` is reachable from `start` along existing edges (DFS).
+    fn reaches(&self, start: NodeId, target: NodeId) -> bool {
+        let mut stack = vec![start];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(node) = stack.pop() {
+            if node == target {
+                return true;
+            }
+            if seen.insert(node) {
+                stack.extend(
+                    self.edges
+                        .iter()
+                        .filter(|e| e.from_node == node)
+                        .map(|e| e.to_node),
+                );
+            }
+        }
+        false
     }
 
     /// Removes the edge feeding `to_node`'s input `to_port`, if any, and returns it.
@@ -347,5 +408,80 @@ mod tests {
     fn remove_unknown_node_returns_none() {
         let mut g = Graph::new();
         assert_eq!(g.remove_node(crate::node::NodeId(42)), None);
+    }
+
+    #[test]
+    fn can_connect_accepts_what_connect_accepts_without_mutating() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        assert_eq!(g.can_connect(a, PortId(0), b, PortId(0)), Ok(()));
+        assert_eq!(g.edges().len(), 0, "dry-run must not add the edge");
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+    }
+
+    #[test]
+    fn can_connect_reports_the_same_endpoint_errors_as_connect() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        let ctl = g.add_node(GraphNode::new(
+            "adsr",
+            vec![Port::input("gate", SignalType::Control)],
+            vec![],
+        ));
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+
+        assert_eq!(
+            g.can_connect(crate::node::NodeId(99), PortId(0), b, PortId(0)),
+            Err(GraphError::UnknownNode(crate::node::NodeId(99)))
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), ctl, PortId(0)),
+            Err(GraphError::SignalMismatch)
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), b, PortId(0)),
+            Err(GraphError::InputAlreadyConnected {
+                node: b,
+                port: PortId(0)
+            })
+        );
+    }
+
+    #[test]
+    fn can_connect_rejects_edges_that_would_close_a_cycle() {
+        let mut g = Graph::new();
+        let a = g.add_node(gain());
+        let b = g.add_node(gain());
+        let c = g.add_node(gain());
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        g.connect(b, PortId(0), c, PortId(0)).unwrap();
+
+        // c → a would close a…b…c → a; a → a is a self-loop.
+        assert_eq!(
+            g.can_connect(c, PortId(0), a, PortId(0)),
+            Err(GraphError::Cycle)
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), a, PortId(0)),
+            Err(GraphError::Cycle)
+        );
+        // A parallel forward edge into a free input is not a cycle.
+        let d = g.add_node(gain());
+        assert_eq!(g.can_connect(c, PortId(0), d, PortId(0)), Ok(()));
+    }
+
+    #[test]
+    fn connect_stays_permissive_about_cycles_for_diagnostics() {
+        // Project files with cycles must remain constructible; only can_connect is
+        // strict. has_cycle()/diagnostics report them afterwards.
+        let mut g = Graph::new();
+        let a = g.add_node(gain());
+        let b = g.add_node(gain());
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        g.connect(b, PortId(0), a, PortId(0))
+            .expect("connect still builds the cyclic graph");
+        assert!(g.has_cycle());
     }
 }

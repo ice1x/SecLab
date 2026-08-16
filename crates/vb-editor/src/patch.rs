@@ -26,6 +26,23 @@ pub struct WireDrag {
     pub port: PortId,
 }
 
+/// Orients a drag endpoint pair as (output side, input side), or `None` when both
+/// ends are the same direction.
+fn normalize_wire(
+    drag: WireDrag,
+    target: (NodeId, NodeHit),
+) -> Option<((NodeId, PortId), (NodeId, PortId))> {
+    match (drag.direction, target) {
+        (PortDirection::Output, (node, NodeHit::Input(port))) => {
+            Some(((drag.node, drag.port), (node, port)))
+        }
+        (PortDirection::Input, (node, NodeHit::Output(port))) => {
+            Some(((node, port), (drag.node, drag.port)))
+        }
+        _ => None,
+    }
+}
+
 /// Editor-side view of a patch: graph + positions + selection.
 #[derive(Default)]
 pub struct PatchView {
@@ -151,20 +168,38 @@ impl PatchView {
     }
 
     /// Finishes the wire drag at `p`: connects if `p` lands on a port of the opposite
-    /// direction and `vb-core` accepts the edge (signal types match, input free, no
-    /// cycle). Returns the created edge; any miss or rejection just clears the drag.
+    /// direction and [`Graph::can_connect`] accepts the edge (signal types match,
+    /// input free, no cycle). Returns the created edge; any miss or rejection just
+    /// clears the drag.
     pub fn end_wire(&mut self, p: Pos2, style: &NodeStyle) -> Option<Edge> {
         let drag = self.drag.take()?;
-        let (from, to) = match (drag.direction, self.node_at(p, style)?) {
-            (PortDirection::Output, (node, NodeHit::Input(port))) => {
-                ((drag.node, drag.port), (node, port))
-            }
-            (PortDirection::Input, (node, NodeHit::Output(port))) => {
-                ((node, port), (drag.node, drag.port))
-            }
-            _ => return None,
-        };
+        let target = self.node_at(p, style)?;
+        let (from, to) = normalize_wire(drag, target)?;
+        self.graph.can_connect(from.0, from.1, to.0, to.1).ok()?;
         self.graph.connect(from.0, from.1, to.0, to.1).ok()
+    }
+
+    /// Whether dropping the active wire on the given port would connect.
+    ///
+    /// `None` when no wire drag is active (nothing to highlight); `Some(false)` for
+    /// same-direction ports and edges [`Graph::can_connect`] rejects (signal mismatch,
+    /// occupied input, cycle); `Some(true)` for a valid drop target.
+    #[must_use]
+    pub fn wire_target_ok(
+        &self,
+        node: NodeId,
+        direction: PortDirection,
+        port: PortId,
+    ) -> Option<bool> {
+        let drag = self.drag?;
+        let hit = match direction {
+            PortDirection::Input => NodeHit::Input(port),
+            PortDirection::Output => NodeHit::Output(port),
+        };
+        let Some((from, to)) = normalize_wire(drag, (node, hit)) else {
+            return Some(false);
+        };
+        Some(self.graph.can_connect(from.0, from.1, to.0, to.1).is_ok())
     }
 
     /// Handles a click at `p`: selects the topmost node there (raising it to the top
@@ -363,6 +398,75 @@ mod tests {
         patch.begin_wire(out_c, &s);
         assert!(patch.end_wire(inp_b, &s).is_none());
         assert_eq!(patch.graph().edges().len(), 1, "original edge untouched");
+    }
+
+    #[test]
+    fn end_wire_refuses_edges_that_would_close_a_cycle() {
+        let (mut patch, a, b) = two_gains();
+        let s = style();
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+
+        // b.out → a.in would close a → b → a.
+        let out_b = patch
+            .port_anchor(b, PortDirection::Output, PortId(0), &s)
+            .unwrap();
+        let in_a = patch
+            .port_anchor(a, PortDirection::Input, PortId(0), &s)
+            .unwrap();
+        patch.begin_wire(out_b, &s);
+        assert!(patch.end_wire(in_a, &s).is_none());
+        assert_eq!(patch.graph().edges().len(), 1, "cycle edge not created");
+    }
+
+    #[test]
+    fn wire_target_ok_highlights_only_valid_drops() {
+        let (mut patch, a, b) = two_gains();
+        let c = patch.add_node(gain(), Pos2::new(600.0, 0.0));
+        let s = style();
+        patch.connect(a, PortId(0), b, PortId(0)).unwrap();
+
+        // No drag: nothing to highlight.
+        assert_eq!(
+            patch.wire_target_ok(c, PortDirection::Input, PortId(0)),
+            None
+        );
+
+        // Dragging from b.out: c.in is valid; a.in closes a cycle; b.in is our own
+        // occupied input anyway; any output is same-direction.
+        let out_b = patch
+            .port_anchor(b, PortDirection::Output, PortId(0), &s)
+            .unwrap();
+        patch.begin_wire(out_b, &s);
+        assert_eq!(
+            patch.wire_target_ok(c, PortDirection::Input, PortId(0)),
+            Some(true)
+        );
+        assert_eq!(
+            patch.wire_target_ok(a, PortDirection::Input, PortId(0)),
+            Some(false),
+            "would close a cycle"
+        );
+        assert_eq!(
+            patch.wire_target_ok(b, PortDirection::Input, PortId(0)),
+            Some(false),
+            "occupied input"
+        );
+        assert_eq!(
+            patch.wire_target_ok(a, PortDirection::Output, PortId(0)),
+            Some(false),
+            "same direction"
+        );
+
+        // Dragging from an input highlights free outputs instead.
+        patch.end_wire(Pos2::new(-999.0, -999.0), &s);
+        let in_c = patch
+            .port_anchor(c, PortDirection::Input, PortId(0), &s)
+            .unwrap();
+        patch.begin_wire(in_c, &s);
+        assert_eq!(
+            patch.wire_target_ok(b, PortDirection::Output, PortId(0)),
+            Some(true)
+        );
     }
 
     #[test]
