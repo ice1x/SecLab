@@ -283,7 +283,7 @@ the definition of done.
 
 ### Epic 7 — Plugin export (`vb-plugin`: CLAP → VST3/AU)
 
-- [ ] 000064 — `nih-plug` plugin scaffold, **CLAP** export, load the serialized graph
+- [x] 000064 — `nih-plug` plugin scaffold, **CLAP** export, load the serialized graph 🧪
 - [ ] 000065 — Route plugin parameters (host automation) into graph parameters 🧪
 - [ ] 000066 — Handle MIDI/notes from the host in the plugin runtime 🧪
 - [ ] 000067 — Embed the GUI (egui editor or a simplified run-view) into the plugin window
