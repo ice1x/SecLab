@@ -11,6 +11,7 @@
 
 mod audio;
 mod live;
+mod settings;
 
 use std::collections::HashMap;
 
@@ -22,25 +23,204 @@ use vb_runtime::{engine_swap, EngineSender, RtEngine};
 
 use audio::{BlockFeeder, SinkHandle};
 use live::build_live_engine;
+use settings::{rates_within, BLOCK_OPTIONS};
 
 /// Engine block size in frames. The feeder bridges this to whatever the device asks.
 const BLOCK_FRAMES: usize = 256;
+
+/// One running audio stream and its engine-swap channel.
+struct AudioStack {
+    tx: EngineSender,
+    sink: SinkHandle,
+    /// Keeps the cpal stream alive for the stack's lifetime.
+    _stream: cpal::Stream,
+}
+
+/// Starts a stream on `device` at the requested rate and engine block size.
+///
+/// The engine block size is independent of the device buffer (the feeder bridges
+/// them), so any [`BLOCK_OPTIONS`] entry works on any device.
+fn start_stack(
+    device: &cpal::Device,
+    sample_rate: u32,
+    block_frames: usize,
+    editor: &EditorApp,
+    registry: &Registry,
+) -> Result<AudioStack, String> {
+    let default = device.default_output_config().map_err(|e| e.to_string())?;
+    if default.sample_format() != cpal::SampleFormat::F32 {
+        return Err(format!(
+            "unsupported sample format {:?}",
+            default.sample_format()
+        ));
+    }
+    let channels = default.channels() as usize;
+
+    let (engine, sink_id) = build_live_engine(editor.patch(), registry, block_frames)
+        .ok_or("the patch failed to compile")?;
+    let (tx, rx) = engine_swap();
+    let sink = SinkHandle::new(sink_id);
+    let mut feeder = BlockFeeder::new(engine, Some(rx), sink.clone(), sample_rate as f32);
+
+    let config = cpal::StreamConfig {
+        channels: default.channels(),
+        sample_rate,
+        buffer_size: cpal::BufferSize::Default,
+    };
+    let stream = device
+        .build_output_stream(
+            config,
+            move |data: &mut [f32], _info| feeder.fill(data, channels),
+            |err| eprintln!("audio stream error: {err}"),
+            None,
+        )
+        .map_err(|e| e.to_string())?;
+    stream.play().map_err(|e| e.to_string())?;
+    Ok(AudioStack {
+        tx,
+        sink,
+        _stream: stream,
+    })
+}
+
+/// Human-readable device name, best effort.
+fn device_name(device: &cpal::Device) -> String {
+    device
+        .description()
+        .map(|d| d.name().to_owned())
+        .unwrap_or_else(|_| "unknown device".into())
+}
+
+/// Sample rates worth offering for `device`: common rates its f32 configs cover,
+/// plus its default rate.
+fn supported_rates(device: &cpal::Device) -> Vec<u32> {
+    let ranges: Vec<(u32, u32)> = device
+        .supported_output_configs()
+        .map(|configs| {
+            configs
+                .filter(|c| c.sample_format() == cpal::SampleFormat::F32)
+                .map(|c| (c.min_sample_rate(), c.max_sample_rate()))
+                .collect()
+        })
+        .unwrap_or_default();
+    let mut rates = rates_within(&ranges);
+    if let Ok(default) = device.default_output_config() {
+        if !rates.contains(&default.sample_rate()) {
+            rates.push(default.sample_rate());
+            rates.sort_unstable();
+        }
+    }
+    rates
+}
 
 /// The editor window with the audio stream that follows it.
 struct LiveApp {
     editor: EditorApp,
     registry: Registry,
-    tx: EngineSender,
-    sink: SinkHandle,
+    /// Output devices as enumerated at startup, parallel to `device_names`.
+    devices: Vec<cpal::Device>,
+    device_names: Vec<String>,
+    /// Selection shown in the audio window (applied on "apply").
+    sel_device: usize,
+    sel_rate: u32,
+    sel_block: usize,
+    /// Rates offered for the selected device.
+    rates: Vec<u32>,
+    stack: AudioStack,
     /// Last patch revision compiled into the running engine.
     compiled_revision: u64,
-    /// Keeps the cpal stream alive for the window's lifetime.
-    _stream: cpal::Stream,
+    /// Why the last apply failed, if it did.
+    audio_error: Option<String>,
+}
+
+impl LiveApp {
+    /// Renders the floating audio-settings window and applies changes.
+    fn audio_settings_ui(&mut self, ctx: &egui::Context) {
+        egui::Window::new("audio")
+            .default_open(false)
+            .resizable(false)
+            .show(ctx, |ui| {
+                let mut device_changed = false;
+                egui::ComboBox::from_label("device")
+                    .selected_text(
+                        self.device_names
+                            .get(self.sel_device)
+                            .map_or("?", String::as_str),
+                    )
+                    .show_ui(ui, |ui| {
+                        for (i, name) in self.device_names.iter().enumerate() {
+                            if ui.selectable_value(&mut self.sel_device, i, name).changed() {
+                                device_changed = true;
+                            }
+                        }
+                    });
+                if device_changed {
+                    if let Some(device) = self.devices.get(self.sel_device) {
+                        self.rates = supported_rates(device);
+                        if !self.rates.contains(&self.sel_rate) {
+                            self.sel_rate = self.rates.first().copied().unwrap_or(48_000);
+                        }
+                    }
+                }
+
+                egui::ComboBox::from_label("sample rate")
+                    .selected_text(format!("{} Hz", self.sel_rate))
+                    .show_ui(ui, |ui| {
+                        for rate in &self.rates {
+                            ui.selectable_value(&mut self.sel_rate, *rate, format!("{rate} Hz"));
+                        }
+                    });
+
+                egui::ComboBox::from_label("block size")
+                    .selected_text(format!("{} frames", self.sel_block))
+                    .show_ui(ui, |ui| {
+                        for block in BLOCK_OPTIONS {
+                            ui.selectable_value(
+                                &mut self.sel_block,
+                                *block,
+                                format!("{block} frames"),
+                            );
+                        }
+                    });
+
+                if ui.button("apply").clicked() {
+                    self.apply_audio_settings();
+                }
+                if let Some(err) = &self.audio_error {
+                    ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
+                }
+            });
+    }
+
+    /// Tears down the running stream and starts one with the selected settings.
+    /// On failure the old stream keeps playing and the error is shown.
+    fn apply_audio_settings(&mut self) {
+        let Some(device) = self.devices.get(self.sel_device) else {
+            self.audio_error = Some("selected device disappeared".into());
+            return;
+        };
+        match start_stack(
+            device,
+            self.sel_rate,
+            self.sel_block,
+            &self.editor,
+            &self.registry,
+        ) {
+            Ok(stack) => {
+                // Dropping the old stack stops its stream; the new one is already live.
+                self.stack = stack;
+                self.compiled_revision = self.editor.patch().revision();
+                self.audio_error = None;
+            }
+            Err(err) => self.audio_error = Some(err),
+        }
+    }
 }
 
 impl eframe::App for LiveApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         eframe::App::ui(&mut self.editor, ui, frame);
+        self.audio_settings_ui(&ui.ctx().clone());
 
         // An audible edit happened: recompile and swap. A patch that no longer
         // compiles (e.g. mid-edit) keeps the previous engine running.
@@ -48,54 +228,60 @@ impl eframe::App for LiveApp {
         if revision != self.compiled_revision {
             self.compiled_revision = revision;
             if let Some((engine, sink)) =
-                build_live_engine(self.editor.patch(), &self.registry, BLOCK_FRAMES)
+                build_live_engine(self.editor.patch(), &self.registry, self.sel_block)
             {
-                self.sink.set(sink);
-                self.tx.install(engine);
+                self.stack.sink.set(sink);
+                self.stack.tx.install(engine);
             }
         }
         // Reclaim engines the audio thread has retired.
-        self.tx.collect();
+        self.stack.tx.collect();
     }
 }
 
 /// Opens the live editor window over a cpal stream.
 fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
-    let (device, config) = default_output()?;
-    let sample_rate = config.sample_rate() as f32;
-    let channels = config.channels() as usize;
+    let host = cpal::default_host();
+    let devices: Vec<cpal::Device> = host
+        .output_devices()
+        .map(Iterator::collect)
+        .unwrap_or_default();
+    if devices.is_empty() {
+        return Err("no audio output devices".into());
+    }
+    let device_names: Vec<String> = devices.iter().map(device_name).collect();
+
+    // Start on the default device (matched by name) at its default rate.
+    let default_name = host.default_output_device().map(|d| device_name(&d));
+    let sel_device = default_name
+        .and_then(|name| device_names.iter().position(|n| *n == name))
+        .unwrap_or(0);
+    let device = &devices[sel_device];
+    let sel_rate = device.default_output_config()?.sample_rate();
+    let rates = supported_rates(device);
 
     let editor = EditorApp::new();
     let registry = Registry::with_builtins();
-    let (engine, sink_id) = build_live_engine(editor.patch(), &registry, BLOCK_FRAMES)
-        .ok_or("the starter patch failed to compile")?;
+    let stack = start_stack(device, sel_rate, BLOCK_FRAMES, &editor, &registry)?;
     let compiled_revision = editor.patch().revision();
 
-    let (tx, rx) = engine_swap();
-    let sink = SinkHandle::new(sink_id);
-    let mut feeder = BlockFeeder::new(engine, Some(rx), sink.clone(), sample_rate);
-
-    let device_name = device
-        .description()
-        .map(|d| d.name().to_owned())
-        .unwrap_or_else(|_| "unknown".into());
-    println!("vb-standalone editor on '{device_name}' @ {sample_rate} Hz, {channels} ch");
-
-    let stream = device.build_output_stream(
-        config.into(),
-        move |data: &mut [f32], _info| feeder.fill(data, channels),
-        |err| eprintln!("audio stream error: {err}"),
-        None,
-    )?;
-    stream.play()?;
+    println!(
+        "vb-standalone editor on '{}' @ {sel_rate} Hz",
+        device_names[sel_device]
+    );
 
     let app = LiveApp {
         editor,
         registry,
-        tx,
-        sink,
+        devices,
+        device_names,
+        sel_device,
+        sel_rate,
+        sel_block: BLOCK_FRAMES,
+        rates,
+        stack,
         compiled_revision,
-        _stream: stream,
+        audio_error: None,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
