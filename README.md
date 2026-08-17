@@ -363,7 +363,7 @@ the definition of done.
 - [x] 000101 — 🏗️ LLM provider abstraction (`AiProvider` trait), Claude by default, model/key config 🧪
 - [x] 000102 — 🏗️ Text/JSON representation of the graph for LLM context (prompt serialization, round-trip) 🧪
 - [x] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `vb-core` 🧪
-- [ ] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
+- [x] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
 - [ ] 000105 — Apply assistant edits as undoable commands (shared stack with manual editing) 🧪
 - [ ] 000106 — Suggestions: next node, auto-fix incompatible/dangling connections 🧪
 - [ ] 000107 — Explain a patch/node in natural language (chat panel / tooltips)
