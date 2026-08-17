@@ -314,7 +314,7 @@ the definition of done.
 ### Epic 10 — Documentation, examples, release
 
 - [ ] 000085 — User guide: build your first plugin (osc→filter→envelope→out)
-- [ ] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
+- [x] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
 - [ ] 000087 — A set of example projects (synth, delay effect, LFO modulation)
 - [ ] 000088 — Developer guide: how to add your own node (`Node` trait + registration) 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
