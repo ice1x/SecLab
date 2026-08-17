@@ -382,7 +382,7 @@ the definition of done.
 - [ ] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
 - [x] 000118 — Skill: "explain / repair an existing patch" (uses validator issues as input) 🧪
 - [x] 000119 — Critic pass (Occam's razor): review request + draft for redundant nodes/routing, surface trade-offs as short bullets 🧪
-- [ ] 000120 — Propose→validate→repair loop: every proposal gated by `vb-core`/`vb-project` validation, issues fed back to the model until convergence (with retry cap) 🧪
+- [x] 000120 — Propose→validate→repair loop: every proposal gated by `vb-core`/`vb-project` validation, issues fed back to the model until convergence (with retry cap) 🧪
 - [ ] 000121 — Context compression: structural graph summary + running "session brief" distillation of earlier turns 🧪
 - [ ] 000122 — 🧩 Token/cost budget guard: estimate and report per-exchange usage, warn before large sends 🧪
 - [ ] 000123 — "What will be sent?" inspector: show the exact outgoing payload before the first request of a session
