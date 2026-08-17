@@ -242,6 +242,7 @@ the definition of done.
 - [x] 000037 — 🧩 Node registry (registration + metadata for the UI: name, ports, category)
 - [x] 000038 — Macro-node (nested subgraph as a single node) — the foundation for the Reaktor style 🧪
 - [x] 000131 — VCA node (control-modulated amplifier `out = in·(bias + amount·cv)`): the first CV-consuming node, so an LFO/envelope can actually modulate audio (unblocks the modulation matrix and the tremolo example) 🧪
+- [x] 000132 — VCF node (voltage-controlled filter): a biquad whose cutoff a control input sweeps (`cutoff = base_hz + amount_hz·cv`) — the README MVP's "LFO on cutoff", with a live filter-sweep example 🧪
 
 ### Epic 4 — Node editor / UI (`vb-editor`, egui)
 
@@ -316,7 +317,7 @@ the definition of done.
 
 - [ ] 000085 — User guide: build your first plugin (osc→filter→envelope→out)
 - [x] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
-- [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo) 🧪
+- [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo, LFO filter sweep) 🧪
 - [ ] 000088 — Developer guide: how to add your own node (`Node` trait + registration) 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
 - [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI

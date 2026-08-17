@@ -62,6 +62,19 @@ impl Biquad {
         self.kind
     }
 
+    /// Retunes the cutoff (Hz) without disturbing the filter state — the hook a control
+    /// input drives to sweep the filter (see [`crate::Vcf`]). Coefficients are recomputed
+    /// on the next processed block.
+    pub fn set_cutoff(&mut self, cutoff_hz: f32) {
+        self.cutoff_hz = cutoff_hz;
+    }
+
+    /// The current cutoff in Hz.
+    #[must_use]
+    pub fn cutoff_hz(&self) -> f32 {
+        self.cutoff_hz
+    }
+
     fn coeffs(&self, sample_rate: f32) -> Coeffs {
         let f0 = self.cutoff_hz.clamp(1.0, 0.49 * sample_rate);
         let w0 = core::f32::consts::TAU * (f0 / sample_rate);

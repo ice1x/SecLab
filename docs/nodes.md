@@ -71,6 +71,16 @@ Auto-generated from the registry — do not edit by hand.
   - `cutoff_hz` — range 20..20000, default 1000
   - `q` — range 0.1..20, default 0.707
 
+### vcf
+
+- **Inputs:** `in` (audio), `cutoff` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `kind` — range 0..3, default 0
+  - `base_hz` — range 20..20000, default 1000
+  - `q` — range 0.1..10, default 0.707
+  - `amount_hz` — range -20000..20000, default 4000
+
 ## generator
 
 ### noise

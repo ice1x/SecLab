@@ -23,6 +23,7 @@ use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
 use crate::vca::Vca;
+use crate::vcf::Vcf;
 use crate::waveshaper::{Shape, Waveshaper};
 
 /// Metadata and factories for one node kind.
@@ -609,6 +610,34 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Vca::new(arg(v, 0, 1.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "vcf",
+            "filter",
+            || {
+                GraphNode::new(
+                    "vcf",
+                    vec![audio_in("in"), Port::input("cutoff", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Vcf::new(FilterKind::LowPass, 1_000.0, 0.707, 4_000.0)),
+            || {
+                vec![
+                    Parameter::new("kind", 0.0, 3.0, 0.0),
+                    Parameter::new("base_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("q", 0.1, 10.0, 0.707),
+                    Parameter::new("amount_hz", -20_000.0, 20_000.0, 4_000.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Vcf::new(
+                    filter_kind_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 1_000.0),
+                    arg(v, 2, 0.707),
+                    arg(v, 3, 4_000.0),
+                ))
+            },
         ),
     ]
 }
