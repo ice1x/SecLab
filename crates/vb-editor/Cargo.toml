@@ -12,6 +12,8 @@ vb-core.workspace = true
 vb-nodes.workspace = true
 egui.workspace = true
 eframe.workspace = true
+serde.workspace = true
+ron.workspace = true
 
 [lints]
 workspace = true

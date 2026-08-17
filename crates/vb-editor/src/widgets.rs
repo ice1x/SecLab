@@ -7,10 +7,11 @@
 //! **XY-pad** maps a 2-D pointer position onto two parameters at once. The egui
 //! rendering in `app.rs` is a thin shell over these functions.
 
+use serde::{Deserialize, Serialize};
 use vb_core::Parameter;
 
 /// Which control the inspector draws for a parameter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub enum WidgetKind {
     /// A horizontal value slider (the classic control).
     Slider,

@@ -11,6 +11,7 @@ use egui::{Pos2, Vec2};
 use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
+use crate::module::{MacroModule, ModuleError, ModuleNode, ModuleParam, MODULE_VERSION};
 use crate::widgets::{default_widget, WidgetKind};
 
 /// Node kind of a macro (a nested subgraph shown as one node).
@@ -245,6 +246,97 @@ impl PatchView {
     pub fn restore_subpatch(&mut self, id: NodeId, sub: PatchView) {
         self.subpatches.insert(id, sub);
         self.touch();
+    }
+
+    /// Adds a macro node at `pos` whose inner patch is `sub` (instead of the empty
+    /// boundary-only patch [`add_macro`](Self::add_macro) seeds). Used when importing a
+    /// reusable module. The macro keeps the conventional single audio in/out shell.
+    pub fn add_macro_with_subpatch(&mut self, pos: Pos2, sub: PatchView) -> NodeId {
+        let id = self.add_node(
+            GraphNode::new(
+                MACRO_KIND,
+                vec![crate::patch::audio_in("in")],
+                vec![crate::patch::audio_out("out")],
+            ),
+            pos,
+        );
+        self.subpatches.insert(id, sub);
+        id
+    }
+
+    /// Captures this patch as a portable [`MacroModule`] named `name`: every node's
+    /// definition, canvas position, parameter values and chosen widgets, plus the edges.
+    #[must_use]
+    pub fn to_module(&self, name: impl Into<String>) -> MacroModule {
+        let nodes = self
+            .order
+            .iter()
+            .filter_map(|id| {
+                let node = self.graph.node(*id)?.clone();
+                let pos = *self.positions.get(id)?;
+                let params = self
+                    .params
+                    .get(id)
+                    .map(|slots| {
+                        slots
+                            .iter()
+                            .map(|s| ModuleParam {
+                                param: s.param.clone(),
+                                value: s.value,
+                                widget: s.widget,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Some(ModuleNode {
+                    id: *id,
+                    node,
+                    pos: (pos.x, pos.y),
+                    params,
+                })
+            })
+            .collect();
+        MacroModule {
+            version: MODULE_VERSION,
+            name: name.into(),
+            nodes,
+            edges: self.graph.edges().to_vec(),
+        }
+    }
+
+    /// Rebuilds a patch from a [`MacroModule`], restoring node positions, parameter
+    /// values, widgets and edges. Node ids are reallocated and edges remapped, so the
+    /// topology is preserved even though concrete ids differ. History starts empty.
+    ///
+    /// # Errors
+    /// [`ModuleError::Build`] if an edge references a missing node or a stored edge is
+    /// rejected by [`vb_core::Graph`] validation.
+    pub fn from_module(module: &MacroModule) -> Result<PatchView, ModuleError> {
+        let mut patch = PatchView::new();
+        let mut remap: HashMap<NodeId, NodeId> = HashMap::new();
+        for mn in &module.nodes {
+            let params: Vec<Parameter> = mn.params.iter().map(|p| p.param.clone()).collect();
+            let new_id =
+                patch.add_node_with_params(mn.node.clone(), params, Pos2::new(mn.pos.0, mn.pos.1));
+            for (i, p) in mn.params.iter().enumerate() {
+                patch.set_param(new_id, i, p.value);
+                patch.set_widget(new_id, i, p.widget);
+            }
+            remap.insert(mn.id, new_id);
+        }
+        for edge in &module.edges {
+            let from = *remap
+                .get(&edge.from_node)
+                .ok_or_else(|| ModuleError::Build("edge from-node missing".to_owned()))?;
+            let to = *remap
+                .get(&edge.to_node)
+                .ok_or_else(|| ModuleError::Build("edge to-node missing".to_owned()))?;
+            patch
+                .connect(from, edge.from_port, to, edge.to_port)
+                .map_err(|e| ModuleError::Build(e.to_string()))?;
+        }
+        patch.clear_history();
+        Ok(patch)
     }
 
     /// Ends the current continuous gesture (mouse released): the next move or
@@ -924,6 +1016,66 @@ mod tests {
         patch.click(Pos2::new(10.0, 10.0), &style());
         let copy = patch.duplicate_selected().expect("copy");
         assert_eq!(patch.params(copy)[0].widget, WidgetKind::Slider);
+    }
+
+    #[test]
+    fn patch_round_trips_through_a_module() {
+        // Build a small patch: osc → gain, with a tweaked value and a retyped widget.
+        let mut patch = PatchView::new();
+        let osc = patch.add_node_with_params(
+            GraphNode::new(
+                "oscillator",
+                vec![],
+                vec![Port::output("out", SignalType::Audio)],
+            ),
+            vec![Parameter::new("freq_hz", 20.0, 20_000.0, 440.0)],
+            Pos2::new(10.0, 20.0),
+        );
+        let amp = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 40.0),
+        );
+        patch.connect(osc, PortId(0), amp, PortId(0)).unwrap();
+        patch.set_param(amp, 0, 0.3);
+        patch.set_widget(amp, 0, WidgetKind::Slider);
+
+        let module = patch.to_module("voice");
+        assert_eq!(module.name, "voice");
+        let rebuilt = PatchView::from_module(&module).expect("rebuild");
+
+        // Same shape.
+        assert_eq!(rebuilt.graph().node_count(), 2);
+        assert_eq!(rebuilt.graph().edges().len(), 1);
+        // Positions, values and widgets survived (ids are reallocated, so find by kind).
+        let amp2 = rebuilt
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "gain")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        assert_eq!(rebuilt.position(amp2), Some(Pos2::new(300.0, 40.0)));
+        assert!((rebuilt.params(amp2)[0].value - 0.3).abs() < f32::EPSILON);
+        assert_eq!(rebuilt.params(amp2)[0].widget, WidgetKind::Slider);
+        assert!(!rebuilt.can_undo(), "rebuild leaves no history");
+    }
+
+    #[test]
+    fn from_module_rejects_a_dangling_edge() {
+        let module = MacroModule {
+            version: MODULE_VERSION,
+            name: "broken".to_owned(),
+            nodes: vec![],
+            edges: vec![Edge {
+                from_node: NodeId(0),
+                from_port: PortId(0),
+                to_node: NodeId(1),
+                to_port: PortId(0),
+            }],
+        };
+        assert!(matches!(
+            PatchView::from_module(&module),
+            Err(ModuleError::Build(_))
+        ));
     }
 
     #[test]
