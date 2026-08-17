@@ -2,6 +2,16 @@
 
 Auto-generated from the registry — do not edit by hand.
 
+## dynamics
+
+### vca
+
+- **Inputs:** `in` (audio), `cv` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `bias` — range 0..2, default 1
+  - `amount` — range 0..2, default 1
+
 ## effect
 
 ### fb-delay

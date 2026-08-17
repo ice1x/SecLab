@@ -22,6 +22,7 @@ use crate::poly::{PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
+use crate::vca::Vca;
 use crate::waveshaper::{Shape, Waveshaper};
 
 /// Metadata and factories for one node kind.
@@ -589,6 +590,25 @@ fn builtins() -> Vec<NodeDescriptor> {
                 let channel = io_channel(arg(v, 0, 0.0));
                 Box::new(AudioOutput::new(ctx.io.clone(), channel))
             },
+        ),
+        NodeDescriptor::new(
+            "vca",
+            "dynamics",
+            || {
+                GraphNode::new(
+                    "vca",
+                    vec![audio_in("in"), Port::input("cv", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Vca::default()),
+            || {
+                vec![
+                    Parameter::new("bias", 0.0, 2.0, 1.0),
+                    Parameter::new("amount", 0.0, 2.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(Vca::new(arg(v, 0, 1.0), arg(v, 1, 1.0))),
         ),
     ]
 }
