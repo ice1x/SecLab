@@ -7,6 +7,7 @@
 pub mod delay;
 pub mod envelope;
 pub mod filter;
+pub mod io;
 pub mod lfo;
 pub mod math;
 pub mod midi;
@@ -22,6 +23,7 @@ pub mod waveshaper;
 pub use delay::{FbDelay, MAX_DELAY_S};
 pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
+pub use io::{AudioBus, AudioInput, AudioOutput, MAX_IO_CHANNELS};
 pub use lfo::{Division, Lfo};
 pub use math::{Add, Clamp, Gain, Mix, Mul};
 pub use midi::{midi_note_to_hz, BuildContext, MidiIn, NoteSource};
