@@ -21,6 +21,6 @@ pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
-pub use preset::{Preset, PresetError, PresetValue, PRESET_VERSION};
+pub use preset::{Preset, PresetBank, PresetError, PresetValue, PRESET_VERSION};
 pub use theme::{Theme, ThemeKind};
 pub use widgets::WidgetKind;
