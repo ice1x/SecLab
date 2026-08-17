@@ -17,6 +17,7 @@ pub mod keystore;
 pub mod privacy;
 pub mod prompt;
 pub mod provider;
+pub mod repair;
 pub mod suggest;
 
 pub use diff::{PatchDiff, Retype};
@@ -29,6 +30,7 @@ pub use provider::{
     AiError, AiProvider, ChatRequest, ChatResponse, Message, ProviderConfig, ProviderKind, Role,
     ScriptedProvider, DEFAULT_MAX_TOKENS, DEFAULT_MODEL,
 };
+pub use repair::{repair_patch, RepairError, RepairOutcome};
 pub use suggest::{
     autofix, compatible_consumers, free_outputs, suggest_next, EdgeDefect, Fix, FreeOutput,
     NextNode,
