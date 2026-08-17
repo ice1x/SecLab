@@ -164,6 +164,10 @@ pub enum AiError {
     Decode(String),
     /// The backend returned no usable content.
     NoContent,
+    /// Offline mode is on: no request may leave the machine.
+    OfflineMode,
+    /// The user has not consented to sending the project to the provider.
+    ConsentRequired,
 }
 
 impl std::fmt::Display for AiError {
@@ -174,6 +178,10 @@ impl std::fmt::Display for AiError {
             AiError::Api(e) => write!(f, "provider API error: {e}"),
             AiError::Decode(e) => write!(f, "could not decode the response: {e}"),
             AiError::NoContent => write!(f, "the provider returned no content"),
+            AiError::OfflineMode => write!(f, "offline mode is on — nothing was sent"),
+            AiError::ConsentRequired => {
+                write!(f, "consent is required before sending the project")
+            }
         }
     }
 }
