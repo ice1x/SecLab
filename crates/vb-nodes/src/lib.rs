@@ -18,6 +18,7 @@ pub mod poly;
 pub mod registry;
 pub mod reverb;
 pub mod routing;
+pub mod smooth;
 pub mod svf;
 pub mod waveshaper;
 
@@ -35,5 +36,6 @@ pub use poly::{PolyNoteSource, PolyVoiceIn, VoiceAllocator, MAX_VOICES};
 pub use registry::{NodeDescriptor, Registry};
 pub use reverb::Reverb;
 pub use routing::{Merger, Selector, Splitter};
+pub use smooth::{ramp_samples, Smoother};
 pub use svf::Svf;
 pub use waveshaper::{Shape, Waveshaper};

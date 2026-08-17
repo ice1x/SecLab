@@ -299,7 +299,7 @@ the definition of done.
 ### Epic 8 — Parameters, automation, presets
 
 - [ ] 000076 — Mapping system: UI widget ↔ graph parameter ↔ host parameter 🧪
-- [ ] 000077 — Parameter smoothing (declick/ramp) in RT 🧪
+- [x] 000077 — Parameter smoothing (declick/ramp) in RT 🧪
 - [x] 000078 — Presets: save/load a set of parameter values 🧪
 - [x] 000079 — Preset bank and switching from UI/host 🧪
 - [ ] 000080 — Modulation matrix (sources → destinations) 🧪
