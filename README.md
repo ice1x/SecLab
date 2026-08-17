@@ -377,7 +377,7 @@ the definition of done.
 - [ ] 000112 — BYOK key management: add/remove provider API keys in Settings, stored in the OS keychain (never in project files) 🧪
 - [ ] 000113 — 🧩 `AiProvider` adapter: Anthropic (Claude) reference implementation (chat + structured output) 🧪
 - [ ] 000114 — 🧩 `AiProvider` adapter: OpenAI-compatible endpoint (covers most third-party providers) 🧪
-- [ ] 000115 — Distilled node reference: auto-generate compact "node cards" from the registry (kinds, ports, params) as LLM context 🧪
+- [x] 000115 — Distilled node reference: auto-generate compact "node cards" from the registry (kinds, ports, params) as LLM context 🧪
 - [ ] 000116 — System pre-prompt & output contract: assistant role, RON `ProjectDoc` schema, refusal rules — versioned prompt assets in-repo 🧪
 - [ ] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
 - [ ] 000118 — Skill: "explain / repair an existing patch" (uses validator issues as input) 🧪
