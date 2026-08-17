@@ -14,6 +14,8 @@ use std::time::Instant;
 use vb_core::{NodeId, ProcessContext};
 use vb_runtime::{EngineReceiver, RtEngine};
 
+use crate::scope::Scope;
+
 /// Lock-free DSP load and xrun counters, shared between the audio and UI threads.
 ///
 /// The audio thread publishes how much of each block's real-time budget the engine
@@ -116,6 +118,8 @@ pub struct BlockFeeder {
     monitor: Option<LoadMonitor>,
     /// Exponentially smoothed load fraction (audio-thread local).
     smoothed_load: f32,
+    /// Visualization tap, if attached.
+    scope: Option<Scope>,
 }
 
 impl BlockFeeder {
@@ -143,6 +147,7 @@ impl BlockFeeder {
             carry_pos: frames, // start empty
             monitor: None,
             smoothed_load: 0.0,
+            scope: None,
         }
     }
 
@@ -150,6 +155,13 @@ impl BlockFeeder {
     #[must_use]
     pub fn with_monitor(mut self, monitor: LoadMonitor) -> Self {
         self.monitor = Some(monitor);
+        self
+    }
+
+    /// Attaches a visualization tap; the played signal is mirrored into it.
+    #[must_use]
+    pub fn with_scope(mut self, scope: Scope) -> Self {
+        self.scope = Some(scope);
         self
     }
 
@@ -184,6 +196,9 @@ impl BlockFeeder {
             }
             // The sink vanished after a swap (edited away): play silence over a click.
             None => self.carry.fill(0.0),
+        }
+        if let Some(scope) = &self.scope {
+            scope.push(&self.carry);
         }
         self.carry_pos = 0;
     }

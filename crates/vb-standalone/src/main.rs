@@ -12,6 +12,7 @@
 mod audio;
 mod live;
 mod midi_io;
+mod scope;
 mod settings;
 
 use std::collections::HashMap;
@@ -25,6 +26,7 @@ use vb_runtime::{engine_swap, EngineSender, RtEngine};
 use audio::{BlockFeeder, LoadMonitor, SinkHandle};
 use live::build_live_engine;
 use midi_io::{connect_port, list_ports};
+use scope::{peak, rms, spectrum, Scope, SCOPE_LEN, SPECTRUM_BANDS};
 use settings::{rates_within, BLOCK_OPTIONS};
 
 /// Engine block size in frames. The feeder bridges this to whatever the device asks.
@@ -36,6 +38,8 @@ struct AudioStack {
     sink: SinkHandle,
     /// DSP load / xrun counters published by the audio thread.
     monitor: LoadMonitor,
+    /// Visualization tap of the played signal.
+    scope: Scope,
     /// Keeps the cpal stream alive for the stack's lifetime.
     _stream: cpal::Stream,
 }
@@ -66,8 +70,10 @@ fn start_stack(
     let (tx, rx) = engine_swap();
     let sink = SinkHandle::new(sink_id);
     let monitor = LoadMonitor::new();
+    let scope = Scope::new();
     let mut feeder = BlockFeeder::new(engine, Some(rx), sink.clone(), sample_rate as f32)
-        .with_monitor(monitor.clone());
+        .with_monitor(monitor.clone())
+        .with_scope(scope.clone());
 
     let config = cpal::StreamConfig {
         channels: default.channels(),
@@ -87,6 +93,7 @@ fn start_stack(
         tx,
         sink,
         monitor,
+        scope,
         _stream: stream,
     })
 }
@@ -150,6 +157,10 @@ struct LiveApp {
     midi_conn: Option<midir::MidiInputConnection<()>>,
     /// Why the last MIDI connect failed, if it did.
     midi_error: Option<String>,
+    /// Reusable snapshot buffer for the visualization (UI thread only).
+    scope_buf: Box<[f32; SCOPE_LEN]>,
+    /// Whether the visualization panel is shown.
+    show_scope: bool,
 }
 
 impl LiveApp {
@@ -266,6 +277,67 @@ impl LiveApp {
         }
     }
 
+    /// Draws the peak meter, oscilloscope trace, and coarse spectrum from the last
+    /// snapshot in `self.scope_buf`.
+    fn scope_ui(&mut self, ui: &mut egui::Ui) {
+        use egui::{Color32, Pos2, Rect, Sense, Stroke, Vec2};
+
+        let samples: &[f32] = self.scope_buf.as_slice();
+        let level = peak(samples);
+        let level_rms = rms(samples);
+        let bands = spectrum(samples, self.sel_rate as f32);
+
+        ui.horizontal(|ui| {
+            ui.label(format!("peak {level:.2}  rms {level_rms:.2}"));
+        });
+
+        let (resp, painter) =
+            ui.allocate_painter(Vec2::new(ui.available_width(), 90.0), Sense::hover());
+        let rect = resp.rect;
+        painter.rect_filled(rect, 2.0, Color32::from_gray(18));
+
+        // Split the panel: left third oscilloscope, right two-thirds spectrum bars.
+        let split = rect.left() + rect.width() * 0.5;
+        let scope_rect = Rect::from_min_max(rect.min, Pos2::new(split, rect.max.y));
+        let spec_rect = Rect::from_min_max(Pos2::new(split, rect.min.y), rect.max);
+
+        // Oscilloscope: the trace centred vertically, amplitude ±1 fills the height.
+        let mid_y = scope_rect.center().y;
+        let half_h = scope_rect.height() * 0.45;
+        let stroke = Stroke::new(1.0, Color32::from_rgb(0x2d, 0xb8, 0xa8));
+        let step = (samples.len() as f32 / scope_rect.width().max(1.0)).max(1.0);
+        let mut prev: Option<Pos2> = None;
+        let mut x = 0.0;
+        while x < scope_rect.width() {
+            let idx = (x * step) as usize;
+            if idx >= samples.len() {
+                break;
+            }
+            let p = Pos2::new(
+                scope_rect.left() + x,
+                mid_y - samples[idx].clamp(-1.0, 1.0) * half_h,
+            );
+            if let Some(prev) = prev {
+                painter.line_segment([prev, p], stroke);
+            }
+            prev = Some(p);
+            x += 1.0;
+        }
+
+        // Spectrum: one bar per band, height ∝ magnitude.
+        let n = SPECTRUM_BANDS.len();
+        let bar_w = spec_rect.width() / n as f32;
+        for (i, &mag) in bands.iter().enumerate() {
+            let h = mag.clamp(0.0, 1.0) * spec_rect.height();
+            let x0 = spec_rect.left() + i as f32 * bar_w + 1.0;
+            let bar = Rect::from_min_max(
+                Pos2::new(x0, spec_rect.bottom() - h),
+                Pos2::new(x0 + bar_w - 2.0, spec_rect.bottom()),
+            );
+            painter.rect_filled(bar, 0.0, Color32::from_rgb(0xd9, 0xa4, 0x2b));
+        }
+    }
+
     /// Tears down the running stream and starts one with the selected settings.
     /// On failure the old stream keeps playing and the error is shown.
     fn apply_audio_settings(&mut self) {
@@ -294,7 +366,14 @@ impl LiveApp {
 
 impl eframe::App for LiveApp {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
-        // Status strip first so the editor gets the remaining space.
+        // Visualization panel above the status strip (both take from the bottom).
+        if self.show_scope {
+            self.stack.scope.snapshot(&mut self.scope_buf);
+            egui::Panel::bottom("scope")
+                .resizable(false)
+                .show(ui, |ui| self.scope_ui(ui));
+        }
+        // Status strip so the editor gets the remaining space.
         egui::Panel::bottom("status").show(ui, |ui| {
             ui.horizontal(|ui| {
                 let load = self.stack.monitor.load();
@@ -320,6 +399,8 @@ impl eframe::App for LiveApp {
                     "@ {} Hz / {} frames",
                     self.sel_rate, self.sel_block
                 ));
+                ui.separator();
+                ui.checkbox(&mut self.show_scope, "scope");
             });
         });
         // Keep the meter moving even when the user is idle.
@@ -406,6 +487,8 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
         sel_midi: None,
         midi_conn: None,
         midi_error: None,
+        scope_buf: Box::new([0.0; SCOPE_LEN]),
+        show_scope: true,
     };
     // Plug in the first keyboard found; the audio window can switch or disconnect.
     if !app.midi_ports.is_empty() {
