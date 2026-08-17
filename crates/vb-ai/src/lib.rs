@@ -13,6 +13,7 @@
 pub mod diff;
 pub mod explain;
 pub mod generate;
+pub mod keystore;
 pub mod prompt;
 pub mod provider;
 pub mod suggest;
@@ -20,6 +21,7 @@ pub mod suggest;
 pub use diff::{PatchDiff, Retype};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
+pub use keystore::{KeyStore, KeyStoreError, MemoryKeyStore};
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
 pub use provider::{
     AiError, AiProvider, ChatRequest, ChatResponse, Message, ProviderConfig, ProviderKind, Role,
