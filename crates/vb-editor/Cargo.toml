@@ -16,5 +16,12 @@ eframe.workspace = true
 serde.workspace = true
 ron.workspace = true
 
+[dev-dependencies]
+# Assistant crate, for the proposal → diff → apply integration test only. This is a
+# dev-dependency so it never enters the editor's runtime graph; vb-ai does not depend on
+# vb-editor, so there is no dependency cycle.
+vb-ai.workspace = true
+ron.workspace = true
+
 [lints]
 workspace = true

@@ -173,6 +173,18 @@ impl PatchView {
         &self.graph
     }
 
+    /// Exports the current patch as a structural [`ProjectDoc`] (nodes + edges only).
+    ///
+    /// This is the editor's side of the assistant round-trip: an edit is diffed against
+    /// this snapshot ([`vb_ai::PatchDiff::between`]) to preview the change, and the
+    /// accepted proposal is applied back with [`apply_doc`](Self::apply_doc). Canvas-only
+    /// state (positions, widgets, selection) is intentionally dropped — `vb-core` is the
+    /// single source of truth for structure.
+    #[must_use]
+    pub fn to_doc(&self) -> ProjectDoc {
+        ProjectDoc::from_graph(&self.graph)
+    }
+
     /// Captures the current state for the undo stack.
     fn snapshot(&self) -> Snapshot {
         Snapshot {
@@ -1206,6 +1218,25 @@ mod tests {
         assert_eq!(patch.graph().node_count(), 0);
         assert!(patch.redo());
         assert_eq!(patch.graph().node_count(), 2);
+    }
+
+    #[test]
+    fn to_doc_exports_the_current_structure_and_round_trips_through_apply() {
+        let registry = Registry::with_builtins();
+        let mut patch = PatchView::new();
+        assert!(patch.apply_doc(&osc_gain_doc(), &registry));
+
+        // The exported doc mirrors the live graph.
+        let doc = patch.to_doc();
+        assert_eq!(doc.nodes.len(), patch.graph().node_count());
+        assert_eq!(doc.edges.len(), patch.graph().edges().len());
+        assert!(doc.is_valid(), "an exported doc is a valid project");
+
+        // Re-applying the editor's own export is structurally a no-op (empty diff).
+        let before = patch.to_doc();
+        assert!(patch.apply_doc(&before, &registry));
+        assert_eq!(patch.graph().node_count(), 2);
+        assert_eq!(patch.graph().edges().len(), 1);
     }
 
     #[test]
