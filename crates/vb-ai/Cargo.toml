@@ -1,0 +1,16 @@
+[package]
+name = "vb-ai"
+description = "VST_bomb — AI assistant: grounded prompt assembly and the LLM output contract."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+vb-core.workspace = true
+vb-nodes.workspace = true
+vb-project.workspace = true
+
+[lints]
+workspace = true

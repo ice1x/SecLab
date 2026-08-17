@@ -3226,6 +3226,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 
 [[package]]
+name = "vb-ai"
+version = "0.0.0"
+dependencies = [
+ "vb-core",
+ "vb-nodes",
+ "vb-project",
+]
+
+[[package]]
 name = "vb-core"
 version = "0.0.0"
 dependencies = [
