@@ -11,5 +11,10 @@
 //! what the app can actually parse and validate.
 
 pub mod prompt;
+pub mod provider;
 
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
+pub use provider::{
+    AiError, AiProvider, ChatRequest, ChatResponse, Message, ProviderConfig, ProviderKind, Role,
+    ScriptedProvider, DEFAULT_MAX_TOKENS, DEFAULT_MODEL,
+};

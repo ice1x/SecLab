@@ -360,7 +360,7 @@ the definition of done.
 > `KnowledgeStore` abstraction (SOLID/testability); the sole production implementation is
 > drevo. Retrieval (000109) is switched on **after** drevo is shaken out in Epic 11.
 
-- [ ] 000101 — 🏗️ LLM provider abstraction (`AiProvider` trait), Claude by default, model/key config 🧪
+- [x] 000101 — 🏗️ LLM provider abstraction (`AiProvider` trait), Claude by default, model/key config 🧪
 - [x] 000102 — 🏗️ Text/JSON representation of the graph for LLM context (prompt serialization, round-trip) 🧪
 - [ ] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `vb-core` 🧪
 - [ ] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
