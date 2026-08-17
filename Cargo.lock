@@ -3253,6 +3253,7 @@ dependencies = [
  "serde",
  "vb-core",
  "vb-nodes",
+ "vb-project",
 ]
 
 [[package]]

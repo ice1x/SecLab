@@ -295,6 +295,13 @@ impl EditorApp {
         &mut self.patch
     }
 
+    /// Applies an assistant-proposed [`ProjectDoc`] to the active patch as one undoable
+    /// command, using this app's registry to seed parameters. Returns `true` if applied
+    /// (a valid document); an invalid one is refused. See [`PatchView::apply_doc`].
+    pub fn apply_doc(&mut self, doc: &vb_project::ProjectDoc) -> bool {
+        self.patch.apply_doc(doc, &self.registry)
+    }
+
     /// Draws the canvas into `ui` and applies pan/zoom/select input.
     ///
     /// Split out of [`eframe::App::ui`] so integration code (and later the

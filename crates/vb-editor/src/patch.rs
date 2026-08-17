@@ -9,10 +9,40 @@ use std::collections::HashMap;
 
 use egui::{Pos2, Vec2};
 use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
+use vb_nodes::Registry;
+use vb_project::ProjectDoc;
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
 use crate::module::{MacroModule, ModuleError, ModuleNode, ModuleParam, MODULE_VERSION};
 use crate::widgets::{default_widget, WidgetKind};
+
+/// Horizontal spacing between auto-layout columns (one per topological layer).
+const APPLY_COL_DX: f32 = 220.0;
+/// Vertical spacing between nodes stacked in the same column.
+const APPLY_ROW_DY: f32 = 120.0;
+
+/// Longest-path depth (topological layer) of every node in `doc`, for column layout.
+fn layer_depths(doc: &ProjectDoc) -> std::collections::HashMap<NodeId, u32> {
+    let mut depth: HashMap<NodeId, u32> = doc.nodes.iter().map(|e| (e.id, 0)).collect();
+    // Relax edges once per node: in a DAG this settles the longest path to each node.
+    for _ in 0..doc.nodes.len() {
+        let mut changed = false;
+        for edge in &doc.edges {
+            let Some(&from_depth) = depth.get(&edge.from_node) else {
+                continue;
+            };
+            let candidate = from_depth + 1;
+            if depth.get(&edge.to_node).is_some_and(|&d| candidate > d) {
+                depth.insert(edge.to_node, candidate);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    depth
+}
 
 /// Node kind of a macro (a nested subgraph shown as one node).
 pub const MACRO_KIND: &str = "macro";
@@ -262,6 +292,65 @@ impl PatchView {
         );
         self.subpatches.insert(id, sub);
         id
+    }
+
+    /// Replaces the whole patch with `doc` as a **single undoable command**, so an
+    /// assistant edit lands on the same history stack as manual editing — one `undo`
+    /// reverts the entire apply.
+    ///
+    /// The document is structural (nodes + edges); this fills in what the canvas needs:
+    /// nodes are auto-laid-out in topological columns and their parameters are seeded
+    /// from the registry defaults. An invalid document is refused (no change, no history
+    /// entry). Returns `true` when applied.
+    pub fn apply_doc(&mut self, doc: &ProjectDoc, registry: &Registry) -> bool {
+        // The assistant already validates, but never trust a doc into the editor blind.
+        if !doc.is_valid() {
+            return false;
+        }
+        self.record(Gesture::Discrete);
+        self.touch();
+
+        self.graph = Graph::new();
+        self.positions.clear();
+        self.order.clear();
+        self.params.clear();
+        self.subpatches.clear();
+        self.selected = None;
+        self.drag = None;
+
+        let depths = layer_depths(doc);
+        let mut row_in_col: HashMap<u32, usize> = HashMap::new();
+        let mut remap: HashMap<NodeId, NodeId> = HashMap::new();
+        for entry in &doc.nodes {
+            let new_id = self.graph.add_node(entry.node.clone());
+            let depth = depths.get(&entry.id).copied().unwrap_or(0);
+            let row = row_in_col.entry(depth).or_insert(0);
+            let pos = Pos2::new(depth as f32 * APPLY_COL_DX, *row as f32 * APPLY_ROW_DY);
+            *row += 1;
+            self.positions.insert(new_id, pos);
+            self.order.push(new_id);
+            let params = registry
+                .get(&entry.node.kind)
+                .map(vb_nodes::NodeDescriptor::params)
+                .unwrap_or_default();
+            let slots = params
+                .into_iter()
+                .map(|param| ParamSlot {
+                    value: param.default,
+                    widget: default_widget(&param),
+                    param,
+                })
+                .collect();
+            self.params.insert(new_id, slots);
+            remap.insert(entry.id, new_id);
+        }
+        for edge in &doc.edges {
+            if let (Some(&from), Some(&to)) = (remap.get(&edge.from_node), remap.get(&edge.to_node))
+            {
+                let _ = self.graph.connect(from, edge.from_port, to, edge.to_port);
+            }
+        }
+        true
     }
 
     /// Captures this patch as a portable [`MacroModule`] named `name`: every node's
@@ -1016,6 +1105,111 @@ mod tests {
         patch.click(Pos2::new(10.0, 10.0), &style());
         let copy = patch.duplicate_selected().expect("copy");
         assert_eq!(patch.params(copy)[0].widget, WidgetKind::Slider);
+    }
+
+    /// A structural osc(0) → gain(1) document.
+    fn osc_gain_doc() -> ProjectDoc {
+        let mut g = Graph::new();
+        let osc = g.add_node(GraphNode::new(
+            "oscillator",
+            vec![],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let amp = g.add_node(gain());
+        g.connect(osc, PortId(0), amp, PortId(0)).unwrap();
+        ProjectDoc::from_graph(&g)
+    }
+
+    #[test]
+    fn apply_doc_loads_a_project_as_one_undoable_command() {
+        let registry = Registry::with_builtins();
+        let mut patch = PatchView::new();
+        patch.clear_history();
+
+        assert!(patch.apply_doc(&osc_gain_doc(), &registry));
+        assert_eq!(patch.graph().node_count(), 2);
+        assert_eq!(patch.graph().edges().len(), 1);
+
+        // Params were seeded from the registry (gain has one param at its default).
+        let amp = patch
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "gain")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        assert_eq!(patch.params(amp).len(), 1);
+
+        // Auto-layout put the source and its downstream node in different columns.
+        let osc = patch
+            .draw_order()
+            .find(|(_, n, _)| n.kind == "oscillator")
+            .map(|(id, _, _)| id)
+            .unwrap();
+        assert!(patch.position(osc).unwrap().x < patch.position(amp).unwrap().x);
+
+        // Exactly one undo step: undoing returns to the empty canvas.
+        assert!(patch.undo());
+        assert_eq!(patch.graph().node_count(), 0);
+        assert!(patch.redo());
+        assert_eq!(patch.graph().node_count(), 2);
+    }
+
+    #[test]
+    fn apply_doc_replaces_existing_content_and_shares_the_undo_stack() {
+        let registry = Registry::with_builtins();
+        let mut patch = PatchView::new();
+        // A manual edit first — a distinctive node so we can spot it after id reuse.
+        let noise = GraphNode::new(
+            "noise",
+            vec![],
+            vec![Port::output("out", SignalType::Audio)],
+        );
+        patch.add_node(noise, Pos2::new(10.0, 10.0));
+        patch.end_gesture();
+
+        // Then an assistant apply replaces everything (the new graph reuses id values,
+        // so identity is checked by content, not by the stale id).
+        assert!(patch.apply_doc(&osc_gain_doc(), &registry));
+        assert_eq!(patch.graph().node_count(), 2);
+        assert!(
+            patch.draw_order().all(|(_, n, _)| n.kind != "noise"),
+            "old content replaced"
+        );
+
+        // Undo reverts only the apply, back to the manual single node.
+        assert!(patch.undo());
+        assert_eq!(patch.graph().node_count(), 1);
+        assert!(patch.draw_order().any(|(_, n, _)| n.kind == "noise"));
+        // A second undo reverts the manual add — one shared stack.
+        assert!(patch.undo());
+        assert_eq!(patch.graph().node_count(), 0);
+    }
+
+    #[test]
+    fn apply_doc_refuses_an_invalid_document() {
+        let registry = Registry::with_builtins();
+        let mut patch = PatchView::new();
+        let existing = patch.add_node(gain(), Pos2::ZERO);
+        patch.end_gesture();
+        let before = patch.revision();
+
+        // An edge to a port that doesn't exist makes the doc invalid.
+        let bad = ProjectDoc {
+            version: vb_project::FORMAT_VERSION,
+            nodes: vec![vb_project::NodeEntry {
+                id: NodeId(0),
+                node: gain(),
+            }],
+            edges: vec![Edge {
+                from_node: NodeId(0),
+                from_port: PortId(9),
+                to_node: NodeId(0),
+                to_port: PortId(0),
+            }],
+        };
+        assert!(!patch.apply_doc(&bad, &registry), "invalid doc refused");
+        // Nothing changed: same node, no history entry, revision untouched.
+        assert!(patch.graph().node(existing).is_some());
+        assert_eq!(patch.revision(), before);
     }
 
     #[test]
