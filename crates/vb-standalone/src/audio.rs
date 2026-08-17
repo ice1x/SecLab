@@ -346,16 +346,18 @@ mod tests {
 
     #[test]
     fn fast_blocks_report_low_load_and_no_xruns() {
-        let (engine, sink) = engine_with(Box::new(Constant(1.0)), 64);
+        // A large block keeps the real-time budget generous so this test measures the
+        // engine's speed, not the CI runner's scheduler jitter: 2048 frames @ 48 kHz is
+        // a ~42.7 ms budget, which a microsecond constant-fill never blows even on a
+        // loaded machine. (A 64-frame / 1.33 ms budget flaked here — see the xrun below.)
+        let (engine, sink) = engine_with(Box::new(Constant(1.0)), 2048);
         let monitor = LoadMonitor::new();
         let mut feeder =
             BlockFeeder::new(engine, None, sink, 48_000.0).with_monitor(monitor.clone());
 
-        let mut data = [0.0_f32; 256];
-        feeder.fill(&mut data, 1); // 4 blocks of 64 frames
+        let mut data = [0.0_f32; 4096];
+        feeder.fill(&mut data, 1); // 2 blocks of 2048 frames
 
-        // A constant-fill engine is far faster than real time: 64 frames @ 48 kHz
-        // is a 1.33 ms budget.
         assert!(
             monitor.load() >= 0.0 && monitor.load() < 1.0,
             "{}",
