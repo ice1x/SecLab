@@ -10,9 +10,11 @@ pub mod camera;
 pub mod layout;
 pub mod palette;
 pub mod patch;
+pub mod widgets;
 
 pub use app::{run, EditorApp};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
+pub use widgets::WidgetKind;

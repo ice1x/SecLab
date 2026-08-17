@@ -254,7 +254,7 @@ the definition of done.
 - [x] 000046 — Undo/redo (command stack) 🧪
 - [x] 000047 — Enter a macro-node and navigate the subgraph hierarchy 🧪
 - [x] 000048 — Live visualizations: level meter, oscilloscope, spectrum 🧪
-- [ ] 000049 — Control widgets: knob, slider, switch, XY-pad (mapped to parameters) 🧪
+- [x] 000049 — Control widgets: knob, slider, switch, XY-pad (mapped to parameters) 🧪
 - [x] 000050 — Grid/alignment/auto-layout of nodes 🧪
 - [ ] 000051 — Theme and "better than Reaktor" styling (visual polish)
 

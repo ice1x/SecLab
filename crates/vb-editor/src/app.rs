@@ -11,7 +11,7 @@
 //! `vb-standalone` embeds it and keeps a live audio engine in sync with the patch.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
-use vb_core::{GraphNode, Port, PortDirection, PortId, SignalType};
+use vb_core::{GraphNode, Parameter, Port, PortDirection, PortId, SignalType};
 
 use vb_nodes::Registry;
 
@@ -19,6 +19,9 @@ use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
 use crate::palette::palette_entries;
 use crate::patch::PatchView;
+use crate::widgets::{
+    self, switch_index, switch_step, switch_values, xy_norm_to_pad, xy_pad_to_norm, WidgetKind,
+};
 
 /// Root application state for the node editor window.
 pub struct EditorApp {
@@ -135,6 +138,129 @@ fn signal_color(signal: SignalType) -> Color32 {
         SignalType::Control => Color32::from_rgb(0xd9, 0xa4, 0x2b),
         SignalType::Event => Color32::from_rgb(0x9a, 0x6f, 0xe8),
     }
+}
+
+/// Accent colour shared by the active fill of inspector widgets.
+const WIDGET_ACCENT: Color32 = Color32::from_rgb(0x2d, 0xb8, 0xa8);
+
+/// Draws a rotary knob for `value` within `param`'s range and returns its response
+/// plus, when a drag moved it, the new value (already inside range).
+///
+/// The knob reads `[min, max]` over a 270° arc with the gap at the bottom; vertical
+/// drag turns it via [`widgets::knob_drag`].
+fn knob_widget(ui: &mut Ui, param: &Parameter, value: f32) -> (egui::Response, Option<f32>) {
+    const DIAMETER: f32 = 44.0;
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(DIAMETER), Sense::drag());
+    let norm = param.normalize(value);
+
+    let changed = response.dragged().then(|| {
+        let new_norm = widgets::knob_drag(norm, response.drag_delta().y);
+        param.denormalize(new_norm)
+    });
+
+    let painter = ui.painter_at(rect);
+    let center = rect.center();
+    let radius = DIAMETER * 0.5 - 4.0;
+    // 225° (down-left) sweeping clockwise to −45° (down-right): a bottom-gapped dial.
+    let at = |t: f32| {
+        let a = (225.0 - 270.0 * t).to_radians();
+        Pos2::new(center.x + radius * a.cos(), center.y - radius * a.sin())
+    };
+    let track: Vec<Pos2> = (0..=32).map(|k| at(k as f32 / 32.0)).collect();
+    painter.add(egui::Shape::line(
+        track,
+        Stroke::new(3.0, Color32::from_gray(70)),
+    ));
+    if norm > 0.0 {
+        let upto = (32.0 * norm).ceil() as usize;
+        let value_arc: Vec<Pos2> = (0..=upto)
+            .map(|k| at((k as f32 / 32.0).min(norm)))
+            .collect();
+        painter.add(egui::Shape::line(
+            value_arc,
+            Stroke::new(3.0, WIDGET_ACCENT),
+        ));
+    }
+    let tip = at(norm);
+    painter.line_segment([center, tip], Stroke::new(2.0, Color32::from_gray(220)));
+    painter.circle_filled(tip, 3.0, Color32::WHITE);
+    (response, changed)
+}
+
+/// Draws a stepped selector for `value` and returns the new value when a step is taken.
+///
+/// The `◀`/`▶` buttons cycle the parameter's discrete positions (an enum's members, or
+/// a two-state min/max toggle) via [`widgets::switch_step`], wrapping at the ends.
+fn switch_widget(ui: &mut Ui, param: &Parameter, value: f32) -> Option<f32> {
+    let values = switch_values(param);
+    let idx = switch_index(param, value);
+    let mut out = None;
+    ui.horizontal(|ui| {
+        if ui.small_button("◀").clicked() {
+            out = Some(switch_step(param, value, false));
+        }
+        ui.monospace(format!("{}/{}", idx + 1, values.len()));
+        ui.weak(format!("{:.3}", values[idx]));
+        if ui.small_button("▶").clicked() {
+            out = Some(switch_step(param, value, true));
+        }
+    });
+    out
+}
+
+/// Draws a 2-D pad binding `x_param` (horizontal) to `y_param` (vertical) and returns
+/// the new `(x_value, y_value)` while the pointer drags or clicks inside it.
+///
+/// The handle sits at [`xy_norm_to_pad`] of the two normalized values; a grab reads
+/// back through [`xy_pad_to_norm`] (Y inverted, so up = maximum).
+fn xy_pad_widget(
+    ui: &mut Ui,
+    x_param: &Parameter,
+    x_value: f32,
+    y_param: &Parameter,
+    y_value: f32,
+) -> Option<(f32, f32)> {
+    const SIDE: f32 = 116.0;
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(SIDE), Sense::click_and_drag());
+
+    let out = (response.dragged() || response.clicked())
+        .then(|| response.interact_pointer_pos())
+        .flatten()
+        .map(|p| {
+            let local = (p - rect.min) / SIDE;
+            let (xn, yn) = xy_pad_to_norm(local.x, local.y);
+            (x_param.denormalize(xn), y_param.denormalize(yn))
+        });
+
+    let painter = ui.painter_at(rect);
+    painter.rect_filled(rect, 4.0, Color32::from_gray(32));
+    painter.rect_stroke(
+        rect,
+        4.0,
+        Stroke::new(1.0, Color32::from_gray(90)),
+        egui::StrokeKind::Inside,
+    );
+    // Cross-hairs through the current handle position.
+    let (hx, hy) = xy_norm_to_pad(x_param.normalize(x_value), y_param.normalize(y_value));
+    let handle = rect.min + Vec2::new(hx * SIDE, hy * SIDE);
+    let faint = Stroke::new(1.0, Color32::from_gray(60));
+    painter.line_segment(
+        [
+            Pos2::new(rect.min.x, handle.y),
+            Pos2::new(rect.max.x, handle.y),
+        ],
+        faint,
+    );
+    painter.line_segment(
+        [
+            Pos2::new(handle.x, rect.min.y),
+            Pos2::new(handle.x, rect.max.y),
+        ],
+        faint,
+    );
+    painter.circle_filled(handle, 6.0, WIDGET_ACCENT);
+    painter.circle_stroke(handle, 6.0, Stroke::new(1.0, Color32::from_gray(20)));
+    out
 }
 
 impl EditorApp {
@@ -537,18 +663,99 @@ impl EditorApp {
             ui.weak("no parameters");
             return;
         }
-        // Copy the slots out so the sliders can borrow `ui` while edits go back
-        // through set_param (which re-clamps).
+        // Copy the slots out so the widgets can borrow `ui` while edits go back through
+        // set_param (which re-clamps) and set_widget.
         let slots: Vec<_> = self.patch.params(id).to_vec();
-        for (i, slot) in slots.iter().enumerate() {
-            let mut value = slot.value;
-            let range = slot.param.min..=slot.param.max;
-            let response = ui.add(egui::Slider::new(&mut value, range).text(&slot.param.name));
-            if response.changed() {
-                self.patch.set_param(id, i, value);
+        let mut i = 0;
+        while i < slots.len() {
+            i += self.param_widget_ui(ui, id, &slots, i);
+            ui.add_space(6.0);
+        }
+    }
+
+    /// Draws one parameter's control (chosen by its [`WidgetKind`]) with a widget-type
+    /// picker above it. Returns how many slots it consumed — an XY-pad claims two, every
+    /// other widget one — so the inspector loop can advance past a paired parameter.
+    fn param_widget_ui(
+        &mut self,
+        ui: &mut Ui,
+        id: vb_core::NodeId,
+        slots: &[crate::patch::ParamSlot],
+        i: usize,
+    ) -> usize {
+        let slot = &slots[i];
+
+        // Header: parameter name + the widget-type picker.
+        let mut widget = slot.widget;
+        ui.horizontal(|ui| {
+            ui.strong(&slot.param.name);
+            egui::ComboBox::from_id_salt((id, i, "widget"))
+                .width(72.0)
+                .selected_text(widget.label())
+                .show_ui(ui, |ui| {
+                    for kind in WidgetKind::ALL {
+                        ui.selectable_value(&mut widget, kind, kind.label());
+                    }
+                });
+        });
+        if widget != slot.widget {
+            self.patch.set_widget(id, i, widget);
+        }
+
+        match widget {
+            WidgetKind::Slider => {
+                let mut value = slot.value;
+                let range = slot.param.min..=slot.param.max;
+                let response = ui.add(egui::Slider::new(&mut value, range));
+                if response.changed() {
+                    self.patch.set_param(id, i, value);
+                }
+                if response.drag_stopped() || response.lost_focus() {
+                    self.patch.end_gesture();
+                }
+                1
             }
-            if response.drag_stopped() || response.lost_focus() {
-                self.patch.end_gesture();
+            WidgetKind::Knob => {
+                let (response, changed) = knob_widget(ui, &slot.param, slot.value);
+                if let Some(v) = changed {
+                    self.patch.set_param(id, i, v);
+                }
+                if response.drag_stopped() {
+                    self.patch.end_gesture();
+                }
+                ui.weak(format!("{:.3}", self.patch.params(id)[i].value));
+                1
+            }
+            WidgetKind::Switch => {
+                if let Some(v) = switch_widget(ui, &slot.param, slot.value) {
+                    self.patch.set_param(id, i, v);
+                    self.patch.end_gesture();
+                }
+                1
+            }
+            WidgetKind::XyPad => {
+                // Pair with the next parameter as the Y axis; a lone last parameter has
+                // no partner, so fall back to a knob for it.
+                let Some(y_slot) = slots.get(i + 1) else {
+                    let (response, changed) = knob_widget(ui, &slot.param, slot.value);
+                    if let Some(v) = changed {
+                        self.patch.set_param(id, i, v);
+                    }
+                    if response.drag_stopped() {
+                        self.patch.end_gesture();
+                    }
+                    ui.weak("(xy needs a second parameter)");
+                    return 1;
+                };
+                ui.weak(format!("x: {} · y: {}", slot.param.name, y_slot.param.name));
+                if let Some((xv, yv)) =
+                    xy_pad_widget(ui, &slot.param, slot.value, &y_slot.param, y_slot.value)
+                {
+                    self.patch.set_param(id, i, xv);
+                    self.patch.set_param(id, i + 1, yv);
+                    self.patch.end_gesture();
+                }
+                2
             }
         }
     }
