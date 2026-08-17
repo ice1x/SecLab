@@ -19,7 +19,7 @@ pub const DEFAULT_MODEL: &str = "claude-sonnet-5";
 pub const DEFAULT_MAX_TOKENS: u32 = 4096;
 
 /// Which backend family a provider speaks to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub enum ProviderKind {
     /// Anthropic Claude (the reference implementation, 000113).
     #[default]

@@ -12,6 +12,13 @@ vb-core.workspace = true
 vb-nodes.workspace = true
 vb-project.workspace = true
 serde.workspace = true
+# Real OS-keychain backend for BYOK keys, behind the `keychain` feature so the default
+# build (and CI) needs no platform secret-store dependency.
+keyring = { version = "3", optional = true, features = ["apple-native"] }
+
+[features]
+# Enables KeychainStore, backing BYOK keys with the OS keychain (macOS: Security.framework).
+keychain = ["dep:keyring"]
 
 [dev-dependencies]
 ron.workspace = true
