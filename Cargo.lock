@@ -3300,6 +3300,7 @@ dependencies = [
  "egui",
  "ron",
  "serde",
+ "vb-ai",
  "vb-core",
  "vb-nodes",
  "vb-project",
