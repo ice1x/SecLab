@@ -15,8 +15,11 @@ use vb_core::{GraphNode, Parameter, Port, PortDirection, PortId, SignalType};
 
 use vb_nodes::Registry;
 
+use std::path::{Path, PathBuf};
+
 use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
+use crate::module::{list_modules, MacroModule, ModuleError};
 use crate::palette::palette_entries;
 use crate::patch::PatchView;
 use crate::theme::{Theme, ThemeKind};
@@ -47,6 +50,10 @@ pub struct EditorApp {
     /// Set once per session so the egui base visuals are installed on the first frame
     /// and again whenever the theme is toggled.
     visuals_dirty: bool,
+    /// Directory reusable macro modules are exported to and imported from.
+    modules_dir: PathBuf,
+    /// Last export/import outcome, shown in the toolbar until the next one.
+    module_status: Option<String>,
 }
 
 impl Default for EditorApp {
@@ -64,6 +71,8 @@ impl Default for EditorApp {
             snap_to_grid: true,
             theme: Theme::default(),
             visuals_dirty: true,
+            modules_dir: PathBuf::from("modules"),
+            module_status: None,
         }
     }
 }
@@ -812,6 +821,7 @@ impl EditorApp {
             let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
             self.patch.add_macro(self.spawn_at - half);
         }
+        self.modules_ui(ui);
         ui.separator();
         let entries = palette_entries(&self.registry, &self.palette_query);
         if entries.is_empty() {
@@ -837,6 +847,48 @@ impl EditorApp {
         }
     }
 
+    /// Reusable-module controls: export the selected macro, and import any module saved
+    /// under [`Self::modules_dir`] as a fresh macro node.
+    fn modules_ui(&mut self, ui: &mut Ui) {
+        let sel_macro = self.patch.selected().filter(|id| self.patch.is_macro(*id));
+        if ui
+            .add_enabled(sel_macro.is_some(), egui::Button::new("export macro"))
+            .clicked()
+        {
+            if let Some(id) = sel_macro {
+                let dir = self.modules_dir.clone();
+                self.module_status = Some(match self.export_macro_to_dir(id, &dir) {
+                    Ok(path) => format!("exported → {}", path.display()),
+                    Err(e) => format!("export failed: {e}"),
+                });
+            }
+        }
+
+        let modules = list_modules(&self.modules_dir);
+        if !modules.is_empty() {
+            let mut chosen: Option<PathBuf> = None;
+            egui::ComboBox::from_id_salt("import-module")
+                .selected_text("import module ▾")
+                .show_ui(ui, |ui| {
+                    for path in &modules {
+                        let label = path.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+                        if ui.selectable_label(false, label).clicked() {
+                            chosen = Some(path.clone());
+                        }
+                    }
+                });
+            if let Some(path) = chosen {
+                self.module_status = Some(match self.import_macro_from_file(&path) {
+                    Ok(id) => format!("imported macro#{}", id.0),
+                    Err(e) => format!("import failed: {e}"),
+                });
+            }
+        }
+        if let Some(status) = &self.module_status {
+            ui.weak(status);
+        }
+    }
+
     /// The active colour theme.
     #[must_use]
     pub fn theme(&self) -> Theme {
@@ -850,6 +902,40 @@ impl EditorApp {
             self.theme = Theme::for_kind(kind);
             self.visuals_dirty = true;
         }
+    }
+
+    /// Exports macro `id`'s inner patch to `dir/<name>.vbmod.ron`, returning the path.
+    ///
+    /// # Errors
+    /// [`ModuleError::Build`] if `id` is not a macro (has no subpatch), or a serialize /
+    /// filesystem error from [`MacroModule::write_to_dir`].
+    pub fn export_macro_to_dir(
+        &self,
+        id: vb_core::NodeId,
+        dir: &Path,
+    ) -> Result<PathBuf, ModuleError> {
+        let sub = self
+            .patch
+            .subpatch(id)
+            .ok_or_else(|| ModuleError::Build(format!("node {} is not a macro", id.0)))?;
+        sub.to_module(format!("macro-{}", id.0)).write_to_dir(dir)
+    }
+
+    /// Imports the module file at `path` as a new macro node at the current spawn point,
+    /// selects it, and returns its id.
+    ///
+    /// # Errors
+    /// Any [`ModuleError`] from reading, parsing, or rebuilding the module.
+    pub fn import_macro_from_file(&mut self, path: &Path) -> Result<vb_core::NodeId, ModuleError> {
+        let module = MacroModule::read_from_file(path)?;
+        let sub = PatchView::from_module(&module)?;
+        let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
+        let id = self
+            .patch
+            .add_macro_with_subpatch(self.spawn_at - half, sub);
+        self.patch
+            .click(self.spawn_at - half + Vec2::new(4.0, 4.0), &self.style);
+        Ok(id)
     }
 
     /// Test/integration hook: a full wire drag between two viewport-local positions.
@@ -1055,6 +1141,45 @@ mod tests {
         assert!(!app.patch().can_undo(), "only the spawn was undoable");
         assert!(app.patch_mut().redo());
         assert_eq!(app.patch().graph().node_count(), before + 1);
+    }
+
+    #[test]
+    fn a_macro_exports_and_reimports_as_a_reusable_module() {
+        let dir = std::env::temp_dir().join(format!("vbmod-app-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let mut app = EditorApp::new();
+        // Build a macro with a real node inside it.
+        let mac = app.patch_mut().add_macro(Pos2::new(500.0, 200.0));
+        app.enter_macro(mac);
+        app.spawn_node("gain").expect("gain inside the macro");
+        app.leave_macro();
+        let inner_before = app.patch().subpatch(mac).unwrap().graph().node_count();
+
+        // Export it, then import the file back as a new macro node.
+        let path = app.export_macro_to_dir(mac, &dir).expect("export");
+        assert!(path.exists());
+        let before = app.patch().graph().node_count();
+        let imported = app.import_macro_from_file(&path).expect("import");
+
+        assert_eq!(
+            app.patch().graph().node_count(),
+            before + 1,
+            "one new macro"
+        );
+        assert!(app.patch().is_macro(imported), "the import is a macro");
+        assert_eq!(app.patch().selected(), Some(imported), "and is selected");
+        assert_eq!(
+            app.patch().subpatch(imported).unwrap().graph().node_count(),
+            inner_before,
+            "the inner patch came across intact"
+        );
+
+        // A non-macro node cannot be exported.
+        let node = app.spawn_node("gain").unwrap();
+        assert!(app.export_macro_to_dir(node, &dir).is_err());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

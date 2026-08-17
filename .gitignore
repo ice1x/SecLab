@@ -76,3 +76,7 @@ vcpkg_installed/
 # test output & cache
 Testing/
 .cache/
+
+# Editor-exported reusable macro modules (runtime output)
+/modules/
+*.vbmod.ron

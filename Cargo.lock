@@ -3238,6 +3238,8 @@ version = "0.0.0"
 dependencies = [
  "eframe",
  "egui",
+ "ron",
+ "serde",
  "vb-core",
  "vb-nodes",
 ]

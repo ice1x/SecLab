@@ -1,10 +1,12 @@
 //! Node parameters: named, ranged control values with host-automation normalization.
 
+use serde::{Deserialize, Serialize};
+
 /// A named parameter with an inclusive `[min, max]` range and a default value.
 ///
 /// Hosts automate parameters over the unit interval `[0, 1]`; [`Parameter::normalize`]
 /// and [`Parameter::denormalize`] convert between the plain value and that interval.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Parameter {
     /// Human-readable label shown in the editor / host.
     pub name: String,

@@ -8,6 +8,7 @@
 pub mod app;
 pub mod camera;
 pub mod layout;
+pub mod module;
 pub mod palette;
 pub mod patch;
 pub mod theme;
@@ -16,6 +17,7 @@ pub mod widgets;
 pub use app::{run, EditorApp};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
+pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
 pub use theme::{Theme, ThemeKind};
