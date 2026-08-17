@@ -831,7 +831,7 @@ mod tests {
     use vb_core::{Port, SignalType};
 
     use super::*;
-    use crate::preset::PresetError;
+    use crate::preset::{PresetBank, PresetError};
 
     fn gain() -> GraphNode {
         GraphNode::new(
@@ -1412,6 +1412,37 @@ mod tests {
         };
         assert_eq!(patch.apply_preset(&empty), 0);
         assert_eq!(patch.revision(), r, "no-op did not touch the revision");
+    }
+
+    #[test]
+    fn switching_a_bank_selection_applies_that_presets_values() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+
+        // Capture two sounds into a bank.
+        let mut bank = PresetBank::new();
+        patch.set_param(id, 0, 0.2);
+        patch.end_gesture();
+        bank.add(patch.capture_preset("quiet"));
+        patch.set_param(id, 0, 1.8);
+        patch.end_gesture();
+        bank.add(patch.capture_preset("loud"));
+        patch.clear_history();
+
+        // Selecting "quiet" and applying it drives the knob back down.
+        let quiet = bank.select(0).cloned().unwrap();
+        assert_eq!(patch.apply_preset(&quiet), 1);
+        assert!((patch.params(id)[0].value - 0.2).abs() < f32::EPSILON);
+
+        // Stepping to the next program (wraps) restores "loud".
+        let loud = bank.next_preset().cloned().unwrap();
+        assert_eq!(loud.name, "loud");
+        patch.apply_preset(&loud);
+        assert!((patch.params(id)[0].value - 1.8).abs() < f32::EPSILON);
     }
 
     #[test]
