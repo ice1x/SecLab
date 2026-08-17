@@ -20,5 +20,11 @@ nih_plug.workspace = true
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
+[dev-dependencies]
+# Assistant crate, for the end-to-end MVP scenario test only (scripted dialogue → patch).
+# A dev-dependency so it never enters the plugin's runtime graph; vb-ai does not depend on
+# vb-plugin, so there is no dependency cycle.
+vb-ai.workspace = true
+
 [lints]
 workspace = true

@@ -3319,6 +3319,7 @@ version = "0.0.0"
 dependencies = [
  "libc",
  "nih_plug",
+ "vb-ai",
  "vb-core",
  "vb-nodes",
  "vb-project",
