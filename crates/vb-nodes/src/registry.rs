@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
+use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::lfo::{Division, Lfo};
 use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
@@ -552,7 +553,49 @@ fn builtins() -> Vec<NodeDescriptor> {
             Vec::new,
             |ctx, _| Box::new(MidiIn::new(ctx.notes.clone())),
         ),
+        NodeDescriptor::new(
+            "audio-in",
+            "input",
+            || GraphNode::new("audio-in", vec![], vec![audio_out("out")]),
+            // No host bus yet: a silent default source.
+            || Box::new(AudioInput::new(crate::io::AudioBus::default(), 0)),
+            || {
+                vec![Parameter::new(
+                    "channel",
+                    0.0,
+                    (MAX_IO_CHANNELS - 1) as f32,
+                    0.0,
+                )]
+            },
+            |ctx, v| {
+                let channel = io_channel(arg(v, 0, 0.0));
+                Box::new(AudioInput::new(ctx.io.clone(), channel))
+            },
+        ),
+        NodeDescriptor::new(
+            "audio-out",
+            "output",
+            || GraphNode::new("audio-out", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(AudioOutput::new(crate::io::AudioBus::default(), 0)),
+            || {
+                vec![Parameter::new(
+                    "channel",
+                    0.0,
+                    (MAX_IO_CHANNELS - 1) as f32,
+                    0.0,
+                )]
+            },
+            |ctx, v| {
+                let channel = io_channel(arg(v, 0, 0.0));
+                Box::new(AudioOutput::new(ctx.io.clone(), channel))
+            },
+        ),
     ]
+}
+
+/// Clamps a raw parameter value to a valid I/O channel index.
+fn io_channel(raw: f32) -> usize {
+    (raw.round().max(0.0) as usize).min(MAX_IO_CHANNELS - 1)
 }
 
 #[cfg(test)]
@@ -629,6 +672,68 @@ mod tests {
             out.iter().any(|&s| s.abs() > 0.01),
             "registry-built patch should produce sound"
         );
+    }
+
+    #[test]
+    fn audio_io_nodes_are_registered_with_the_right_shape() {
+        let r = Registry::with_builtins();
+        let kinds: Vec<&str> = r.kinds().collect();
+        assert!(kinds.contains(&"audio-in") && kinds.contains(&"audio-out"));
+
+        let ain = r.graph_node("audio-in").unwrap();
+        assert_eq!((ain.inputs.len(), ain.outputs.len()), (0, 1), "source");
+        let aout = r.graph_node("audio-out").unwrap();
+        assert_eq!(
+            (aout.inputs.len(), aout.outputs.len()),
+            (1, 1),
+            "sink+passthru"
+        );
+
+        assert_eq!(r.get("audio-in").unwrap().category(), "input");
+        assert_eq!(r.get("audio-out").unwrap().category(), "output");
+        assert_eq!(r.get("audio-in").unwrap().params()[0].name, "channel");
+    }
+
+    #[test]
+    fn registry_audio_io_carries_host_audio_through_the_graph() {
+        // audio-in(ch 0) -> audio-out(ch 1): the host feeds channel 0 and reads its
+        // signal back on channel 1, exercising the shared bus end to end.
+        let r = Registry::with_builtins();
+        let bus = crate::io::AudioBus::new(64);
+        let ctx = BuildContext {
+            io: bus.clone(),
+            ..Default::default()
+        };
+
+        let mut g = Graph::new();
+        let ain = g.add_node(r.graph_node("audio-in").unwrap());
+        let aout = g.add_node(r.graph_node("audio-out").unwrap());
+        g.connect(ain, PortId(0), aout, PortId(0)).unwrap();
+
+        let mut procs: HashMap<_, Box<dyn Processor>> = HashMap::new();
+        procs.insert(ain, r.get("audio-in").unwrap().processor_with(&ctx, &[0.0]));
+        procs.insert(
+            aout,
+            r.get("audio-out").unwrap().processor_with(&ctx, &[1.0]),
+        );
+
+        let block = [0.1_f32, 0.2, 0.3, 0.4];
+        bus.publish_input(&[&block], 4);
+
+        let mut engine = Engine::compile(&g, procs, 4).unwrap();
+        engine.process(&ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 4,
+        });
+
+        // Pass-through reaches the audio-out node's output buffer...
+        let tapped = engine.node_output(aout).unwrap().channel(0).unwrap();
+        assert_eq!(tapped, block);
+        // ...and the host drains the same signal from bus output channel 1.
+        let (mut l, mut r_ch) = ([0.0; 4], [0.0; 4]);
+        bus.collect_output(&mut [&mut l, &mut r_ch]);
+        assert_eq!(l, [0.0; 4]);
+        assert_eq!(r_ch, block);
     }
 
     #[test]

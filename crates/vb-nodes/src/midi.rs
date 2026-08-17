@@ -83,6 +83,8 @@ pub struct BuildContext {
     pub notes: NoteSource,
     /// The polyphonic mailbox `voice-in` nodes listen to.
     pub poly: crate::poly::PolyNoteSource,
+    /// The host audio exchange `audio-in`/`audio-out` nodes read and write.
+    pub io: crate::io::AudioBus,
 }
 
 /// Processor emitting `gate` (0/1), `pitch_hz`, and `velocity` (0..1) control

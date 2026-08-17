@@ -234,7 +234,7 @@ the definition of done.
 - [x] 000029 — LFO (with tempo sync) 🧪
 - [x] 000030 — Math nodes: add/mul/mix/gain/clamp 🧪
 - [x] 000031 — Routing nodes: splitter, merger, selector 🧪
-- [ ] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪
+- [x] 000032 — Audio I/O nodes: plugin in/out (channels) 🧪
 - [x] 000033 — MIDI input: note on/off → gate/pitch/velocity 🧪
 - [x] 000034 — Polyphony / voices (voice allocation) 🧪
 - [x] 000035 — Effects: delay, reverb (basic) 🧪
