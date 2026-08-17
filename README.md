@@ -302,7 +302,7 @@ the definition of done.
 - [x] 000077 — Parameter smoothing (declick/ramp) in RT 🧪
 - [x] 000078 — Presets: save/load a set of parameter values 🧪
 - [x] 000079 — Preset bank and switching from UI/host 🧪
-- [ ] 000080 — Modulation matrix (sources → destinations) 🧪
+- [x] 000080 — Modulation matrix (sources → destinations) 🧪
 
 ### Epic 9 — WebUI (future)
 
