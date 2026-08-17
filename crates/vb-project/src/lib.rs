@@ -12,6 +12,7 @@
 pub mod doc;
 pub mod error;
 pub mod io;
+pub mod mapping;
 pub mod migrate;
 pub mod prompt;
 pub mod validate;
@@ -19,5 +20,6 @@ pub mod validate;
 pub use doc::{NodeEntry, ProjectDoc, FORMAT_VERSION, MIN_SUPPORTED_VERSION};
 pub use error::ProjectError;
 pub use io::{from_ron, load_from_path, open_path, open_ron, save_to_path, to_ron};
+pub use mapping::{build_mappings, ParamId, ParamMap, ParamMapping};
 pub use migrate::migrate_to_current;
 pub use validate::Issue;

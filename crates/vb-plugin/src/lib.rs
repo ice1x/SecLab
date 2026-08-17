@@ -87,14 +87,16 @@ impl VstBombParams {
     #[must_use]
     pub fn for_doc(doc: &ProjectDoc, registry: &Registry) -> Self {
         let patch_ron = Mutex::new(vb_project::to_ron(doc).unwrap_or_default());
-        let mut bound = Vec::new();
-        for entry in &doc.nodes {
-            let Some(descriptor) = registry.get(&entry.node.kind) else {
-                continue;
-            };
-            for (index, p) in descriptor.params().into_iter().enumerate() {
-                let id = format!("n{}_{index}", entry.id.0);
-                let name = format!("{} {} (node {})", entry.node.kind, p.name, entry.id.0);
+        // The id ↔ node-param ↔ host-name scheme lives in one place (vb-project's
+        // mapping system); here we only turn each mapping into a nih-plug FloatParam.
+        // Unknown kinds yield no parameters and so contribute nothing.
+        let mappings = vb_project::build_mappings(doc, |kind| {
+            registry.get(kind).map(|d| d.params()).unwrap_or_default()
+        });
+        let bound = mappings
+            .into_iter()
+            .map(|m| {
+                let p = &m.param;
                 // Rounded display so value → string → value round-trips exactly:
                 // the digit budget shrinks as the range grows, keeping the printed
                 // string well inside f32's ~7 significant digits.
@@ -106,7 +108,7 @@ impl VstBombParams {
                     3
                 };
                 let param = FloatParam::new(
-                    name,
+                    m.name.clone(),
                     p.default,
                     FloatRange::Linear {
                         min: p.min,
@@ -114,13 +116,13 @@ impl VstBombParams {
                     },
                 )
                 .with_value_to_string(formatters::v2s_f32_rounded(decimals));
-                bound.push(BoundParam {
-                    node: entry.id,
+                BoundParam {
+                    node: m.node,
                     param,
-                    id,
-                });
-            }
-        }
+                    id: m.id.0,
+                }
+            })
+            .collect();
         Self { bound, patch_ron }
     }
 
