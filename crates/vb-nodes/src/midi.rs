@@ -51,6 +51,10 @@ impl NoteSource {
 
     /// A key was released. Only the currently sounding note releases the gate;
     /// releasing an older key under a newer one changes nothing.
+    // `fetch_update` was renamed to `try_update` on newer stable toolchains; the CI
+    // runner's stable still exposes only `fetch_update`, so we keep it and silence the
+    // deprecation locally rather than call a method the runner does not have yet.
+    #[allow(deprecated)]
     pub fn note_off(&self, note: u8) {
         let _ = self
             .state

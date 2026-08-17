@@ -11,6 +11,7 @@ use egui::{Pos2, Vec2};
 use vb_core::{Edge, Graph, GraphNode, NodeId, Parameter, PortDirection, PortId};
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
+use crate::widgets::{default_widget, WidgetKind};
 
 /// Node kind of a macro (a nested subgraph shown as one node).
 pub const MACRO_KIND: &str = "macro";
@@ -94,13 +95,16 @@ struct History {
 /// Cap on stored undo steps; the oldest entries fall off beyond this.
 const HISTORY_LIMIT: usize = 200;
 
-/// One editable parameter on a node: its descriptor plus the current value.
+/// One editable parameter on a node: its descriptor, current value, and the control
+/// the inspector draws for it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamSlot {
     /// Name, range and default (from the registry descriptor).
     pub param: Parameter,
     /// Current value, always inside the descriptor's range.
     pub value: f32,
+    /// Which control the inspector renders (knob, slider, switch, XY-pad).
+    pub widget: WidgetKind,
 }
 
 /// Editor-side view of a patch: graph + positions + selection.
@@ -317,6 +321,7 @@ impl PatchView {
             .into_iter()
             .map(|param| ParamSlot {
                 value: param.default,
+                widget: default_widget(&param),
                 param,
             })
             .collect();
@@ -342,6 +347,21 @@ impl PatchView {
         let slot = self.params.get_mut(&id)?.get_mut(index)?;
         slot.value = slot.param.clamp(value);
         Some(slot.value)
+    }
+
+    /// Reassigns the control widget for parameter `index` on `id`.
+    ///
+    /// A widget is a view-only mapping — it changes nothing audible and is not an undo
+    /// step — so this neither [`touch`](Self::touch)es the revision nor records history.
+    /// Returns `false` for an unknown node/index.
+    pub fn set_widget(&mut self, id: NodeId, index: usize, widget: WidgetKind) -> bool {
+        match self.params.get_mut(&id).and_then(|s| s.get_mut(index)) {
+            Some(slot) => {
+                slot.widget = widget;
+                true
+            }
+            None => false,
+        }
     }
 
     /// Connects an output to an input directly (programmatic wiring, e.g. seeding).
@@ -862,6 +882,48 @@ mod tests {
         // Unknown index / node are refused without panicking.
         assert_eq!(patch.set_param(id, 9, 1.0), None);
         assert_eq!(patch.set_param(vb_core::NodeId(999), 0, 1.0), None);
+    }
+
+    #[test]
+    fn params_default_to_a_knob_and_the_widget_can_be_retyped() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+        assert_eq!(
+            patch.params(id)[0].widget,
+            WidgetKind::Knob,
+            "default widget"
+        );
+
+        let r0 = patch.revision();
+        assert!(patch.set_widget(id, 0, WidgetKind::Switch));
+        assert_eq!(patch.params(id)[0].widget, WidgetKind::Switch);
+        assert_eq!(
+            patch.revision(),
+            r0,
+            "a widget is a view mapping — not an audible edit"
+        );
+
+        // Unknown node/index are refused.
+        assert!(!patch.set_widget(id, 9, WidgetKind::Slider));
+        assert!(!patch.set_widget(NodeId(999), 0, WidgetKind::Slider));
+    }
+
+    #[test]
+    fn duplicate_carries_the_widget_assignment() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+        patch.set_widget(id, 0, WidgetKind::Slider);
+        patch.click(Pos2::new(10.0, 10.0), &style());
+        let copy = patch.duplicate_selected().expect("copy");
+        assert_eq!(patch.params(copy)[0].widget, WidgetKind::Slider);
     }
 
     #[test]
