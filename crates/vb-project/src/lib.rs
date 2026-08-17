@@ -14,6 +14,7 @@ pub mod error;
 pub mod io;
 pub mod mapping;
 pub mod migrate;
+pub mod modmatrix;
 pub mod prompt;
 pub mod validate;
 
@@ -22,4 +23,5 @@ pub use error::ProjectError;
 pub use io::{from_ron, load_from_path, open_path, open_ron, save_to_path, to_ron};
 pub use mapping::{build_mappings, ParamId, ParamMap, ParamMapping};
 pub use migrate::migrate_to_current;
+pub use modmatrix::{ModMatrix, ModMatrixError, ModRoute, ModSource, MODMATRIX_VERSION};
 pub use validate::Issue;
