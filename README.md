@@ -315,7 +315,7 @@ the definition of done.
 
 - [ ] 000085 — User guide: build your first plugin (osc→filter→envelope→out)
 - [x] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
-- [ ] 000087 — A set of example projects (synth, delay effect, LFO modulation)
+- [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison) 🧪
 - [ ] 000088 — Developer guide: how to add your own node (`Node` trait + registration) 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
 - [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI
