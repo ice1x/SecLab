@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 vb-core.workspace = true
 vb-nodes.workspace = true
+vb-project.workspace = true
 egui.workspace = true
 eframe.workspace = true
 serde.workspace = true
