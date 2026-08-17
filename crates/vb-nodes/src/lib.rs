@@ -21,6 +21,7 @@ pub mod reverb;
 pub mod routing;
 pub mod smooth;
 pub mod svf;
+pub mod vca;
 pub mod waveshaper;
 
 pub use cards::{node_card, node_reference};
@@ -40,4 +41,5 @@ pub use reverb::Reverb;
 pub use routing::{Merger, Selector, Splitter};
 pub use smooth::{ramp_samples, Smoother};
 pub use svf::Svf;
+pub use vca::Vca;
 pub use waveshaper::{Shape, Waveshaper};
