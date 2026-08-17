@@ -361,7 +361,7 @@ the definition of done.
 > drevo. Retrieval (000109) is switched on **after** drevo is shaken out in Epic 11.
 
 - [ ] 000101 — 🏗️ LLM provider abstraction (`AiProvider` trait), Claude by default, model/key config 🧪
-- [ ] 000102 — 🏗️ Text/JSON representation of the graph for LLM context (prompt serialization, round-trip) 🧪
+- [x] 000102 — 🏗️ Text/JSON representation of the graph for LLM context (prompt serialization, round-trip) 🧪
 - [ ] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `vb-core` 🧪
 - [ ] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
 - [ ] 000105 — Apply assistant edits as undoable commands (shared stack with manual editing) 🧪
