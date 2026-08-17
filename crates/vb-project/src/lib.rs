@@ -13,6 +13,7 @@ pub mod doc;
 pub mod error;
 pub mod io;
 pub mod migrate;
+pub mod prompt;
 pub mod validate;
 
 pub use doc::{NodeEntry, ProjectDoc, FORMAT_VERSION, MIN_SUPPORTED_VERSION};
