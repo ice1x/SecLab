@@ -11,6 +11,7 @@
 //! what the app can actually parse and validate.
 
 pub mod budget;
+pub mod compress;
 pub mod converge;
 pub mod critic;
 pub mod diff;
@@ -26,6 +27,7 @@ pub mod suggest;
 pub use budget::{
     estimate_cost_usd, estimate_tokens, estimate_usage, BudgetCheck, BudgetGuard, Usage,
 };
+pub use compress::{distill_history, graph_summary};
 pub use converge::{converge, ConvergeError, Converged, Verdict};
 pub use critic::{critique_patch, CritiqueError};
 pub use diff::{PatchDiff, Retype};
