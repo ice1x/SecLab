@@ -256,7 +256,7 @@ the definition of done.
 - [x] 000048 — Live visualizations: level meter, oscilloscope, spectrum 🧪
 - [x] 000049 — Control widgets: knob, slider, switch, XY-pad (mapped to parameters) 🧪
 - [x] 000050 — Grid/alignment/auto-layout of nodes 🧪
-- [ ] 000051 — Theme and "better than Reaktor" styling (visual polish)
+- [x] 000051 — Theme and "better than Reaktor" styling (visual polish)
 
 ### Epic 5 — Project serialization (`vb-project`)
 

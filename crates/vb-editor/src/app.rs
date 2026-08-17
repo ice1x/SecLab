@@ -19,6 +19,7 @@ use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
 use crate::palette::palette_entries;
 use crate::patch::PatchView;
+use crate::theme::{Theme, ThemeKind};
 use crate::widgets::{
     self, switch_index, switch_step, switch_values, xy_norm_to_pad, xy_pad_to_norm, WidgetKind,
 };
@@ -41,6 +42,11 @@ pub struct EditorApp {
     stack: Vec<(PatchView, vb_core::NodeId)>,
     /// Snap node positions to the grid when a drag ends.
     snap_to_grid: bool,
+    /// Active colour palette for the canvas and inspector widgets.
+    theme: Theme,
+    /// Set once per session so the egui base visuals are installed on the first frame
+    /// and again whenever the theme is toggled.
+    visuals_dirty: bool,
 }
 
 impl Default for EditorApp {
@@ -56,6 +62,8 @@ impl Default for EditorApp {
             moving: None,
             stack: Vec::new(),
             snap_to_grid: true,
+            theme: Theme::default(),
+            visuals_dirty: true,
         }
     }
 }
@@ -131,24 +139,17 @@ fn draw_wire(painter: &egui::Painter, from: Pos2, to: Pos2, width: f32, color: C
     ));
 }
 
-/// Port circle colour per signal type (audio = teal, control = amber, event = violet).
-fn signal_color(signal: SignalType) -> Color32 {
-    match signal {
-        SignalType::Audio => Color32::from_rgb(0x2d, 0xb8, 0xa8),
-        SignalType::Control => Color32::from_rgb(0xd9, 0xa4, 0x2b),
-        SignalType::Event => Color32::from_rgb(0x9a, 0x6f, 0xe8),
-    }
-}
-
-/// Accent colour shared by the active fill of inspector widgets.
-const WIDGET_ACCENT: Color32 = Color32::from_rgb(0x2d, 0xb8, 0xa8);
-
 /// Draws a rotary knob for `value` within `param`'s range and returns its response
 /// plus, when a drag moved it, the new value (already inside range).
 ///
 /// The knob reads `[min, max]` over a 270° arc with the gap at the bottom; vertical
-/// drag turns it via [`widgets::knob_drag`].
-fn knob_widget(ui: &mut Ui, param: &Parameter, value: f32) -> (egui::Response, Option<f32>) {
+/// drag turns it via [`widgets::knob_drag`]. Colours come from `theme`.
+fn knob_widget(
+    ui: &mut Ui,
+    theme: &Theme,
+    param: &Parameter,
+    value: f32,
+) -> (egui::Response, Option<f32>) {
     const DIAMETER: f32 = 44.0;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(DIAMETER), Sense::drag());
     let norm = param.normalize(value);
@@ -169,21 +170,18 @@ fn knob_widget(ui: &mut Ui, param: &Parameter, value: f32) -> (egui::Response, O
     let track: Vec<Pos2> = (0..=32).map(|k| at(k as f32 / 32.0)).collect();
     painter.add(egui::Shape::line(
         track,
-        Stroke::new(3.0, Color32::from_gray(70)),
+        Stroke::new(3.0, theme.node_outline),
     ));
     if norm > 0.0 {
         let upto = (32.0 * norm).ceil() as usize;
         let value_arc: Vec<Pos2> = (0..=upto)
             .map(|k| at((k as f32 / 32.0).min(norm)))
             .collect();
-        painter.add(egui::Shape::line(
-            value_arc,
-            Stroke::new(3.0, WIDGET_ACCENT),
-        ));
+        painter.add(egui::Shape::line(value_arc, Stroke::new(3.0, theme.accent)));
     }
     let tip = at(norm);
-    painter.line_segment([center, tip], Stroke::new(2.0, Color32::from_gray(220)));
-    painter.circle_filled(tip, 3.0, Color32::WHITE);
+    painter.line_segment([center, tip], Stroke::new(2.0, theme.text));
+    painter.circle_filled(tip, 3.0, theme.text);
     (response, changed)
 }
 
@@ -215,6 +213,7 @@ fn switch_widget(ui: &mut Ui, param: &Parameter, value: f32) -> Option<f32> {
 /// back through [`xy_pad_to_norm`] (Y inverted, so up = maximum).
 fn xy_pad_widget(
     ui: &mut Ui,
+    theme: &Theme,
     x_param: &Parameter,
     x_value: f32,
     y_param: &Parameter,
@@ -233,17 +232,17 @@ fn xy_pad_widget(
         });
 
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 4.0, Color32::from_gray(32));
+    painter.rect_filled(rect, 4.0, theme.canvas_bg);
     painter.rect_stroke(
         rect,
         4.0,
-        Stroke::new(1.0, Color32::from_gray(90)),
+        Stroke::new(1.0, theme.node_outline),
         egui::StrokeKind::Inside,
     );
     // Cross-hairs through the current handle position.
     let (hx, hy) = xy_norm_to_pad(x_param.normalize(x_value), y_param.normalize(y_value));
     let handle = rect.min + Vec2::new(hx * SIDE, hy * SIDE);
-    let faint = Stroke::new(1.0, Color32::from_gray(60));
+    let faint = Stroke::new(1.0, theme.grid_line_strong);
     painter.line_segment(
         [
             Pos2::new(rect.min.x, handle.y),
@@ -258,8 +257,8 @@ fn xy_pad_widget(
         ],
         faint,
     );
-    painter.circle_filled(handle, 6.0, WIDGET_ACCENT);
-    painter.circle_stroke(handle, 6.0, Stroke::new(1.0, Color32::from_gray(20)));
+    painter.circle_filled(handle, 6.0, theme.accent);
+    painter.circle_stroke(handle, 6.0, Stroke::new(1.0, theme.canvas_bg));
     out
 }
 
@@ -424,7 +423,7 @@ impl EditorApp {
                 .graph()
                 .node(edge.from_node)
                 .and_then(|n| n.outputs.get(edge.from_port.0))
-                .map_or(Color32::from_gray(160), |p| signal_color(p.signal));
+                .map_or(self.theme.text_dim, |p| self.theme.signal_color(p.signal));
             draw_wire(painter, to_screen(from), to_screen(to), stroke_w, color);
         }
 
@@ -442,7 +441,7 @@ impl EditorApp {
                 let color = match self.drop_target_ok(pointer - origin) {
                     Some(true) => Color32::from_rgb(0x4c, 0xd9, 0x64),
                     Some(false) => Color32::from_rgb(0xe5, 0x48, 0x48),
-                    None => Color32::from_gray(200),
+                    None => self.theme.text_dim,
                 };
                 draw_wire(painter, from, to, stroke_w, color);
             }
@@ -464,12 +463,14 @@ impl EditorApp {
         }
     }
 
-    /// Paints the adaptive background grid over `viewport`.
+    /// Paints the adaptive background grid over `viewport`. Every fourth line is drawn
+    /// a touch stronger, giving the eye major gridlines to read spacing against.
     fn paint_grid(&self, painter: &egui::Painter, viewport: Rect) {
-        painter.rect_filled(viewport, 0.0, Color32::from_gray(24));
+        painter.rect_filled(viewport, 0.0, self.theme.canvas_bg);
 
         let step = grid_step(self.camera.zoom());
-        let stroke = Stroke::new(1.0, Color32::from_gray(40));
+        let minor = Stroke::new(1.0, self.theme.grid_line);
+        let major = Stroke::new(1.0, self.theme.grid_line_strong);
         let origin = viewport.min.to_vec2();
 
         // Canvas-space bounds of the visible viewport.
@@ -478,17 +479,33 @@ impl EditorApp {
             .camera
             .screen_to_canvas((viewport.max - viewport.min).to_pos2());
 
-        let mut x = (top_left.x / step).floor() * step;
+        // Index a line by how many `step`s it sits from the canvas origin, so the major
+        // lines stay pinned to the same canvas positions as the view pans.
+        let stroke_for = |line_index: f32| {
+            if (line_index.rem_euclid(4.0)).abs() < 0.5 {
+                major
+            } else {
+                minor
+            }
+        };
+
+        let first_x = (top_left.x / step).floor();
+        let mut xi = first_x;
+        let mut x = xi * step;
         while x <= bottom_right.x {
             let sx = self.camera.canvas_to_screen(Pos2::new(x, 0.0)).x + origin.x;
-            painter.vline(sx, viewport.y_range(), stroke);
-            x += step;
+            painter.vline(sx, viewport.y_range(), stroke_for(xi));
+            xi += 1.0;
+            x = xi * step;
         }
-        let mut y = (top_left.y / step).floor() * step;
+        let first_y = (top_left.y / step).floor();
+        let mut yi = first_y;
+        let mut y = yi * step;
         while y <= bottom_right.y {
             let sy = self.camera.canvas_to_screen(Pos2::new(0.0, y)).y + origin.y;
-            painter.hline(viewport.x_range(), sy, stroke);
-            y += step;
+            painter.hline(viewport.x_range(), sy, stroke_for(yi));
+            yi += 1.0;
+            y = yi * step;
         }
     }
 
@@ -503,13 +520,33 @@ impl EditorApp {
             let title = Rect::from_min_max(to_screen(l.title.min), to_screen(l.title.max));
             let selected = self.patch.selected() == Some(id);
 
-            let rounding = CornerRadius::same((4.0 * zoom).clamp(1.0, 6.0) as u8);
-            painter.rect_filled(frame, rounding, Color32::from_gray(48));
-            painter.rect_filled(title, rounding, Color32::from_gray(64));
+            let rounding =
+                CornerRadius::same((4.0 * zoom).clamp(1.0, self.theme.node_rounding) as u8);
+            // Soft drop shadow for depth, then the body with a lighter top band that
+            // fakes a top-lit gradient, then the title bar over it.
+            let shadow = frame.translate(Vec2::splat(2.0 * zoom));
+            painter.rect_filled(shadow, rounding, self.theme.node_shadow);
+            painter.rect_filled(frame, rounding, self.theme.node_fill);
+            let highlight = Rect::from_min_max(
+                frame.min,
+                Pos2::new(frame.max.x, frame.min.y + frame.height() * 0.45),
+            );
+            painter.rect_filled(highlight, rounding, self.theme.node_fill_top);
+            painter.rect_filled(title, rounding, self.theme.node_title);
+
+            if selected {
+                // A faint outer halo under the crisp outline reads as a glow.
+                painter.rect_stroke(
+                    frame.expand(2.5 * zoom),
+                    rounding,
+                    Stroke::new(2.0, self.theme.node_outline_selected.gamma_multiply(0.4)),
+                    egui::StrokeKind::Outside,
+                );
+            }
             let outline = if selected {
-                Stroke::new(2.0, Color32::from_rgb(0xff, 0xb0, 0x30))
+                Stroke::new(2.0, self.theme.node_outline_selected)
             } else {
-                Stroke::new(1.0, Color32::from_gray(90))
+                Stroke::new(1.0, self.theme.node_outline)
             };
             painter.rect_stroke(frame, rounding, outline, egui::StrokeKind::Outside);
 
@@ -518,7 +555,7 @@ impl EditorApp {
                 Align2::CENTER_CENTER,
                 &node.kind,
                 FontId::proportional((12.0 * zoom).clamp(8.0, 24.0)),
-                Color32::from_gray(220),
+                self.theme.text,
             );
 
             let port_r = self.style.port_radius * zoom;
@@ -546,7 +583,7 @@ impl EditorApp {
                 let is_grabbed = self.patch.wire_drag().is_some_and(|d| {
                     d.node == id && d.direction == direction && d.port == PortId(i)
                 });
-                let mut fill = signal_color(port.signal);
+                let mut fill = self.theme.signal_color(port.signal);
                 if target_ok == Some(false) && !is_grabbed {
                     fill = fill.gamma_multiply(0.3);
                 }
@@ -558,7 +595,7 @@ impl EditorApp {
                     );
                 }
                 painter.circle_filled(at, port_r, fill);
-                painter.circle_stroke(at, port_r, Stroke::new(1.0, Color32::from_gray(20)));
+                painter.circle_stroke(at, port_r, Stroke::new(1.0, self.theme.canvas_bg));
                 // Port names clutter at far zoom-out; show them once readable.
                 if zoom >= 0.6 {
                     let inset = Vec2::new(
@@ -574,7 +611,7 @@ impl EditorApp {
                         align,
                         &port.name,
                         label_font.clone(),
-                        Color32::from_gray(170),
+                        self.theme.text_dim,
                     );
                 }
             }
@@ -684,6 +721,7 @@ impl EditorApp {
         i: usize,
     ) -> usize {
         let slot = &slots[i];
+        let theme = self.theme; // Copy — frees `self` for the set_param calls below.
 
         // Header: parameter name + the widget-type picker.
         let mut widget = slot.widget;
@@ -716,7 +754,7 @@ impl EditorApp {
                 1
             }
             WidgetKind::Knob => {
-                let (response, changed) = knob_widget(ui, &slot.param, slot.value);
+                let (response, changed) = knob_widget(ui, &theme, &slot.param, slot.value);
                 if let Some(v) = changed {
                     self.patch.set_param(id, i, v);
                 }
@@ -737,7 +775,7 @@ impl EditorApp {
                 // Pair with the next parameter as the Y axis; a lone last parameter has
                 // no partner, so fall back to a knob for it.
                 let Some(y_slot) = slots.get(i + 1) else {
-                    let (response, changed) = knob_widget(ui, &slot.param, slot.value);
+                    let (response, changed) = knob_widget(ui, &theme, &slot.param, slot.value);
                     if let Some(v) = changed {
                         self.patch.set_param(id, i, v);
                     }
@@ -748,9 +786,14 @@ impl EditorApp {
                     return 1;
                 };
                 ui.weak(format!("x: {} · y: {}", slot.param.name, y_slot.param.name));
-                if let Some((xv, yv)) =
-                    xy_pad_widget(ui, &slot.param, slot.value, &y_slot.param, y_slot.value)
-                {
+                if let Some((xv, yv)) = xy_pad_widget(
+                    ui,
+                    &theme,
+                    &slot.param,
+                    slot.value,
+                    &y_slot.param,
+                    y_slot.value,
+                ) {
                     self.patch.set_param(id, i, xv);
                     self.patch.set_param(id, i + 1, yv);
                     self.patch.end_gesture();
@@ -794,6 +837,21 @@ impl EditorApp {
         }
     }
 
+    /// The active colour theme.
+    #[must_use]
+    pub fn theme(&self) -> Theme {
+        self.theme
+    }
+
+    /// Switches to the `kind` palette, queuing the egui base visuals for reinstall on
+    /// the next frame. A no-op if that palette is already active.
+    pub fn set_theme(&mut self, kind: ThemeKind) {
+        if self.theme.kind != kind {
+            self.theme = Theme::for_kind(kind);
+            self.visuals_dirty = true;
+        }
+    }
+
     /// Test/integration hook: a full wire drag between two viewport-local positions.
     pub fn drag_wire(&mut self, from_screen: Pos2, to_screen: Pos2) {
         let from = self.camera.screen_to_canvas(from_screen);
@@ -805,6 +863,12 @@ impl EditorApp {
 
 impl eframe::App for EditorApp {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        // Install the palette's egui base once, and again after any theme toggle, so
+        // panels/buttons/combos match the canvas.
+        if self.visuals_dirty {
+            ui.ctx().set_visuals(self.theme.egui_visuals());
+            self.visuals_dirty = false;
+        }
         egui::Panel::top("toolbar").show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label("VST_bomb");
@@ -839,6 +903,12 @@ impl eframe::App for EditorApp {
                     self.camera = Camera::default();
                 }
                 ui.checkbox(&mut self.snap_to_grid, "snap");
+                if ui
+                    .button(format!("theme: {}", self.theme.kind.label()))
+                    .clicked()
+                {
+                    self.set_theme(self.theme.kind.toggled());
+                }
                 ui.separator();
                 if ui
                     .add_enabled(self.patch.can_undo(), egui::Button::new("undo"))
@@ -908,6 +978,20 @@ mod tests {
     fn reset_state_is_the_default_camera() {
         let app = EditorApp::new();
         assert_eq!(*app.camera(), Camera::default());
+    }
+
+    #[test]
+    fn the_editor_starts_dark_and_can_switch_themes() {
+        let mut app = EditorApp::new();
+        assert_eq!(app.theme().kind, ThemeKind::Dark, "dark by default");
+
+        app.set_theme(ThemeKind::Light);
+        assert_eq!(app.theme().kind, ThemeKind::Light);
+        assert_eq!(app.theme(), Theme::light());
+
+        // Toggling back returns the exact dark palette.
+        app.set_theme(app.theme().kind.toggled());
+        assert_eq!(app.theme(), Theme::dark());
     }
 
     #[test]
