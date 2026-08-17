@@ -11,6 +11,7 @@ pub mod layout;
 pub mod module;
 pub mod palette;
 pub mod patch;
+pub mod preset;
 pub mod theme;
 pub mod widgets;
 
@@ -20,5 +21,6 @@ pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
+pub use preset::{Preset, PresetError, PresetValue, PRESET_VERSION};
 pub use theme::{Theme, ThemeKind};
 pub use widgets::WidgetKind;

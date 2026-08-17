@@ -14,6 +14,7 @@ use vb_project::ProjectDoc;
 
 use crate::layout::{hit_test, layout_node, NodeHit, NodeStyle};
 use crate::module::{MacroModule, ModuleError, ModuleNode, ModuleParam, MODULE_VERSION};
+use crate::preset::{Preset, PresetValue, PRESET_VERSION};
 use crate::widgets::{default_widget, WidgetKind};
 
 /// Horizontal spacing between auto-layout columns (one per topological layer).
@@ -530,6 +531,59 @@ impl PatchView {
         Some(slot.value)
     }
 
+    /// Captures every parameter value on the canvas as a named [`Preset`], in draw
+    /// order so the snapshot is stable. A preset stores values only — reapply it to the
+    /// same patch with [`apply_preset`](Self::apply_preset).
+    #[must_use]
+    pub fn capture_preset(&self, name: impl Into<String>) -> Preset {
+        let mut values = Vec::new();
+        for id in &self.order {
+            if let Some(slots) = self.params.get(id) {
+                for (index, slot) in slots.iter().enumerate() {
+                    values.push(PresetValue {
+                        node: *id,
+                        index,
+                        value: slot.value,
+                    });
+                }
+            }
+        }
+        Preset {
+            version: PRESET_VERSION,
+            name: name.into(),
+            values,
+        }
+    }
+
+    /// Applies a [`Preset`]'s values to matching parameters as **one undoable step**,
+    /// clamping each into range. Values for nodes/indices not present are skipped.
+    /// Returns how many values were applied; a preset that matches nothing is a no-op
+    /// (no history entry). Suits A/B snapshots and restoring a saved sound.
+    pub fn apply_preset(&mut self, preset: &Preset) -> usize {
+        let matches_any = preset.values.iter().any(|pv| {
+            self.params
+                .get(&pv.node)
+                .is_some_and(|s| pv.index < s.len())
+        });
+        if !matches_any {
+            return 0;
+        }
+        self.record(Gesture::Discrete);
+        self.touch();
+        let mut applied = 0;
+        for pv in &preset.values {
+            if let Some(slot) = self
+                .params
+                .get_mut(&pv.node)
+                .and_then(|s| s.get_mut(pv.index))
+            {
+                slot.value = slot.param.clamp(pv.value);
+                applied += 1;
+            }
+        }
+        applied
+    }
+
     /// Reassigns the control widget for parameter `index` on `id`.
     ///
     /// A widget is a view-only mapping — it changes nothing audible and is not an undo
@@ -777,6 +831,7 @@ mod tests {
     use vb_core::{Port, SignalType};
 
     use super::*;
+    use crate::preset::PresetError;
 
     fn gain() -> GraphNode {
         GraphNode::new(
@@ -1270,6 +1325,115 @@ mod tests {
             PatchView::from_module(&module),
             Err(ModuleError::Build(_))
         ));
+    }
+
+    #[test]
+    fn preset_captures_and_reapplies_values_in_one_undo_step() {
+        let mut patch = PatchView::new();
+        let a = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+        let b = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::new(300.0, 0.0),
+        );
+        patch.set_param(a, 0, 0.3);
+        patch.set_param(b, 0, 1.7);
+        patch.end_gesture();
+        patch.clear_history();
+
+        // Snapshot, then move the knobs.
+        let snap = patch.capture_preset("A");
+        assert_eq!(snap.values.len(), 2, "both params captured");
+        patch.set_param(a, 0, 2.0);
+        patch.set_param(b, 0, 0.0);
+        patch.end_gesture();
+
+        // Reapply restores both, as a single undoable step.
+        assert_eq!(patch.apply_preset(&snap), 2);
+        assert!((patch.params(a)[0].value - 0.3).abs() < f32::EPSILON);
+        assert!((patch.params(b)[0].value - 1.7).abs() < f32::EPSILON);
+        assert!(patch.undo(), "the whole apply reverts at once");
+        assert!((patch.params(a)[0].value - 2.0).abs() < f32::EPSILON);
+        assert!((patch.params(b)[0].value - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn applying_a_preset_clamps_and_skips_unknown_targets() {
+        let mut patch = PatchView::new();
+        let id = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+        patch.clear_history();
+
+        let preset = Preset {
+            version: PRESET_VERSION,
+            name: "mix".to_owned(),
+            values: vec![
+                PresetValue {
+                    node: id,
+                    index: 0,
+                    value: 9.9,
+                }, // clamped to 2.0
+                PresetValue {
+                    node: id,
+                    index: 5,
+                    value: 1.0,
+                }, // no such index → skipped
+                PresetValue {
+                    node: NodeId(999),
+                    index: 0,
+                    value: 1.0,
+                }, // no such node
+            ],
+        };
+        assert_eq!(
+            patch.apply_preset(&preset),
+            1,
+            "only the valid target applied"
+        );
+        assert!((patch.params(id)[0].value - 2.0).abs() < f32::EPSILON);
+
+        // A preset matching nothing is a no-op with no history entry.
+        let r = patch.revision();
+        let empty = Preset {
+            version: PRESET_VERSION,
+            name: "x".to_owned(),
+            values: vec![PresetValue {
+                node: NodeId(999),
+                index: 0,
+                value: 0.5,
+            }],
+        };
+        assert_eq!(patch.apply_preset(&empty), 0);
+        assert_eq!(patch.revision(), r, "no-op did not touch the revision");
+    }
+
+    #[test]
+    fn preset_round_trips_through_ron() {
+        let preset = Preset {
+            version: PRESET_VERSION,
+            name: "lead".to_owned(),
+            values: vec![PresetValue {
+                node: NodeId(2),
+                index: 1,
+                value: 0.42,
+            }],
+        };
+        let ron = preset.to_ron().unwrap();
+        assert_eq!(Preset::from_ron(&ron).unwrap(), preset);
+        // A future version is refused.
+        let mut future = preset.clone();
+        future.version = PRESET_VERSION + 1;
+        assert_eq!(
+            Preset::from_ron(&future.to_ron().unwrap()),
+            Err(PresetError::UnsupportedVersion(PRESET_VERSION + 1))
+        );
     }
 
     #[test]
