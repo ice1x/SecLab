@@ -11,6 +11,10 @@ authors.workspace = true
 vb-core.workspace = true
 vb-nodes.workspace = true
 vb-project.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+ron.workspace = true
 
 [lints]
 workspace = true

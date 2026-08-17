@@ -3229,6 +3229,8 @@ checksum = "2cefc03fd367c0c6d4305de1b312cf00248c4114f4a0418ce6a6af769e3b0bd9"
 name = "vb-ai"
 version = "0.0.0"
 dependencies = [
+ "ron",
+ "serde",
  "vb-core",
  "vb-nodes",
  "vb-project",
