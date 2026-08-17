@@ -6,6 +6,7 @@
 
 pub mod cards;
 pub mod delay;
+pub mod docs;
 pub mod envelope;
 pub mod filter;
 pub mod io;
@@ -24,6 +25,7 @@ pub mod waveshaper;
 
 pub use cards::{node_card, node_reference};
 pub use delay::{FbDelay, MAX_DELAY_S};
+pub use docs::node_reference_markdown;
 pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
 pub use io::{AudioBus, AudioInput, AudioOutput, MAX_IO_CHANNELS};
