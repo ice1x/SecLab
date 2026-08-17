@@ -10,11 +10,13 @@
 //! here, versioned and tested, means the contract shown to the model never drifts from
 //! what the app can actually parse and validate.
 
+pub mod diff;
 pub mod generate;
 pub mod prompt;
 pub mod provider;
 
-pub use generate::{generate_patch, GenerateError, GenerateOutcome};
+pub use diff::{PatchDiff, Retype};
+pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
 pub use provider::{
     AiError, AiProvider, ChatRequest, ChatResponse, Message, ProviderConfig, ProviderKind, Role,

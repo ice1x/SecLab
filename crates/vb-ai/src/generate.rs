@@ -14,6 +14,7 @@
 use vb_nodes::Registry;
 use vb_project::ProjectDoc;
 
+use crate::diff::PatchDiff;
 use crate::prompt::build_system_prompt;
 use crate::provider::{AiError, AiProvider, ChatRequest, Message, ProviderConfig};
 
@@ -106,6 +107,58 @@ pub fn generate_patch(
     Err(GenerateError::NotConverged {
         issues: last_issues,
         attempts: attempts_budget,
+    })
+}
+
+/// A successfully generated edit: the new patch plus the diff from the current one.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EditOutcome {
+    /// The validated, edited document.
+    pub doc: ProjectDoc,
+    /// What changed from the current patch — for previewing before applying.
+    pub diff: PatchDiff,
+    /// The assistant's plain-language explanation.
+    pub explanation: String,
+    /// Model round-trips it took.
+    pub attempts: u32,
+}
+
+/// Applies a natural-language edit to `current`, returning the validated new patch and a
+/// [`PatchDiff`] to preview before it touches the canvas.
+///
+/// The model is asked to return the *full* updated `ProjectDoc`, keeping existing node
+/// ids stable so a small edit reads as a small diff; the result runs through the same
+/// mandatory validation as [`generate_patch`]. Applying the diff as an undoable command
+/// is a separate step (000105) — this only proposes and previews.
+///
+/// # Errors
+/// Same as [`generate_patch`]: [`GenerateError::Provider`] or [`GenerateError::NotConverged`].
+pub fn edit_patch(
+    provider: &dyn AiProvider,
+    registry: &Registry,
+    config: &ProviderConfig,
+    current: &ProjectDoc,
+    instruction: &str,
+    max_attempts: u32,
+) -> Result<EditOutcome, GenerateError> {
+    let framed = format!(
+        "Edit the current patch per this instruction. Keep existing node ids stable for \
+         nodes you do not change, and output the FULL updated ProjectDoc.\n\nInstruction: {instruction}"
+    );
+    let out = generate_patch(
+        provider,
+        registry,
+        config,
+        &framed,
+        Some(current),
+        max_attempts,
+    )?;
+    let diff = PatchDiff::between(current, &out.doc);
+    Ok(EditOutcome {
+        doc: out.doc,
+        diff,
+        explanation: out.explanation,
+        attempts: out.attempts,
     })
 }
 
@@ -287,6 +340,105 @@ mod tests {
         let provider = ScriptedProvider::new(vec![Err(AiError::MissingKey)]);
         let err = generate_patch(&provider, &registry, &config, "x", None, 3).unwrap_err();
         assert_eq!(err, GenerateError::Provider(AiError::MissingKey));
+    }
+
+    #[test]
+    fn edit_patch_returns_a_validated_doc_and_a_preview_diff() {
+        use vb_core::{Graph, GraphNode, Port, PortId, SignalType};
+
+        let (registry, config) = setup();
+        // Current patch: osc(0) -> gain(1).
+        let mut g = Graph::new();
+        let osc = g.add_node(GraphNode::new(
+            "oscillator",
+            vec![],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        let amp = g.add_node(GraphNode::new(
+            "gain",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(osc, PortId(0), amp, PortId(0)).unwrap();
+        let current = ProjectDoc::from_graph(&g);
+
+        // The model returns a full edited doc that inserts a biquad between them.
+        let edited = ProjectDoc {
+            version: vb_project::FORMAT_VERSION,
+            nodes: vec![
+                vb_project::NodeEntry {
+                    id: vb_core::NodeId(0),
+                    node: GraphNode::new(
+                        "oscillator",
+                        vec![],
+                        vec![Port::output("out", SignalType::Audio)],
+                    ),
+                },
+                vb_project::NodeEntry {
+                    id: vb_core::NodeId(1),
+                    node: GraphNode::new(
+                        "gain",
+                        vec![Port::input("in", SignalType::Audio)],
+                        vec![Port::output("out", SignalType::Audio)],
+                    ),
+                },
+                vb_project::NodeEntry {
+                    id: vb_core::NodeId(2),
+                    node: GraphNode::new(
+                        "biquad",
+                        vec![
+                            Port::input("in", SignalType::Audio),
+                            Port::input("cutoff", SignalType::Control),
+                        ],
+                        vec![Port::output("out", SignalType::Audio)],
+                    ),
+                },
+            ],
+            edges: vec![
+                vb_core::Edge {
+                    from_node: vb_core::NodeId(0),
+                    from_port: PortId(0),
+                    to_node: vb_core::NodeId(2),
+                    to_port: PortId(0),
+                },
+                vb_core::Edge {
+                    from_node: vb_core::NodeId(2),
+                    from_port: PortId(0),
+                    to_node: vb_core::NodeId(1),
+                    to_port: PortId(0),
+                },
+            ],
+        };
+        let ron = vb_project::to_ron(&edited).unwrap();
+        let provider = ScriptedProvider::replies(&[&reply_with(&ron)]);
+
+        let out = edit_patch(
+            &provider,
+            &registry,
+            &config,
+            &current,
+            "add a lowpass filter",
+            2,
+        )
+        .expect("edit succeeds");
+        assert_eq!(out.attempts, 1);
+        assert_eq!(
+            out.diff.added_nodes,
+            vec![(vb_core::NodeId(2), "biquad".to_owned())]
+        );
+        assert!(
+            out.diff.removed_edges.len() == 1,
+            "old osc->gain edge dropped"
+        );
+        assert!(!out.diff.is_empty());
+
+        // The instruction was framed as an edit and reached the model.
+        assert!(provider.requests()[0].messages[0]
+            .content
+            .contains("add a lowpass filter"));
+        assert!(provider.requests()[0].messages[0]
+            .content
+            .contains("Keep existing node ids stable"));
     }
 
     #[test]
