@@ -365,7 +365,7 @@ the definition of done.
 - [x] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `vb-core` 🧪
 - [x] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
 - [x] 000105 — Apply assistant edits as undoable commands (shared stack with manual editing) 🧪
-- [ ] 000106 — Suggestions: next node, auto-fix incompatible/dangling connections 🧪
+- [x] 000106 — Suggestions: next node, auto-fix incompatible/dangling connections 🧪
 - [ ] 000107 — Explain a patch/node in natural language (chat panel / tooltips)
 - [ ] 000108 — UI: assistant chat panel in the editor (request → proposal → apply/reject)
 - [ ] 000109 — RAG over the drevo library: example patches/presets as context (ties into Epic 11) 🧪
