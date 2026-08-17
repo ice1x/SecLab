@@ -10,6 +10,7 @@
 //! here, versioned and tested, means the contract shown to the model never drifts from
 //! what the app can actually parse and validate.
 
+pub mod critic;
 pub mod diff;
 pub mod explain;
 pub mod generate;
@@ -20,6 +21,7 @@ pub mod provider;
 pub mod repair;
 pub mod suggest;
 
+pub use critic::{critique_patch, CritiqueError};
 pub use diff::{PatchDiff, Retype};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
