@@ -388,7 +388,7 @@ the definition of done.
 - [ ] 000123 — "What will be sent?" inspector: show the exact outgoing payload before the first request of a session
 - [ ] 000124 — Wire the accepted proposal into the editor: apply as undoable diff → audition in the editor (builds on 000104/000105)
 - [ ] 000125 — End-to-end MVP scenario test: scripted dialogue (mock provider) → validated graph → exported CLAP/VST3 bundle (ties into Epic 7) 🧪
-- [ ] 000126 — 🧩 Golden-transcript tests for prompt assets: pre-prompt/skills regressions caught by fixture dialogues 🧪
+- [x] 000126 — 🧩 Golden-transcript tests for prompt assets: pre-prompt/skills regressions caught by fixture dialogues 🧪
 
 #### Knowledge graph grounding (docs → drevo → GraphRAG / MCP)
 
