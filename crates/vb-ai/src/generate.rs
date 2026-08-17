@@ -14,9 +14,10 @@
 use vb_nodes::Registry;
 use vb_project::ProjectDoc;
 
+use crate::converge::{converge, ConvergeError, Converged, Verdict};
 use crate::diff::PatchDiff;
 use crate::prompt::build_system_prompt;
-use crate::provider::{AiError, AiProvider, ChatRequest, Message, ProviderConfig};
+use crate::provider::{AiError, AiProvider, ProviderConfig};
 
 /// A successfully generated, validated patch.
 #[derive(Debug, Clone, PartialEq)]
@@ -76,38 +77,35 @@ pub fn generate_patch(
     current: Option<&ProjectDoc>,
     max_attempts: u32,
 ) -> Result<GenerateOutcome, GenerateError> {
-    let attempts_budget = max_attempts.max(1);
     let system = build_system_prompt(registry, current);
-    let mut messages = vec![Message::user(description)];
-    let mut last_issues = vec!["no attempts were made".to_owned()];
-
-    for attempt in 1..=attempts_budget {
-        let request = ChatRequest::new(config, system.clone(), messages.clone());
-        let reply = provider
-            .complete(&request)
-            .map_err(GenerateError::Provider)?;
-
-        match evaluate_reply(&reply.content, registry) {
-            Ok((doc, explanation)) => {
-                return Ok(GenerateOutcome {
-                    doc,
-                    explanation,
-                    attempts: attempt,
-                })
-            }
-            Err(issues) => {
-                last_issues = issues;
-                // Feed the wrong answer and the problems back for another try.
-                messages.push(Message::assistant(reply.content));
-                messages.push(Message::user(retry_prompt(&last_issues)));
-            }
+    // The propose → validate → repair loop is the shared `converge` primitive; the gate
+    // here is "extract a RON ProjectDoc and pass mandatory validation".
+    let result = converge(
+        provider,
+        config,
+        &system,
+        description.to_owned(),
+        max_attempts,
+        |content| match evaluate_reply(content, registry) {
+            Ok(accepted) => Verdict::Accept(accepted),
+            Err(issues) => Verdict::Revise(issues),
+        },
+        retry_prompt,
+    );
+    match result {
+        Ok(Converged {
+            value: (doc, explanation),
+            attempts,
+        }) => Ok(GenerateOutcome {
+            doc,
+            explanation,
+            attempts,
+        }),
+        Err(ConvergeError::Provider(e)) => Err(GenerateError::Provider(e)),
+        Err(ConvergeError::NotConverged { issues, attempts }) => {
+            Err(GenerateError::NotConverged { issues, attempts })
         }
     }
-
-    Err(GenerateError::NotConverged {
-        issues: last_issues,
-        attempts: attempts_budget,
-    })
 }
 
 /// A successfully generated edit: the new patch plus the diff from the current one.
