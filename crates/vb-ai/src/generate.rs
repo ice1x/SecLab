@@ -185,8 +185,8 @@ fn evaluate_reply(content: &str, registry: &Registry) -> Result<(ProjectDoc, Str
 }
 
 /// Mandatory validation: unknown node kinds (grounding) plus every structural problem
-/// [`ProjectDoc::validate`] reports.
-fn patch_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String> {
+/// [`ProjectDoc::validate`] reports. Shared with the repair skill (000118).
+pub(crate) fn patch_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String> {
     let mut issues: Vec<String> = doc
         .nodes
         .iter()
