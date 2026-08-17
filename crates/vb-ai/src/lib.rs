@@ -14,6 +14,7 @@ pub mod diff;
 pub mod generate;
 pub mod prompt;
 pub mod provider;
+pub mod suggest;
 
 pub use diff::{PatchDiff, Retype};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
@@ -21,4 +22,8 @@ pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_
 pub use provider::{
     AiError, AiProvider, ChatRequest, ChatResponse, Message, ProviderConfig, ProviderKind, Role,
     ScriptedProvider, DEFAULT_MAX_TOKENS, DEFAULT_MODEL,
+};
+pub use suggest::{
+    autofix, compatible_consumers, free_outputs, suggest_next, EdgeDefect, Fix, FreeOutput,
+    NextNode,
 };
