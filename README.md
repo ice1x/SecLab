@@ -379,7 +379,7 @@ the definition of done.
 - [ ] 000114 — 🧩 `AiProvider` adapter: OpenAI-compatible endpoint (covers most third-party providers) 🧪
 - [x] 000115 — Distilled node reference: auto-generate compact "node cards" from the registry (kinds, ports, params) as LLM context 🧪
 - [x] 000116 — System pre-prompt & output contract: assistant role, RON `ProjectDoc` schema, refusal rules — versioned prompt assets in-repo 🧪
-- [ ] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
+- [x] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
 - [x] 000118 — Skill: "explain / repair an existing patch" (uses validator issues as input) 🧪
 - [x] 000119 — Critic pass (Occam's razor): review request + draft for redundant nodes/routing, surface trade-offs as short bullets 🧪
 - [x] 000120 — Propose→validate→repair loop: every proposal gated by `vb-core`/`vb-project` validation, issues fed back to the model until convergence (with retry cap) 🧪

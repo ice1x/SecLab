@@ -162,7 +162,10 @@ pub fn edit_patch(
 
 /// Extracts and validates a reply. `Ok((doc, explanation))` on success, `Err(issues)`
 /// with the problems to feed back otherwise.
-fn evaluate_reply(content: &str, registry: &Registry) -> Result<(ProjectDoc, String), Vec<String>> {
+pub(crate) fn evaluate_reply(
+    content: &str,
+    registry: &Registry,
+) -> Result<(ProjectDoc, String), Vec<String>> {
     let Some((explanation, ron)) = extract_ron_block(content) else {
         return Err(vec![
             "no RON code block found — output the patch in a fenced ```ron block".to_owned(),
@@ -201,7 +204,7 @@ pub(crate) fn patch_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String>
 }
 
 /// The follow-up message listing the problems to fix.
-fn retry_prompt(issues: &[String]) -> String {
+pub(crate) fn retry_prompt(issues: &[String]) -> String {
     let mut msg =
         String::from("That patch is not valid. Fix these and re-emit the full RON ProjectDoc:\n");
     for issue in issues {
@@ -214,7 +217,7 @@ fn retry_prompt(issues: &[String]) -> String {
 
 /// Pulls the RON out of a fenced code block, returning `(prose_before, ron)`.
 /// Accepts a ```ron fence or a bare ``` fence; `None` if there is no closed block.
-fn extract_ron_block(text: &str) -> Option<(String, String)> {
+pub(crate) fn extract_ron_block(text: &str) -> Option<(String, String)> {
     let (open_at, after) = if let Some(pos) = text.find("```ron") {
         (pos, &text[pos + "```ron".len()..])
     } else {
