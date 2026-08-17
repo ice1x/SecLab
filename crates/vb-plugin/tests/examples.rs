@@ -11,6 +11,10 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("delay", include_str!("../../../examples/delay.ron")),
     ("unison", include_str!("../../../examples/unison.ron")),
     ("tremolo", include_str!("../../../examples/tremolo.ron")),
+    (
+        "filter_sweep",
+        include_str!("../../../examples/filter_sweep.ron"),
+    ),
 ];
 
 #[test]
@@ -49,7 +53,10 @@ fn every_example_loads_validates_and_builds_an_engine() {
 fn the_example_set_is_the_expected_three() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
-    assert_eq!(names, vec!["synth", "delay", "unison", "tremolo"]);
+    assert_eq!(
+        names,
+        vec!["synth", "delay", "unison", "tremolo", "filter_sweep"]
+    );
     // No example is empty.
     assert!(EXAMPLES.iter().all(|(_, ron)| !ron.trim().is_empty()));
 }
