@@ -14,6 +14,7 @@ pub mod budget;
 pub mod compress;
 pub mod converge;
 pub mod critic;
+pub mod design;
 pub mod diff;
 pub mod explain;
 pub mod generate;
@@ -30,6 +31,7 @@ pub use budget::{
 pub use compress::{distill_history, graph_summary};
 pub use converge::{converge, ConvergeError, Converged, Verdict};
 pub use critic::{critique_patch, CritiqueError};
+pub use design::{DesignError, DesignSession, DesignStep};
 pub use diff::{PatchDiff, Retype};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
