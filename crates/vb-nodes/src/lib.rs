@@ -4,6 +4,7 @@
 //! envelopes, math and routing. Each node is a small, independently tested unit that
 //! plugs into the [`vb_core`] graph engine.
 
+pub mod cards;
 pub mod delay;
 pub mod envelope;
 pub mod filter;
@@ -20,6 +21,7 @@ pub mod routing;
 pub mod svf;
 pub mod waveshaper;
 
+pub use cards::{node_card, node_reference};
 pub use delay::{FbDelay, MAX_DELAY_S};
 pub use envelope::Adsr;
 pub use filter::{Biquad, FilterKind};
