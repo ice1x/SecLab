@@ -11,12 +11,14 @@
 //! what the app can actually parse and validate.
 
 pub mod diff;
+pub mod explain;
 pub mod generate;
 pub mod prompt;
 pub mod provider;
 pub mod suggest;
 
 pub use diff::{PatchDiff, Retype};
+pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
 pub use provider::{
