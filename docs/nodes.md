@@ -99,6 +99,15 @@ Auto-generated from the registry — do not edit by hand.
   - `waveform` — range 0..3, default 0
   - `freq_hz` — range 20..20000, default 440
 
+### vco
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `waveform` — range 0..3, default 0
+  - `base_hz` — range 20..20000, default 440
+  - `amount_oct` — range -4..4, default 1
+
 ## input
 
 ### audio-in

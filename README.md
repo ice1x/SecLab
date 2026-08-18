@@ -243,6 +243,7 @@ the definition of done.
 - [x] 000038 — Macro-node (nested subgraph as a single node) — the foundation for the Reaktor style 🧪
 - [x] 000131 — VCA node (control-modulated amplifier `out = in·(bias + amount·cv)`): the first CV-consuming node, so an LFO/envelope can actually modulate audio (unblocks the modulation matrix and the tremolo example) 🧪
 - [x] 000132 — VCF node (voltage-controlled filter): a biquad whose cutoff a control input sweeps (`cutoff = base_hz + amount_hz·cv`) — the README MVP's "LFO on cutoff", with a live filter-sweep example 🧪
+- [x] 000133 — VCO node (control-modulated oscillator pitch): an oscillator whose frequency a control input sweeps exponentially (`freq = base_hz·2^(amount_oct·cv)`, 1 V/oct) — the pitch leg of modulation alongside VCA/VCF, so an LFO/envelope can vibrato or sweep pitch, with a live vibrato example 🧪
 
 ### Epic 4 — Node editor / UI (`vb-editor`, egui)
 

@@ -48,6 +48,18 @@ impl Oscillator {
         self.waveform
     }
 
+    /// The frequency this oscillator is currently running at (Hz).
+    #[must_use]
+    pub fn freq_hz(&self) -> f32 {
+        self.freq_hz
+    }
+
+    /// Retunes the oscillator to `freq_hz` without disturbing its phase, so a control
+    /// signal can sweep the pitch continuously (see [`crate::Vco`]).
+    pub fn set_freq_hz(&mut self, freq_hz: f32) {
+        self.freq_hz = freq_hz;
+    }
+
     /// Computes the current sample for the given per-sample phase increment `dt`.
     fn sample(&self, dt: f32) -> f32 {
         match self.waveform {
