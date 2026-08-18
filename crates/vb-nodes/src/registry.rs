@@ -24,6 +24,7 @@ use crate::routing::{Merger, Selector, Splitter};
 use crate::svf::Svf;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
+use crate::vco::Vco;
 use crate::waveshaper::{Shape, Waveshaper};
 
 /// Metadata and factories for one node kind.
@@ -639,6 +640,32 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ))
             },
         ),
+        NodeDescriptor::new(
+            "vco",
+            "generator",
+            || {
+                GraphNode::new(
+                    "vco",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Vco::new(Waveform::Sine, 440.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("waveform", 0.0, 3.0, 0.0),
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("amount_oct", -4.0, 4.0, 1.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Vco::new(
+                    waveform_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 440.0),
+                    arg(v, 2, 1.0),
+                ))
+            },
+        ),
     ]
 }
 
@@ -670,6 +697,26 @@ mod tests {
         ] {
             assert!(kinds.contains(&expected), "missing kind {expected}");
         }
+    }
+
+    #[test]
+    fn vco_is_registered_as_a_pitch_modulated_generator() {
+        let r = Registry::with_builtins();
+        let desc = r.get("vco").expect("vco is registered");
+        assert_eq!(desc.category(), "generator");
+
+        // One control input (the pitch CV) and one audio output.
+        let node = r.graph_node("vco").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs.len(), 1);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+
+        // Built with waveform / base_hz / amount_oct params.
+        let descriptor_params = desc.params();
+        let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
+        assert!(r.processor("vco").is_some(), "a processor can be built");
     }
 
     #[test]

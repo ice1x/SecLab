@@ -23,6 +23,7 @@ pub mod smooth;
 pub mod svf;
 pub mod vca;
 pub mod vcf;
+pub mod vco;
 pub mod waveshaper;
 
 pub use cards::{node_card, node_reference};
@@ -44,4 +45,5 @@ pub use smooth::{ramp_samples, Smoother};
 pub use svf::Svf;
 pub use vca::Vca;
 pub use vcf::Vcf;
+pub use vco::Vco;
 pub use waveshaper::{Shape, Waveshaper};
