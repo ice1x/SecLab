@@ -1,0 +1,26 @@
+# cargo-nextest configuration — faster, clearer test runs than `cargo test`.
+#
+# Run the suite with `cargo nextest run` (see the README "Documentation" section).
+# Note: nextest does not run doctests; run those separately with `cargo test --doc`
+# (the workspace currently has none, but that's the command if any are added).
+
+[profile.default]
+# The suite is deterministic by default — no blanket retries, so a real failure fails.
+retries = 0
+
+# A couple of tests in `vb-standalone` measure real wall-clock headroom — the audio
+# callback's load budget and xrun counting — rather than pure logic. On a heavily loaded
+# machine (a busy CI runner) they can flake even though the code is correct. Give just
+# those a few automatic retries; a genuine regression still fails every attempt.
+[[profile.default.overrides]]
+filter = 'package(vb-standalone) and test(/report_low_load_and_no_xruns|count_as_xruns/)'
+retries = 3
+
+# A profile for CI use (`cargo nextest run --profile ci`): don't stop at the first
+# failure, so one flake doesn't mask other results. Keep the same timing-test retries.
+[profile.ci]
+fail-fast = false
+
+[[profile.ci.overrides]]
+filter = 'package(vb-standalone) and test(/report_low_load_and_no_xruns|count_as_xruns/)'
+retries = 3
