@@ -201,7 +201,9 @@ Detailed checklist — in the [Tasks](#-tasks-backlog) section.
 **Running the tests:** `cargo test --workspace`, or — faster and with clearer output —
 [`cargo nextest run`](https://nexte.st/) (config in [`.config/nextest.toml`](.config/nextest.toml);
 it auto-retries a couple of load-sensitive timing tests). Nextest does not run doctests;
-use `cargo test --doc` for those.
+use `cargo test --doc` for those. **Coverage:** `cargo llvm-cov --workspace --summary-only`
+([cargo-llvm-cov](https://github.com/taiki-e/cargo-llvm-cov)); CI runs it as a non-blocking
+advisory job.
 
 ---
 
@@ -223,7 +225,7 @@ the definition of done.
 - [x] 000007 — Add `CONTRIBUTING.md` with TDD/SOLID rules and branch workflow
 - [x] 000008 — Crate stubs: each crate compiles and has an empty passing test 🧪
 - [x] 000009 — Set up `cargo-nextest` (optional) for fast test runs — [`.config/nextest.toml`](.config/nextest.toml) (default + `ci` profiles; targeted auto-retries for the load-sensitive timing tests)
-- [ ] 000010 — Set up test coverage measurement (`cargo-llvm-cov`) in CI
+- [x] 000010 — Set up test coverage measurement (`cargo-llvm-cov`) in CI — non-blocking advisory `coverage` job in [ci.yml](.github/workflows/ci.yml) (baseline ~85% line coverage)
 
 ### Epic 2 — Core: DSP graph engine (`vb-core`)
 
