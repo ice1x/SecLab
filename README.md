@@ -198,6 +198,11 @@ Detailed checklist — in the [Tasks](#-tasks-backlog) section.
 - [CHANGELOG](CHANGELOG.md) — notable changes and the versioning policy.
 - [`examples/`](examples) — small, tested starter patches.
 
+**Running the tests:** `cargo test --workspace`, or — faster and with clearer output —
+[`cargo nextest run`](https://nexte.st/) (config in [`.config/nextest.toml`](.config/nextest.toml);
+it auto-retries a couple of load-sensitive timing tests). Nextest does not run doctests;
+use `cargo test --doc` for those.
+
 ---
 
 ## ✅ Tasks (backlog)
@@ -217,7 +222,7 @@ the definition of done.
 - [x] 000006 — 🧩 Configure dependency caching in CI (faster builds)
 - [x] 000007 — Add `CONTRIBUTING.md` with TDD/SOLID rules and branch workflow
 - [x] 000008 — Crate stubs: each crate compiles and has an empty passing test 🧪
-- [ ] 000009 — Set up `cargo-nextest` (optional) for fast test runs
+- [x] 000009 — Set up `cargo-nextest` (optional) for fast test runs — [`.config/nextest.toml`](.config/nextest.toml) (default + `ci` profiles; targeted auto-retries for the load-sensitive timing tests)
 - [ ] 000010 — Set up test coverage measurement (`cargo-llvm-cov`) in CI
 
 ### Epic 2 — Core: DSP graph engine (`vb-core`)
