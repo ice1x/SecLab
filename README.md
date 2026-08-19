@@ -188,6 +188,18 @@ Detailed checklist — in the [Tasks](#-tasks-backlog) section.
 
 ---
 
+## 📚 Documentation
+
+- [Build your first plugin](docs/first-plugin.md) — a getting-started walkthrough
+  (oscillator → filter → envelope → output).
+- [Adding your own node](docs/adding-a-node.md) — extend the DSP library with custom nodes.
+- [Node reference](docs/nodes.md) — every built-in node, its ports and parameters
+  (auto-generated).
+- [CHANGELOG](CHANGELOG.md) — notable changes and the versioning policy.
+- [`examples/`](examples) — small, tested starter patches.
+
+---
+
 ## ✅ Tasks (backlog)
 
 Format: `- [ ] NNNNNN — description`. Numbers are global and unique, order = rough
@@ -322,7 +334,7 @@ the definition of done.
 - [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/vb-nodes/tests/custom_node.rs` 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
 - [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI
-- [ ] 000091 — Versioning and CHANGELOG
+- [x] 000091 — Versioning and CHANGELOG — [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog; documents the crate SemVer vs. the separate project format version), guarded by a test tying it to `vb_project::FORMAT_VERSION` 🧪
 - [ ] 000092 — MVP release: working export of a minimal synth to VST3 + AU
 
 ### Epic 11 — Patch/preset library on drevo (optional)
