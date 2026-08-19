@@ -46,3 +46,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cargo xtask validate
+
+  # Advisory line coverage. cargo-llvm-cov and the llvm-tools rustup component are
+  # installed on the runner. This job is NON-blocking (continue-on-error): coverage is a
+  # signal, not a gate, so a tooling hiccup or a dip in the number never fails the merge.
+  coverage:
+    name: coverage (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: line coverage summary
+        run: cargo llvm-cov --workspace --summary-only
