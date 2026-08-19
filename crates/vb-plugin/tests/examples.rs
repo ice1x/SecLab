@@ -16,6 +16,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/filter_sweep.ron"),
     ),
     ("vibrato", include_str!("../../../examples/vibrato.ron")),
+    (
+        "first_synth",
+        include_str!("../../../examples/first_synth.ron"),
+    ),
 ];
 
 #[test]
@@ -62,7 +66,8 @@ fn the_example_set_is_the_expected_manifest() {
             "unison",
             "tremolo",
             "filter_sweep",
-            "vibrato"
+            "vibrato",
+            "first_synth"
         ]
     );
     // No example is empty.

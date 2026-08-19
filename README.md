@@ -316,7 +316,7 @@ the definition of done.
 
 ### Epic 10 — Documentation, examples, release
 
-- [ ] 000085 — User guide: build your first plugin (osc→filter→envelope→out)
+- [x] 000085 — User guide: build your first plugin (osc→filter→envelope→out) — [docs/first-plugin.md](docs/first-plugin.md), backed by the tested `examples/first_synth.ron` patch
 - [x] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
 - [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo, LFO filter sweep) 🧪
 - [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/vb-nodes/tests/custom_node.rs` 🧪
