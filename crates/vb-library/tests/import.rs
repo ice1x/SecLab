@@ -51,7 +51,7 @@ fn synth_doc() -> ProjectDoc {
 #[test]
 fn importing_a_patch_stores_summary_metadata() {
     let lib = Library::open_in_memory().unwrap();
-    let patch = import_patch(&lib, &synth_doc(), "My Synth").unwrap();
+    let patch = import_patch(&lib, &synth_doc(), "My Synth", "a warm analog bass").unwrap();
 
     assert_eq!(patch.kind, kind::PATCH);
     assert_eq!(patch.title, "My Synth");
@@ -70,7 +70,7 @@ fn importing_a_patch_stores_summary_metadata() {
 #[test]
 fn imported_patches_are_queryable_by_contained_node_kind() {
     let lib = Library::open_in_memory().unwrap();
-    import_patch(&lib, &synth_doc(), "Synth A").unwrap();
+    import_patch(&lib, &synth_doc(), "Synth A", "").unwrap();
 
     // A second patch that also contains a biquad but no separate gain path.
     let filter_doc = ProjectDoc {
@@ -86,7 +86,7 @@ fn imported_patches_are_queryable_by_contained_node_kind() {
             to_port: PortId(0),
         }],
     };
-    import_patch(&lib, &filter_doc, "Filter B").unwrap();
+    import_patch(&lib, &filter_doc, "Filter B", "").unwrap();
 
     // Both patches contain a biquad.
     let mut with_biquad: Vec<String> = patches_with_node_kind(&lib, "biquad")
@@ -113,9 +113,9 @@ fn imported_patches_are_queryable_by_contained_node_kind() {
 fn a_duplicate_title_is_rejected() {
     // Titles are the library key; drevo enforces uniqueness.
     let lib = Library::open_in_memory().unwrap();
-    import_patch(&lib, &synth_doc(), "Unique").unwrap();
+    import_patch(&lib, &synth_doc(), "Unique", "").unwrap();
     assert!(
-        import_patch(&lib, &synth_doc(), "Unique").is_err(),
+        import_patch(&lib, &synth_doc(), "Unique", "").is_err(),
         "re-importing under the same title is refused"
     );
 }

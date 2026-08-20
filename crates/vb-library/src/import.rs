@@ -42,15 +42,22 @@ fn kind_tag(lib: &Library, node_kind: &str) -> Result<Node> {
     }
 }
 
-/// Imports `doc` as a patch named `title`: creates the patch node with summary metadata
-/// and tags it with each structural node kind it contains.
+/// Imports `doc` as a patch named `title` with a free-text `description`: creates the
+/// patch node with summary metadata and tags it with each structural node kind it
+/// contains. The `title` and `description` are indexed for full-text search
+/// ([`Library::search`](crate::Library::search)).
 ///
 /// The `title` is the library key and must be unique (drevo enforces unique titles);
 /// re-importing under an existing title returns [`drevo::error::DrevoError::DuplicateTitle`].
 ///
 /// # Errors
 /// Propagates any drevo error (including a duplicate title).
-pub fn import_patch(lib: &Library, doc: &ProjectDoc, title: &str) -> Result<Node> {
+pub fn import_patch(
+    lib: &Library,
+    doc: &ProjectDoc,
+    title: &str,
+    description: &str,
+) -> Result<Node> {
     let kinds = distinct_kinds(doc);
 
     let mut props = HashMap::new();
@@ -62,7 +69,8 @@ pub fn import_patch(lib: &Library, doc: &ProjectDoc, title: &str) -> Result<Node
     let patch = lib.db().create_node(NewNode {
         kind: kind::PATCH.to_owned(),
         title: title.to_owned(),
-        body: String::new(),
+        // The description lives in the node body, which drevo indexes for FTS.
+        body: description.to_owned(),
         body_html: String::new(),
         properties: Properties(props),
     })?;
