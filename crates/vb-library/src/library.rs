@@ -28,6 +28,23 @@ pub mod kind {
     pub const PRESET_BANK: &str = "preset-bank";
     /// A free-form tag used to organise the library.
     pub const TAG: &str = "tag";
+
+    // --- Knowledge-graph ontology (000127) ---
+
+    /// A node kind in the DSP library (e.g. `oscillator`), as a knowledge-graph entity.
+    pub const NODE_KIND: &str = "node-kind";
+    /// A port on a node kind (an input or output, with a signal type).
+    pub const PORT: &str = "port";
+    /// A parameter on a node kind (name, range, default).
+    pub const PARAMETER: &str = "parameter";
+    /// A UI category grouping node kinds (e.g. `generator`, `filter`).
+    pub const CATEGORY: &str = "category";
+    /// An authored DSP concept the assistant can cite.
+    pub const CONCEPT: &str = "concept";
+    /// An authored DSP heuristic ("when X, prefer Y").
+    pub const HEURISTIC: &str = "heuristic";
+    /// An example patch, referenced from the knowledge graph.
+    pub const EXAMPLE_PATCH: &str = "example-patch";
 }
 
 /// Edge `kind` values the library stores.
@@ -41,6 +58,19 @@ pub mod rel {
     pub const TAGGED: &str = "tagged";
     /// `preset-bank --contains--> preset`: the bank groups that preset.
     pub const CONTAINS: &str = "contains";
+
+    // --- Knowledge-graph ontology (000127) ---
+
+    /// `node-kind --has_port--> port`.
+    pub const HAS_PORT: &str = "has_port";
+    /// `node-kind --has_parameter--> parameter`.
+    pub const HAS_PARAMETER: &str = "has_parameter";
+    /// `node-kind --in_category--> category`.
+    pub const IN_CATEGORY: &str = "in_category";
+    /// `output-port --compatible_with--> input-port` (same signal type).
+    pub const COMPATIBLE_WITH: &str = "compatible_with";
+    /// `concept|heuristic --explains--> node-kind` (authored knowledge).
+    pub const EXPLAINS: &str = "explains";
 }
 
 /// Builds a library node with the given kind/title (empty body and no properties).
