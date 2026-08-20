@@ -415,7 +415,7 @@ the definition of done.
 #### Knowledge graph grounding (docs → drevo → GraphRAG / MCP)
 
 - [x] 000127 — Docs→graph pipeline: convert the product documentation (node reference from 000086/000115, port compatibility rules, DSP heuristics, example patches) into a typed drevo knowledge graph — `NodeKind` / `Port` / `Parameter` / `Concept` / `Heuristic` / `ExamplePatch` nodes with `has_port` / `compatible_with` / `in_category` / `explains` / `uses` edges — `Library::build_registry_ontology` derives the structural core (node-kind/port/parameter/category + has_port/has_parameter/in_category/compatible_with) from the registry; `add_concept`/`add_heuristic`/`link_explains` attach authored knowledge 🧪
-- [ ] 000128 — Assistant retrieval over the graph: `KnowledgeStore` queries fetch only the ontology slice a question needs (FTS + vector + graph traversal), replacing the full node-card corpus in the prompt; measure the token savings per exchange 🧪
+- [x] 000128 — Assistant retrieval over the graph: `KnowledgeStore` queries fetch only the ontology slice a question needs (FTS + vector + graph traversal), replacing the full node-card corpus in the prompt; measure the token savings per exchange — `Library::knowledge_slice` (FTS → owning node-kinds → compact cards via traversal); test asserts a slice is a fraction of the full `node_reference` corpus 🧪
 - [ ] 000129 — 🧩 Expose the same knowledge graph via drevo's MCP/server mode for external AI agents (dev tooling); off by default, does not change the embedded in-app path
 - [ ] 000130 — 🧩 Keep the graph in sync: regenerate from the registry/docs on release, stale-graph diff check in CI 🧪
 

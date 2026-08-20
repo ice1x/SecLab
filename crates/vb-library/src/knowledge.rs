@@ -14,7 +14,7 @@
 //! (`nodekind:…`, `category:…`, `port:…`, `param:…`); the plain name lives in the body for
 //! search.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use drevo::error::Result;
 use drevo::model::{Direction, Edge, NewNode, Node, Properties};
@@ -254,5 +254,144 @@ impl Library {
     pub fn link_explains(&self, from_id: u64, node_kind_id: u64) -> Result<Edge> {
         self.db()
             .create_edge(new_edge(from_id, node_kind_id, rel::EXPLAINS))
+    }
+
+    /// Retrieves the ontology slice relevant to `query` — up to `limit` node-kind cards —
+    /// instead of dumping the whole node-card corpus into the prompt (000128).
+    ///
+    /// FTS finds matching entities of any type; each contributes the node-kind(s) it
+    /// belongs to (a matched category yields its kinds, a matched concept/heuristic the
+    /// kinds it explains, a matched port/parameter its owning kind, a matched node-kind
+    /// itself). Each selected node-kind is rendered as a compact card (name, category,
+    /// ports, parameters) via graph traversal. Returns an empty string when nothing
+    /// matches.
+    ///
+    /// # Errors
+    /// Propagates any drevo error.
+    pub fn knowledge_slice(&self, query: &str, limit: usize) -> Result<String> {
+        let over = limit.saturating_mul(8).max(limit).min(500);
+        let hits = self.search(query, over)?;
+
+        // Map every hit to the node-kind(s) it implies.
+        let mut candidates: Vec<u64> = Vec::new();
+        for scored in &hits {
+            let node = &scored.node;
+            let k = node.kind.as_str();
+            if k == kind::NODE_KIND {
+                candidates.push(node.id);
+            } else if k == kind::CATEGORY {
+                self.push_neighbor_ids(
+                    node.id,
+                    Direction::Incoming,
+                    rel::IN_CATEGORY,
+                    &mut candidates,
+                )?;
+            } else if k == kind::CONCEPT || k == kind::HEURISTIC {
+                self.push_neighbor_ids(
+                    node.id,
+                    Direction::Outgoing,
+                    rel::EXPLAINS,
+                    &mut candidates,
+                )?;
+            } else if k == kind::PORT {
+                self.push_neighbor_ids(
+                    node.id,
+                    Direction::Incoming,
+                    rel::HAS_PORT,
+                    &mut candidates,
+                )?;
+            } else if k == kind::PARAMETER {
+                self.push_neighbor_ids(
+                    node.id,
+                    Direction::Incoming,
+                    rel::HAS_PARAMETER,
+                    &mut candidates,
+                )?;
+            }
+        }
+
+        // Dedup preserving relevance order, cap at limit.
+        let mut seen: HashSet<u64> = HashSet::new();
+        let selected: Vec<u64> = candidates
+            .into_iter()
+            .filter(|id| seen.insert(*id))
+            .take(limit)
+            .collect();
+
+        let mut out = String::new();
+        for id in selected {
+            out.push_str(&self.render_node_kind_card(id)?);
+        }
+        Ok(out)
+    }
+
+    /// Appends the ids of `node_id`'s neighbours in `direction` along `edge_kind`.
+    fn push_neighbor_ids(
+        &self,
+        node_id: u64,
+        direction: Direction,
+        edge_kind: &str,
+        out: &mut Vec<u64>,
+    ) -> Result<()> {
+        for neighbor in self.db().neighbors(node_id, direction, Some(edge_kind))? {
+            out.push(neighbor.id);
+        }
+        Ok(())
+    }
+
+    /// Renders one node-kind entity as a compact card via traversal.
+    fn render_node_kind_card(&self, node_kind_id: u64) -> Result<String> {
+        let Some(nk) = self.db().get_node(node_kind_id)? else {
+            return Ok(String::new());
+        };
+        let category = self
+            .category_of_entity(node_kind_id)?
+            .map(|c| c.body)
+            .unwrap_or_default();
+        let mut card = format!("{} ({category})\n", nk.body);
+
+        let ports = self.ports_of_entity(node_kind_id)?;
+        if !ports.is_empty() {
+            let rendered: Vec<String> = ports
+                .iter()
+                .map(|p| {
+                    let signal = p
+                        .properties
+                        .0
+                        .get("signal")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    format!("{}({signal})", p.body)
+                })
+                .collect();
+            card.push_str(&format!("  ports: {}\n", rendered.join(", ")));
+        }
+
+        let params =
+            self.db()
+                .neighbors(node_kind_id, Direction::Outgoing, Some(rel::HAS_PARAMETER))?;
+        if !params.is_empty() {
+            let rendered: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    let get = |key: &str| {
+                        p.properties
+                            .0
+                            .get(key)
+                            .and_then(serde_json::Value::as_f64)
+                            .unwrap_or(0.0)
+                    };
+                    format!(
+                        "{} {}..{}={}",
+                        p.body,
+                        get("min"),
+                        get("max"),
+                        get("default")
+                    )
+                })
+                .collect();
+            card.push_str(&format!("  params: {}\n", rendered.join(", ")));
+        }
+        Ok(card)
     }
 }
