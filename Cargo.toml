@@ -9,6 +9,7 @@ members = [
     "crates/vb-standalone",
     "crates/vb-plugin",
     "crates/vb-ai",
+    "crates/vb-library",
     "xtask",
 ]
 

@@ -58,3 +58,16 @@ jobs:
       - uses: actions/checkout@v4
       - name: line coverage summary
         run: cargo llvm-cov --workspace --summary-only
+
+  # Opt-in drevo-backed library (Epic 11). The `library` feature compiles the embedded
+  # drevo dependency and runs its CRUD smoke test. NON-blocking: it depends on the sibling
+  # `drevo` crate on the runner machine, so the required gate never hinges on an external
+  # crate's state. The default jobs above do not build drevo.
+  library:
+    name: library / drevo (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: drevo CRUD smoke test
+        run: cargo test -p vb-library --features library
