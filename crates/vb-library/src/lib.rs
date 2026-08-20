@@ -33,6 +33,10 @@ pub use import::{import_patch, patches_with_node_kind};
 #[cfg(feature = "library")]
 pub use library::{kind, rel, Library};
 
+/// A relevance-scored node from a full-text search (re-exported from drevo).
+#[cfg(feature = "library")]
+pub use drevo::model::ScoredNode;
+
 /// Opens a fresh in-memory library store (no file, no server) — the embedded direct API.
 ///
 /// Used by the smoke test and handy for transient/testing use; persistent stores open a

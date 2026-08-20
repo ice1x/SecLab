@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 use drevo::db::Drevo;
 use drevo::error::Result;
-use drevo::model::{Direction, Edge, NewEdge, NewNode, Node, Properties};
+use drevo::model::{Direction, Edge, NewEdge, NewNode, Node, Properties, ScoredNode};
 
 /// Node `kind` values the library stores.
 pub mod kind {
@@ -185,5 +185,33 @@ impl Library {
     pub fn items_with_tag(&self, tag_id: u64) -> Result<Vec<Node>> {
         self.db
             .neighbors(tag_id, Direction::Incoming, Some(rel::TAGGED))
+    }
+
+    /// Full-text search across every library node's name and description, ranked by
+    /// relevance (drevo's BM25 FTS), returning up to `limit` scored hits.
+    ///
+    /// Note: drevo's FTS is trigram-based, so queries shorter than three characters match
+    /// nothing.
+    ///
+    /// # Errors
+    /// Propagates any drevo error.
+    pub fn search(&self, query: &str, limit: usize) -> Result<Vec<ScoredNode>> {
+        self.db.search_fts(query, limit)
+    }
+
+    /// Like [`search`](Self::search) but returns only **patch** hits (dropping tag and
+    /// other node kinds), still ranked, up to `limit`. Internally it over-fetches so the
+    /// filter does not starve the result.
+    ///
+    /// # Errors
+    /// Propagates any drevo error.
+    pub fn search_patches(&self, query: &str, limit: usize) -> Result<Vec<ScoredNode>> {
+        // Over-fetch (bounded) before filtering to patches, so tag hits don't crowd out
+        // real patches within `limit`.
+        let over = limit.saturating_mul(4).max(limit).min(1_000);
+        let mut hits = self.db.search_fts(query, over)?;
+        hits.retain(|scored| scored.node.kind == kind::PATCH);
+        hits.truncate(limit);
+        Ok(hits)
     }
 }
