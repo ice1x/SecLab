@@ -1,0 +1,39 @@
+[package]
+name = "vb-library"
+description = "VST_bomb — patch/preset library and AI knowledge base, backed by embedded drevo."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+# drevo is the embedded graph store for the patch library (Epic 11). It is OPTIONAL and
+# gated behind the `library` feature, so the default workspace build — and CI's required
+# gate — never compiles it. We depend on the crate directly (the direct Rust API, not the
+# Bolt server) with default features OFF, pulling only the embedded `redb-backend`; this
+# drops drevo's heavy `http` (axum/tokio) and `cbindgen` defaults.
+#
+# Path dependency on the sibling drevo checkout. The path is ABSOLUTE on purpose: Cargo
+# resolves every path dependency's manifest even when it is optional and its feature is
+# off, and the self-hosted CI runner checks this repo out into its own `_work` tree (not
+# alongside `/…/repo/drevo`), so a relative `../../../drevo` would fail to resolve there
+# and break the default gate. An absolute path resolves identically for the local clone
+# and the runner (same machine). This is a deliberate, documented single-machine coupling
+# for the Epic 11 assessment; a git dependency can replace it once the integration
+# stabilises. drevo is still only COMPILED under `--features library`.
+drevo = { path = "/Users/cold00n/repo/drevo", default-features = false, features = [
+    "redb-backend",
+], optional = true }
+
+[features]
+# Off by default: enables the drevo-backed library. Turn on with `--features library`.
+default = []
+library = ["dep:drevo"]
+
+[dev-dependencies]
+# Only for the CRUD smoke test's JSON property assertions (behind the `library` feature).
+serde_json = "1"
+
+[lints]
+workspace = true

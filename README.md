@@ -360,7 +360,7 @@ the definition of done.
 > (ref: drevo [#202](https://github.com/ice1x/drevo/issues/202),
 > [#251](https://github.com/ice1x/drevo/issues/251), [#48](https://github.com/ice1x/drevo/issues/48)).
 
-- [ ] 000093 — Integration assessment: add `drevo` as a dependency behind the `library` feature flag, CRUD smoke test 🧪
+- [x] 000093 — Integration assessment: add `drevo` as a dependency behind the `library` feature flag, CRUD smoke test — new `vb-library` crate; drevo embedded via its direct Rust API (`redb-backend`, no Bolt), opt-in `--features library`; CRUD + JSON-properties smoke test green 🧪
 - [ ] 000094 — Storage schema: `Patch` / `MacroNode` / `Preset` nodes, `uses` / `derived-from` / `tagged` edges 🧪
 - [ ] 000095 — Import a patch (RON) → write metadata and links into drevo (RON stays the source of truth) 🧪
 - [ ] 000096 — Full-text search over the library (name, tags, description) via drevo's FTS/BM25 🧪

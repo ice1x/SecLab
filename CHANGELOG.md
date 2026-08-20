@@ -50,6 +50,10 @@ the AI assistant from the ground up. Highlights by area:
   with a BYOK keystore and a privacy gate (offline switch, consent, a "what will be sent?"
   payload inspector); a token/cost budget guard; propose → validate → repair convergence;
   and generate / edit / explain / suggest / repair / critique skills.
+- **Patch library (`vb-library`, optional)** — behind the opt-in `library` feature, an
+  integration with the embedded [drevo](https://github.com/) graph store via its direct
+  Rust API (`redb-backend`, no Bolt server), assessed with a CRUD smoke test. Off by
+  default, so the standard build never compiles it.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), and tested starter
