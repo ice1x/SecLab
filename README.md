@@ -367,7 +367,7 @@ the definition of done.
 - [ ] 000097 — UI: library browser in the editor (list/search/filter by tags, insert a macro-node onto the canvas)
 - [x] 000098 — Store preset banks and "preset → patch" links in drevo — `add_preset_for` (values + `derived-from` link), `create_bank`/`add_to_bank` (`contains`), and `presets_for_patch`/`patch_of_preset`/`presets_in_bank` queries 🧪
 - [ ] 000099 — 🧩 Verify the `library` layer builds to WASM (shared path with Epic 9)
-- [ ] 000100 — Library export/backup and drevo schema migrations 🧪
+- [x] 000100 — Library export/backup and drevo schema migrations — `Library::export_json`/`import_json` (idempotent JSON snapshots) + `migrate` (up/down) pass-through 🧪
 
 ### Epic 12 — AI assistant (planned from the start)
 
