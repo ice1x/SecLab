@@ -25,15 +25,23 @@ authors.workspace = true
 drevo = { path = "/Users/cold00n/repo/drevo", default-features = false, features = [
     "redb-backend",
 ], optional = true }
+# Reading patches to import (000095). vb-project is a light workspace crate; still gated
+# behind `library` so the default build stays untouched.
+vb-project = { workspace = true, optional = true }
+# Building drevo `Properties` (JSON) values when importing patch metadata.
+serde_json = { version = "1", optional = true }
 
 [features]
 # Off by default: enables the drevo-backed library. Turn on with `--features library`.
 default = []
-library = ["dep:drevo"]
+library = ["dep:drevo", "dep:vb-project", "dep:serde_json"]
 
 [dev-dependencies]
 # Only for the CRUD smoke test's JSON property assertions (behind the `library` feature).
 serde_json = "1"
+# For building a ProjectDoc to import in the import tests (behind `library`).
+vb-project.workspace = true
+vb-core.workspace = true
 
 [lints]
 workspace = true

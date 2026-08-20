@@ -362,7 +362,7 @@ the definition of done.
 
 - [x] 000093 — Integration assessment: add `drevo` as a dependency behind the `library` feature flag, CRUD smoke test — new `vb-library` crate; drevo embedded via its direct Rust API (`redb-backend`, no Bolt), opt-in `--features library`; CRUD + JSON-properties smoke test green 🧪
 - [x] 000094 — Storage schema: `Patch` / `MacroNode` / `Preset` nodes, `uses` / `derived-from` / `tagged` edges — typed `Library` layer over drevo (`vb-library/src/library.rs`) with `kind`/`rel` vocabularies and kind-scoped traversals 🧪
-- [ ] 000095 — Import a patch (RON) → write metadata and links into drevo (RON stays the source of truth) 🧪
+- [x] 000095 — Import a patch (RON) → write metadata and links into drevo (RON stays the source of truth) — `import_patch(ProjectDoc)` stores summary metadata (node/edge counts, kinds, format version) + `tagged` links to `kind:*` facets; `patches_with_node_kind` queries them 🧪
 - [ ] 000096 — Full-text search over the library (name, tags, description) via drevo's FTS/BM25 🧪
 - [ ] 000097 — UI: library browser in the editor (list/search/filter by tags, insert a macro-node onto the canvas)
 - [ ] 000098 — Store preset banks and "preset → patch" links in drevo 🧪
