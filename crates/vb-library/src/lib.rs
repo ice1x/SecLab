@@ -22,6 +22,9 @@
 pub use drevo;
 
 #[cfg(feature = "library")]
+pub mod backup;
+
+#[cfg(feature = "library")]
 pub mod import;
 
 #[cfg(feature = "library")]
@@ -39,6 +42,10 @@ pub use library::{kind, rel, Library};
 /// A relevance-scored node from a full-text search (re-exported from drevo).
 #[cfg(feature = "library")]
 pub use drevo::model::ScoredNode;
+
+/// Backup/migration types (re-exported from drevo).
+#[cfg(feature = "library")]
+pub use drevo::{db::MigrationDirection, dump::ImportReport};
 
 /// Opens a fresh in-memory library store (no file, no server) — the embedded direct API.
 ///
