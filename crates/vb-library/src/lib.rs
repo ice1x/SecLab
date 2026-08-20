@@ -21,6 +21,12 @@
 #[cfg(feature = "library")]
 pub use drevo;
 
+#[cfg(feature = "library")]
+pub mod library;
+
+#[cfg(feature = "library")]
+pub use library::{kind, rel, Library};
+
 /// Opens a fresh in-memory library store (no file, no server) — the embedded direct API.
 ///
 /// Used by the smoke test and handy for transient/testing use; persistent stores open a
