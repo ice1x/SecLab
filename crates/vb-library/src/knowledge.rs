@@ -188,6 +188,26 @@ impl Library {
         self.db().get_node_by_title(&nodekind_title(kind_name))
     }
 
+    /// The registry kinds NOT present as `node-kind` entities in this store — the
+    /// stale-graph diff (000130). Empty means the ontology is in sync with `registry`.
+    ///
+    /// The knowledge graph is a *derived* artifact: it is regenerated from the registry
+    /// (there is no committed graph to drift). This check guards the derivation — a CI test
+    /// asserts it is empty after a build, so a builder that drops a kind, or a registry
+    /// that gains one without a rebuild, is caught.
+    ///
+    /// # Errors
+    /// Propagates any drevo error.
+    pub fn missing_ontology_kinds(&self, registry: &Registry) -> Result<Vec<String>> {
+        let mut missing = Vec::new();
+        for k in registry.kinds() {
+            if self.node_kind_entity(k)?.is_none() {
+                missing.push(k.to_owned());
+            }
+        }
+        Ok(missing)
+    }
+
     /// The ports of a node-kind entity (`node-kind --has_port--> port`).
     ///
     /// # Errors
