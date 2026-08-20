@@ -28,6 +28,9 @@ pub mod import;
 pub mod library;
 
 #[cfg(feature = "library")]
+pub mod preset;
+
+#[cfg(feature = "library")]
 pub use import::{import_patch, patches_with_node_kind};
 
 #[cfg(feature = "library")]
