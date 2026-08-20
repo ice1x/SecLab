@@ -24,6 +24,8 @@ pub mod kind {
     pub const MACRO_NODE: &str = "macro-node";
     /// A preset (a set of parameter values) for a patch.
     pub const PRESET: &str = "preset";
+    /// A named collection of presets.
+    pub const PRESET_BANK: &str = "preset-bank";
     /// A free-form tag used to organise the library.
     pub const TAG: &str = "tag";
 }
@@ -37,10 +39,12 @@ pub mod rel {
     pub const DERIVED_FROM: &str = "derived-from";
     /// `item --tagged--> tag`: the item carries that tag.
     pub const TAGGED: &str = "tagged";
+    /// `preset-bank --contains--> preset`: the bank groups that preset.
+    pub const CONTAINS: &str = "contains";
 }
 
 /// Builds a library node with the given kind/title (empty body and no properties).
-fn new_node(node_kind: &str, title: &str) -> NewNode {
+pub(crate) fn new_node(node_kind: &str, title: &str) -> NewNode {
     NewNode {
         kind: node_kind.to_owned(),
         title: title.to_owned(),
@@ -51,7 +55,7 @@ fn new_node(node_kind: &str, title: &str) -> NewNode {
 }
 
 /// Builds a library edge of the given kind at unit weight (no properties).
-fn new_edge(from_id: u64, to_id: u64, edge_kind: &str) -> NewEdge {
+pub(crate) fn new_edge(from_id: u64, to_id: u64, edge_kind: &str) -> NewEdge {
     NewEdge {
         from_id,
         to_id,
