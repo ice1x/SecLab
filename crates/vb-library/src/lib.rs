@@ -28,6 +28,9 @@ pub mod backup;
 pub mod import;
 
 #[cfg(feature = "library")]
+pub mod knowledge;
+
+#[cfg(feature = "library")]
 pub mod library;
 
 #[cfg(feature = "library")]
@@ -38,6 +41,9 @@ pub mod rag;
 
 #[cfg(feature = "library")]
 pub use import::{import_patch, patches_with_node_kind};
+
+#[cfg(feature = "library")]
+pub use knowledge::OntologyReport;
 
 #[cfg(feature = "library")]
 pub use library::{kind, rel, Library};
