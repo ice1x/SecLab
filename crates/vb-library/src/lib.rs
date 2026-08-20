@@ -34,6 +34,9 @@ pub mod library;
 pub mod preset;
 
 #[cfg(feature = "library")]
+pub mod rag;
+
+#[cfg(feature = "library")]
 pub use import::{import_patch, patches_with_node_kind};
 
 #[cfg(feature = "library")]
