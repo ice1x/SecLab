@@ -420,3 +420,30 @@ fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::WrappedFormat;
+
+    /// The real-host testing checklist must name every bundle the build produces, so the
+    /// install table there cannot silently drift from what `bundle-*` actually emits.
+    #[test]
+    fn host_testing_checklist_names_every_produced_bundle() {
+        let doc = include_str!("../../docs/host-testing.md");
+        // The CLAP is produced by the plain bundler; the other three by the wrapper.
+        let mut artifacts = vec!["vb-plugin.clap"];
+        for format in [
+            WrappedFormat::Vst3,
+            WrappedFormat::Auv2,
+            WrappedFormat::Standalone,
+        ] {
+            artifacts.push(format.artifact());
+        }
+        for artifact in artifacts {
+            assert!(
+                doc.contains(artifact),
+                "docs/host-testing.md must mention the produced bundle `{artifact}`"
+            );
+        }
+    }
+}
