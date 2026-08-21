@@ -96,6 +96,11 @@ jobs:
       - name: add the wasm32 target
         run: rustup target add wasm32-unknown-unknown
       - name: build the core crates for wasm32
-        run: cargo build -p vb-core -p vb-nodes -p vb-project --target wasm32-unknown-unknown
+        run: cargo build -p vb-core -p vb-nodes -p vb-project -p vb-runtime --target wasm32-unknown-unknown
       - name: build the editor for wasm32 (browser entry point)
         run: cargo build -p vb-editor --target wasm32-unknown-unknown
+      # The default vb-library must stay wasm-portable: the drevo/redb knowledge graph is a
+      # native-only capability behind the off-by-default `library` feature (000099). Building
+      # the default here guards the boundary defined in docs/architecture-boundary.md.
+      - name: build the default library façade for wasm32
+        run: cargo build -p vb-library --target wasm32-unknown-unknown

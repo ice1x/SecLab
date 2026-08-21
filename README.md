@@ -331,7 +331,7 @@ the definition of done.
 - [x] 000081 — Build `vb-editor` to **WASM** (egui/eframe web target) — proof of concept
 - [x] 000082 — Edit the graph in the browser (no audio) with serialization
 - [ ] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM)
-- [ ] 000084 — Define the web/native runtime boundary and a shared project format
+- [x] 000084 — Define the web/native runtime boundary and a shared project format
 
 ### Epic 10 — Documentation, examples, release
 
@@ -366,7 +366,7 @@ the definition of done.
 - [x] 000096 — Full-text search over the library (name, tags, description) via drevo's FTS/BM25 — `Library::search` / `search_patches` (BM25, trigram); patch descriptions stored in the FTS-indexed body 🧪
 - [ ] 000097 — UI: library browser in the editor (list/search/filter by tags, insert a macro-node onto the canvas)
 - [x] 000098 — Store preset banks and "preset → patch" links in drevo — `add_preset_for` (values + `derived-from` link), `create_bank`/`add_to_bank` (`contains`), and `presets_for_patch`/`patch_of_preset`/`presets_in_bank` queries 🧪
-- [ ] 000099 — 🧩 Verify the `library` layer builds to WASM (shared path with Epic 9)
+- [x] 000099 — 🧩 Verify the `library` layer builds to WASM (shared path with Epic 9)
 - [x] 000100 — Library export/backup and drevo schema migrations — `Library::export_json`/`import_json` (idempotent JSON snapshots) + `migrate` (up/down) pass-through 🧪
 
 ### Epic 12 — AI assistant (planned from the start)
