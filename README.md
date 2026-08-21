@@ -308,7 +308,7 @@ the definition of done.
 - [x] 000064 — `nih-plug` plugin scaffold, **CLAP** export, load the serialized graph 🧪
 - [x] 000065 — Route plugin parameters (host automation) into graph parameters 🧪
 - [x] 000066 — Handle MIDI/notes from the host in the plugin runtime 🧪
-- [ ] 000067 — Embed the GUI (egui editor or a simplified run-view) into the plugin window
+- [x] 000067 — Embed the GUI (egui editor or a simplified run-view) into the plugin window — egui run-view behind the `gui` feature (`nih_plug_egui`): shows the loaded patch (nodes by kind, edges) and live parameter values; wrapped bundles build with it, `validate()`/CI clap-validator stay editor-free 🧪
 - [x] 000068 — Save/restore plugin state in the host (preset state) 🧪
 - [x] 000069 — Integrate `clap-wrapper`: build **VST3** from CLAP 🧪
 - [x] 000070 — Integrate `clap-wrapper`: build **AUv2** (macOS) from CLAP 🧪
