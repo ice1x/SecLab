@@ -50,6 +50,12 @@ the AI assistant from the ground up. Highlights by area:
   with a BYOK keystore and a privacy gate (offline switch, consent, a "what will be sent?"
   payload inspector); a token/cost budget guard; propose → validate → repair convergence;
   and generate / edit / explain / suggest / repair / critique skills.
+- **Anthropic provider adapter (`vb-ai`)** — the reference `AiProvider` speaking the
+  Anthropic Messages API. The request/response codec is a pure, always-compiled,
+  unit-tested pair over an injectable `HttpTransport` seam; the real blocking HTTP
+  transport (`ReqwestTransport`, rustls) lives behind the optional `net` feature, so the
+  default build (and CI) links no HTTP stack and can send nothing without an explicit
+  opt-in and a BYOK key.
 - **Patch library (`vb-library`, optional)** — behind the opt-in `library` feature, an
   integration with the embedded [drevo](https://github.com/) graph store via its direct
   Rust API (`redb-backend`, no Bolt server), assessed with a CRUD smoke test. Off by

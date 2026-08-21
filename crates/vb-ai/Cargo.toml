@@ -12,13 +12,27 @@ vb-core.workspace = true
 vb-nodes.workspace = true
 vb-project.workspace = true
 serde.workspace = true
+# The provider adapters (000113 Anthropic, 000114 OpenAI-compatible) build/parse JSON with
+# serde_json. The codec is always compiled and unit-tested — no network — so this is a
+# regular (non-optional) dependency.
+serde_json = "1"
 # Real OS-keychain backend for BYOK keys, behind the `keychain` feature so the default
 # build (and CI) needs no platform secret-store dependency.
 keyring = { version = "3", optional = true, features = ["apple-native"] }
+# The real blocking HTTP transport (ReqwestTransport), behind the `net` feature so the
+# default build (and CI) links no HTTP stack and cannot open a socket. rustls avoids a
+# system OpenSSL dependency.
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+], optional = true }
 
 [features]
 # Enables KeychainStore, backing BYOK keys with the OS keychain (macOS: Security.framework).
 keychain = ["dep:keyring"]
+# Enables ReqwestTransport — real network IO for the provider adapters. OFF by default:
+# the codec and the mock-transport tests need no network, and CI never sends a request.
+net = ["dep:reqwest"]
 
 [dev-dependencies]
 ron.workspace = true
