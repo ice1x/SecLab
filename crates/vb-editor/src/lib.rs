@@ -13,9 +13,13 @@ pub mod palette;
 pub mod patch;
 pub mod preset;
 pub mod theme;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
 pub mod widgets;
 
-pub use app::{run, EditorApp};
+#[cfg(not(target_arch = "wasm32"))]
+pub use app::run;
+pub use app::EditorApp;
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use module::{list_modules, MacroModule, ModuleError};

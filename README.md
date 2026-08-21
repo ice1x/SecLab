@@ -328,7 +328,7 @@ the definition of done.
 
 ### Epic 9 — WebUI (future)
 
-- [ ] 000081 — Build `vb-editor` to **WASM** (egui/eframe web target) — proof of concept
+- [x] 000081 — Build `vb-editor` to **WASM** (egui/eframe web target) — proof of concept
 - [ ] 000082 — Edit the graph in the browser (no audio) with serialization
 - [ ] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM)
 - [ ] 000084 — Define the web/native runtime boundary and a shared project format
