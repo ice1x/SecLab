@@ -11,6 +11,7 @@
 //! `libvb_plugin` cdylib renamed to `vb_bomb.clap` is a loadable CLAP bundle (the
 //! one-command bundler is task 000072).
 
+pub mod editor;
 pub mod engine_builder;
 
 use std::collections::{BTreeMap, HashMap};
@@ -48,6 +49,9 @@ pub struct VstBomb {
     tx: Option<vb_runtime::EngineSender>,
     /// Values the running engine was built with; compared in place, no allocation.
     built_values: Vec<f32>,
+    /// Persisted egui window state for the embedded editor (000067).
+    #[cfg(feature = "gui")]
+    editor_state: Arc<nih_plug_egui::EguiState>,
 }
 
 /// One host-automatable parameter bound to a node's registry parameter.
@@ -141,6 +145,16 @@ impl VstBombParams {
     #[must_use]
     pub fn len(&self) -> usize {
         self.bound.len()
+    }
+
+    /// `(display name, current value)` for every automatable parameter, in host order —
+    /// the read-only rows the plugin editor's run-view shows.
+    #[must_use]
+    pub fn overview(&self) -> Vec<(String, f32)> {
+        self.bound
+            .iter()
+            .map(|b| (b.param.name().to_owned(), b.param.value()))
+            .collect()
     }
 
     /// Whether the patch has no automatable parameters.
@@ -255,6 +269,8 @@ impl Default for VstBomb {
             rx,
             tx: Some(tx),
             built_values,
+            #[cfg(feature = "gui")]
+            editor_state: nih_plug_egui::EguiState::from_size(560, 380),
         }
     }
 }
@@ -281,6 +297,24 @@ impl Plugin for VstBomb {
 
     fn params(&self) -> Arc<dyn Params> {
         self.params.clone()
+    }
+
+    /// The embedded run-view editor (000067). Present only under the `gui` feature; the
+    /// default build returns `None`, so a headless validator never opens a window.
+    fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
+        let _ = async_executor;
+        #[cfg(feature = "gui")]
+        {
+            editor::create(
+                self.editor_state.clone(),
+                self.doc.clone(),
+                self.params.clone(),
+            )
+        }
+        #[cfg(not(feature = "gui"))]
+        {
+            None
+        }
     }
 
     fn task_executor(&mut self) -> TaskExecutor<Self> {

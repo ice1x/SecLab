@@ -16,6 +16,16 @@ vb-nodes.workspace = true
 vb-runtime.workspace = true
 vb-project.workspace = true
 nih_plug.workspace = true
+# egui editor embedded in the plugin window (000067). OPTIONAL, behind the `gui` feature:
+# the default build (and the required clap-validator CI gate) ships no editor, so a
+# headless validator never has to open a window. Same git source as nih_plug so the two
+# resolve to one nih-plug revision.
+nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", optional = true }
+
+[features]
+# Embed the egui run-view in the plugin window. Build bundles with `--features gui` to
+# get an in-host editor.
+gui = ["dep:nih_plug_egui"]
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

@@ -71,3 +71,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: drevo CRUD smoke test
         run: cargo test -p vb-library --features library
+
+  # Compile-check of the embedded plugin editor (000067, `gui` feature — egui/baseview).
+  # NON-blocking: the required clap-validator gate builds the plugin WITHOUT the editor, so
+  # a headless runner never opens a window; this only proves the GUI code still compiles.
+  gui:
+    name: plugin editor / gui (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: build the plugin with the editor
+        run: cargo build -p vb-plugin --features gui

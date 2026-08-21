@@ -157,9 +157,12 @@ impl WrappedFormat {
 
 /// Builds the release CLAP, then wraps it into the requested format via clap-wrapper.
 fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error>> {
+    // The wrapped bundles (VST3/AU/standalone) ship with the embedded editor (000067) —
+    // `--features gui`. Plain `validate()` deliberately does NOT, so the CI clap-validator
+    // never opens a window on a headless runner.
     nih_plug_xtask::main_with_args(
         "cargo xtask",
-        ["bundle", "vb-plugin", "--release"]
+        ["bundle", "vb-plugin", "--release", "--features", "gui"]
             .into_iter()
             .map(String::from),
     )?;
