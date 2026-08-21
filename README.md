@@ -392,7 +392,7 @@ the definition of done.
 - [ ] 000108 — UI: assistant chat panel in the editor (request → proposal → apply/reject)
 - [x] 000109 — RAG over the drevo library: example patches/presets as context (ties into Epic 11) — `Library::retrieve_patches` / `retrieve_context` (FTS-ranked patches rendered as a compact prompt block) 🧪
 - [x] 000110 — Privacy/security: API key handling, explicit consent before sending the project, offline mode 🧪
-- [ ] 000111 — 🧩 Offline/local models (optional) via the same `AiProvider` abstraction
+- [x] 000111 — 🧩 Offline/local models (optional) via the same `AiProvider` abstraction
 
 #### MVP: "dialogue → your VST/AU" pipeline (see [MVP feature](#-mvp-feature-ai-assistant-that-builds-your-synthplugin-with-you))
 

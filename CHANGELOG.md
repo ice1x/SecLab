@@ -61,6 +61,11 @@ the AI assistant from the ground up. Highlights by area:
   with a configurable endpoint. Same offline-tested codec + injectable-transport structure
   as the Anthropic adapter; the system prompt maps to the leading `system` message and the
   reply text to `choices[0].message.content`. Shares the `net`-gated HTTP transport.
+- **Offline / local models (`vb-ai`)** — a `LocalProvider` reaching a local LLM server
+  (Ollama, LM Studio, llama.cpp) through the same `AiProvider` trait and OpenAI-compatible
+  codec, pointed at a `localhost` endpoint and keyless by default (an optional bearer for a
+  secured local gateway). The request never leaves the machine — no BYOK key, no cloud
+  round-trip — so it is the privacy-preserving assistant path.
 - **Patch library (`vb-library`, optional)** — behind the opt-in `library` feature, an
   integration with the embedded [drevo](https://github.com/) graph store via its direct
   Rust API (`redb-backend`, no Bolt server), assessed with a CRUD smoke test. Off by
