@@ -10,6 +10,7 @@
 //! here, versioned and tested, means the contract shown to the model never drifts from
 //! what the app can actually parse and validate.
 
+pub mod anthropic;
 pub mod budget;
 pub mod compress;
 pub mod converge;
@@ -18,6 +19,7 @@ pub mod design;
 pub mod diff;
 pub mod explain;
 pub mod generate;
+pub mod http;
 pub mod inspect;
 pub mod keystore;
 pub mod privacy;
@@ -26,6 +28,7 @@ pub mod provider;
 pub mod repair;
 pub mod suggest;
 
+pub use anthropic::{build_request_body, parse_response, AnthropicProvider};
 pub use budget::{
     estimate_cost_usd, estimate_tokens, estimate_usage, BudgetCheck, BudgetGuard, Usage,
 };
@@ -36,6 +39,9 @@ pub use design::{DesignError, DesignSession, DesignStep};
 pub use diff::{PatchDiff, Retype};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
+#[cfg(feature = "net")]
+pub use http::ReqwestTransport;
+pub use http::{Header, HttpReply, HttpTransport};
 pub use inspect::{inspect_request, RequestInspection, Segment, SessionInspector};
 pub use keystore::{KeyStore, KeyStoreError, MemoryKeyStore};
 pub use privacy::{preview_request, GuardedProvider, PrivacySettings};
