@@ -304,7 +304,7 @@ impl LiveApp {
         // Oscilloscope: the trace centred vertically, amplitude ±1 fills the height.
         let mid_y = scope_rect.center().y;
         let half_h = scope_rect.height() * 0.45;
-        let stroke = Stroke::new(1.0, Color32::from_rgb(0x2d, 0xb8, 0xa8));
+        let stroke = Stroke::new(1.0_f32, Color32::from_rgb(0x2d, 0xb8, 0xa8));
         let step = (samples.len() as f32 / scope_rect.width().max(1.0)).max(1.0);
         let mut prev: Option<Pos2> = None;
         let mut x = 0.0;
@@ -365,16 +365,16 @@ impl LiveApp {
 }
 
 impl eframe::App for LiveApp {
-    fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Visualization panel above the status strip (both take from the bottom).
         if self.show_scope {
             self.stack.scope.snapshot(&mut self.scope_buf);
-            egui::Panel::bottom("scope")
+            egui::TopBottomPanel::bottom("scope")
                 .resizable(false)
-                .show(ui, |ui| self.scope_ui(ui));
+                .show(ctx, |ui| self.scope_ui(ui));
         }
         // Status strip so the editor gets the remaining space.
-        egui::Panel::bottom("status").show(ui, |ui| {
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let load = self.stack.monitor.load();
                 let xruns = self.stack.monitor.xruns();
@@ -404,11 +404,12 @@ impl eframe::App for LiveApp {
             });
         });
         // Keep the meter moving even when the user is idle.
-        ui.ctx()
-            .request_repaint_after(std::time::Duration::from_millis(150));
+        ctx.request_repaint_after(std::time::Duration::from_millis(150));
 
-        eframe::App::ui(&mut self.editor, ui, frame);
-        self.audio_settings_ui(&ui.ctx().clone());
+        // The embedded editor draws its own top/side/central panels into the space the
+        // bottom panels leave — one shared editor, native and (soon) in the plugin window.
+        eframe::App::update(&mut self.editor, ctx, frame);
+        self.audio_settings_ui(ctx);
 
         // An audible edit happened: recompile and swap. A patch that no longer
         // compiles (e.g. mid-edit) keeps the previous engine running.

@@ -165,7 +165,7 @@ impl Theme {
         v.panel_fill = self.node_fill;
         v.override_text_color = Some(self.text);
         v.selection.bg_fill = self.accent.gamma_multiply(0.55);
-        v.selection.stroke = egui::Stroke::new(1.0, self.accent);
+        v.selection.stroke = egui::Stroke::new(1.0_f32, self.accent);
         v.hyperlink_color = self.accent;
         v
     }

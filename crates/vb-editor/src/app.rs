@@ -187,17 +187,20 @@ fn knob_widget(
     let track: Vec<Pos2> = (0..=32).map(|k| at(k as f32 / 32.0)).collect();
     painter.add(egui::Shape::line(
         track,
-        Stroke::new(3.0, theme.node_outline),
+        Stroke::new(3.0_f32, theme.node_outline),
     ));
     if norm > 0.0 {
         let upto = (32.0 * norm).ceil() as usize;
         let value_arc: Vec<Pos2> = (0..=upto)
             .map(|k| at((k as f32 / 32.0).min(norm)))
             .collect();
-        painter.add(egui::Shape::line(value_arc, Stroke::new(3.0, theme.accent)));
+        painter.add(egui::Shape::line(
+            value_arc,
+            Stroke::new(3.0_f32, theme.accent),
+        ));
     }
     let tip = at(norm);
-    painter.line_segment([center, tip], Stroke::new(2.0, theme.text));
+    painter.line_segment([center, tip], Stroke::new(2.0_f32, theme.text));
     painter.circle_filled(tip, 3.0, theme.text);
     (response, changed)
 }
@@ -253,13 +256,13 @@ fn xy_pad_widget(
     painter.rect_stroke(
         rect,
         4.0,
-        Stroke::new(1.0, theme.node_outline),
+        Stroke::new(1.0_f32, theme.node_outline),
         egui::StrokeKind::Inside,
     );
     // Cross-hairs through the current handle position.
     let (hx, hy) = xy_norm_to_pad(x_param.normalize(x_value), y_param.normalize(y_value));
     let handle = rect.min + Vec2::new(hx * SIDE, hy * SIDE);
-    let faint = Stroke::new(1.0, theme.grid_line_strong);
+    let faint = Stroke::new(1.0_f32, theme.grid_line_strong);
     painter.line_segment(
         [
             Pos2::new(rect.min.x, handle.y),
@@ -275,7 +278,7 @@ fn xy_pad_widget(
         faint,
     );
     painter.circle_filled(handle, 6.0, theme.accent);
-    painter.circle_stroke(handle, 6.0, Stroke::new(1.0, theme.canvas_bg));
+    painter.circle_stroke(handle, 6.0, Stroke::new(1.0_f32, theme.canvas_bg));
     out
 }
 
@@ -360,7 +363,7 @@ impl EditorApp {
 
         // Keyboard: delete/duplicate the selection — unless a text field (e.g. the
         // palette search box) owns the keyboard.
-        if !ui.ctx().egui_wants_keyboard_input() {
+        if !ui.ctx().wants_keyboard_input() {
             let (delete, duplicate, undo, redo) = ui.input(|i| {
                 (
                     i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace),
@@ -411,7 +414,7 @@ impl EditorApp {
                 }
             }
         }
-        if !ui.ctx().egui_wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        if !ui.ctx().wants_keyboard_input() && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.leave_macro();
         }
 
@@ -493,8 +496,8 @@ impl EditorApp {
         painter.rect_filled(viewport, 0.0, self.theme.canvas_bg);
 
         let step = grid_step(self.camera.zoom());
-        let minor = Stroke::new(1.0, self.theme.grid_line);
-        let major = Stroke::new(1.0, self.theme.grid_line_strong);
+        let minor = Stroke::new(1.0_f32, self.theme.grid_line);
+        let major = Stroke::new(1.0_f32, self.theme.grid_line_strong);
         let origin = viewport.min.to_vec2();
 
         // Canvas-space bounds of the visible viewport.
@@ -563,14 +566,17 @@ impl EditorApp {
                 painter.rect_stroke(
                     frame.expand(2.5 * zoom),
                     rounding,
-                    Stroke::new(2.0, self.theme.node_outline_selected.gamma_multiply(0.4)),
+                    Stroke::new(
+                        2.0_f32,
+                        self.theme.node_outline_selected.gamma_multiply(0.4),
+                    ),
                     egui::StrokeKind::Outside,
                 );
             }
             let outline = if selected {
-                Stroke::new(2.0, self.theme.node_outline_selected)
+                Stroke::new(2.0_f32, self.theme.node_outline_selected)
             } else {
-                Stroke::new(1.0, self.theme.node_outline)
+                Stroke::new(1.0_f32, self.theme.node_outline)
             };
             painter.rect_stroke(frame, rounding, outline, egui::StrokeKind::Outside);
 
@@ -615,11 +621,11 @@ impl EditorApp {
                     painter.circle_stroke(
                         at,
                         port_r + (3.0 * zoom).clamp(2.0, 6.0),
-                        Stroke::new(2.0, Color32::from_rgb(0x4c, 0xd9, 0x64)),
+                        Stroke::new(2.0_f32, Color32::from_rgb(0x4c, 0xd9, 0x64)),
                     );
                 }
                 painter.circle_filled(at, port_r, fill);
-                painter.circle_stroke(at, port_r, Stroke::new(1.0, self.theme.canvas_bg));
+                painter.circle_stroke(at, port_r, Stroke::new(1.0_f32, self.theme.canvas_bg));
                 // Port names clutter at far zoom-out; show them once readable.
                 if zoom >= 0.6 {
                     let inset = Vec2::new(
@@ -1034,14 +1040,14 @@ impl EditorApp {
 }
 
 impl eframe::App for EditorApp {
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
         if self.visuals_dirty {
-            ui.ctx().set_visuals(self.theme.egui_visuals());
+            ctx.set_visuals(self.theme.egui_visuals());
             self.visuals_dirty = false;
         }
-        egui::Panel::top("toolbar").show(ui, |ui| {
+        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.label("VST_bomb");
                 ui.separator();
@@ -1101,15 +1107,15 @@ impl eframe::App for EditorApp {
                 }
             });
         });
-        egui::Panel::left("palette")
+        egui::SidePanel::left("palette")
             .resizable(true)
-            .show(ui, |ui| self.palette_ui(ui));
-        egui::Panel::right("inspector")
+            .show(ctx, |ui| self.palette_ui(ui));
+        egui::SidePanel::right("inspector")
             .resizable(true)
-            .show(ui, |ui| self.inspector_ui(ui));
+            .show(ctx, |ui| self.inspector_ui(ui));
         egui::CentralPanel::default()
             .frame(egui::Frame::NONE)
-            .show(ui, |ui| self.canvas_ui(ui));
+            .show(ctx, |ui| self.canvas_ui(ui));
     }
 }
 
