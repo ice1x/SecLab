@@ -60,9 +60,17 @@ python3 -m http.server --directory web 8080
 # open http://localhost:8080
 ```
 
+## Editing and serialization in the browser
+
+Graph editing works in the web build, and so does save/load: the palette panel has a
+**project (RON)** section whose Export/Import buttons round-trip the whole patch through the
+`.vbp` format (`EditorApp::export_project_ron` / `import_project_ron`). It uses only
+`vb-project` and an in-memory text buffer — no browser file API — so copy the RON out to
+save, or paste a `.vbp` in and load it. This is [000082](../README.md).
+
 ## Not covered here
 
 - **Audio** — the browser build has no `cpal` stream; running the engine under
   WebAudio/AudioWorklet is [000083](../README.md).
-- **Persistence** — loading/saving `.vbp` in the browser (file picker / local storage) is
-  [000082](../README.md).
+- **Native file dialogs / local storage** — the in-app RON buffer is the portable path;
+  richer browser persistence (a file picker, `localStorage`) can build on it later.

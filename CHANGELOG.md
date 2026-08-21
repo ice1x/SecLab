@@ -80,8 +80,13 @@ the AI assistant from the ground up. Highlights by area:
   cfg-split entry point (`vb_editor::web::start`), leaving the native winit launcher
   untouched; the platform-agnostic core (`vb-core` / `vb-nodes` / `vb-project`) is portable
   too, so `.vbp` files load on both. A non-blocking CI `wasm build` job compiles them on
-  every push. Build/serve steps in [`docs/wasm.md`](docs/wasm.md). (Browser audio and
-  persistence are separate, later tasks.)
+  every push. Build/serve steps in [`docs/wasm.md`](docs/wasm.md). (Browser audio is a
+  separate, later task.)
+- **In-app project serialization (`vb-editor`)** — `EditorApp::export_project_ron` /
+  `import_project_ron` round-trip the whole patch through the `.vbp` RON format using only
+  `vb-project` and in-memory strings (no filesystem), wired to an egui text-buffer panel.
+  Because it avoids browser file APIs, graph editing **and** save/load work in the WASM
+  build, closing the browser-editing loop; a failed import leaves the canvas untouched.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
