@@ -316,7 +316,7 @@ the definition of done.
 - [x] 000072 — Export script/`xtask`: project graph → ready plugin bundle in one command 🧪
 - [x] 000073 — Plugin validation: `clap-validator`, `pluginval` (VST3/AU) in CI *(clap-validator live in CI; pluginval joins when VST3/AU exports land — 000069/000070)*
 - [ ] 000074 — Test loading the exported plugin in a real host (Reaper/Logic) — checklist
-- [ ] 000075 — Sign/notarize the AU bundle on macOS (document the process)
+- [x] 000075 — Sign/notarize the AU bundle on macOS (document the process)
 
 ### Epic 8 — Parameters, automation, presets
 
