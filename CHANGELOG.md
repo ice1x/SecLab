@@ -77,7 +77,9 @@ the AI assistant from the ground up. Highlights by area:
   default, so the standard build never compiles it.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
-  [developer guide](docs/adding-a-node.md) (add your own node), and tested starter
-  patches under [`examples/`](examples).
+  [developer guide](docs/adding-a-node.md) (add your own node), a
+  [real-host testing checklist](docs/host-testing.md) (manual DAW QA — kept in sync with the
+  produced bundles by an xtask test), a [signing/notarization guide](docs/signing.md), and
+  tested starter patches under [`examples/`](examples).
 
 [Unreleased]: https://github.com/ice1x/VST_bomb/commits/main
