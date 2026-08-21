@@ -87,6 +87,14 @@ the AI assistant from the ground up. Highlights by area:
   `vb-project` and in-memory strings (no filesystem), wired to an egui text-buffer panel.
   Because it avoids browser file APIs, graph editing **and** save/load work in the WASM
   build, closing the browser-editing loop; a failed import leaves the canvas untouched.
+- **Web/native runtime boundary** — the shared interchange point is the `.vbp` project
+  format (`vb-project`); the engine (`vb-core`/`vb-runtime`), nodes, editor, and assistant
+  core all build to `wasm32`, while audio device I/O (`cpal`), plugin export (`nih-plug`),
+  and the drevo knowledge graph are native-only. The `library` feature does **not** build
+  to wasm — `getrandom` (via `uuid`→`drevo`) and `redb`'s mmap store — verified and guarded
+  by the CI `wasm build` job (which now also builds `vb-runtime` and the default
+  `vb-library`). Written up in
+  [`docs/architecture-boundary.md`](docs/architecture-boundary.md).
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
