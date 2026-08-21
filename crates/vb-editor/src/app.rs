@@ -54,6 +54,12 @@ pub struct EditorApp {
     modules_dir: PathBuf,
     /// Last export/import outcome, shown in the toolbar until the next one.
     module_status: Option<String>,
+    /// Shared RON text buffer for whole-project import/export (000082). Export writes the
+    /// current patch here; import parses whatever is in it. Filesystem-free, so it works
+    /// in the browser as well as natively.
+    project_ron: String,
+    /// Last whole-project import/export outcome, shown next to the buffer.
+    project_status: Option<String>,
 }
 
 impl Default for EditorApp {
@@ -73,6 +79,8 @@ impl Default for EditorApp {
             visuals_dirty: true,
             modules_dir: PathBuf::from("modules"),
             module_status: None,
+            project_ron: String::new(),
+            project_status: None,
         }
     }
 }
@@ -830,6 +838,8 @@ impl EditorApp {
         }
         self.modules_ui(ui);
         ui.separator();
+        self.project_io_ui(ui);
+        ui.separator();
         let entries = palette_entries(&self.registry, &self.palette_query);
         if entries.is_empty() {
             ui.weak("no matches");
@@ -851,6 +861,44 @@ impl EditorApp {
         });
         if let Some(kind) = spawn {
             self.spawn_node(kind);
+        }
+    }
+
+    /// Whole-project RON import/export (000082): a text buffer plus Export/Import buttons.
+    /// Filesystem-free, so the same controls work in the browser — copy the RON out, or
+    /// paste a `.vbp` in and load it.
+    fn project_io_ui(&mut self, ui: &mut Ui) {
+        ui.label("project (RON)");
+        ui.horizontal(|ui| {
+            if ui.button("export ⤓").clicked() {
+                self.project_status = Some(match self.export_project_ron() {
+                    Ok(ron) => {
+                        self.project_ron = ron;
+                        "exported to the buffer".to_owned()
+                    }
+                    Err(e) => format!("export failed: {e}"),
+                });
+            }
+            let can_import = !self.project_ron.trim().is_empty();
+            if ui
+                .add_enabled(can_import, egui::Button::new("import ⤒"))
+                .clicked()
+            {
+                let text = self.project_ron.clone();
+                self.project_status = Some(match self.import_project_ron(&text) {
+                    Ok(()) => "loaded project".to_owned(),
+                    Err(e) => format!("import failed: {e}"),
+                });
+            }
+        });
+        ui.add(
+            egui::TextEdit::multiline(&mut self.project_ron)
+                .desired_rows(4)
+                .code_editor()
+                .hint_text("exported RON appears here; paste a .vbp to import"),
+        );
+        if let Some(status) = &self.project_status {
+            ui.weak(status);
         }
     }
 
@@ -908,6 +956,37 @@ impl EditorApp {
         if self.theme.kind != kind {
             self.theme = Theme::for_kind(kind);
             self.visuals_dirty = true;
+        }
+    }
+
+    /// Serialises the **whole active patch** to a RON string (the `.vbp` project format).
+    ///
+    /// Filesystem-free — the caller decides where the text goes (a text box, the clipboard,
+    /// a browser download) — so it is the serialization primitive the WASM build uses. Only
+    /// structure is captured (nodes + edges); canvas-only state is intentionally dropped,
+    /// matching [`PatchView::to_doc`].
+    ///
+    /// # Errors
+    /// [`vb_project::ProjectError`] if the document cannot be serialised.
+    pub fn export_project_ron(&self) -> Result<String, vb_project::ProjectError> {
+        vb_project::to_ron(&self.patch.to_doc())
+    }
+
+    /// Replaces the active patch with the project parsed from `text` (a `.vbp` RON string).
+    ///
+    /// Parses and migrates via [`vb_project::from_ron`], then applies the document with
+    /// [`PatchView::apply_doc`], which validates it and rebuilds the canvas as one undoable
+    /// step. Also filesystem-free, so it is the import path for the browser.
+    ///
+    /// # Errors
+    /// The parse/migration error from [`vb_project::from_ron`], or a message if the parsed
+    /// document fails graph validation on apply.
+    pub fn import_project_ron(&mut self, text: &str) -> Result<(), String> {
+        let doc = vb_project::from_ron(text).map_err(|e| e.to_string())?;
+        if self.patch.apply_doc(&doc, &self.registry) {
+            Ok(())
+        } else {
+            Err("the project is structurally invalid and was not loaded".to_owned())
         }
     }
 
@@ -1136,6 +1215,38 @@ mod tests {
         // The inspector writes through set_param, which clamps into range.
         assert_eq!(app.patch_mut().set_param(id, 1, 99_999.0), Some(20_000.0));
         assert!((app.patch().params(id)[1].value - 20_000.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn project_ron_round_trips_the_whole_patch() {
+        let mut app = EditorApp::new();
+        app.spawn_node("gain").expect("builtin");
+        let expected_nodes = app.patch().graph().node_count();
+        let expected_edges = app.patch().graph().edges().len();
+
+        // Export the live patch to RON, then load it into a fresh editor.
+        let ron = app.export_project_ron().expect("serialize");
+        assert!(ron.contains("gain"), "the RON names the patch's kinds");
+
+        let mut loaded = EditorApp::new();
+        loaded.import_project_ron(&ron).expect("load valid project");
+        assert_eq!(loaded.patch().graph().node_count(), expected_nodes);
+        assert_eq!(loaded.patch().graph().edges().len(), expected_edges);
+        // apply_doc lands as one undoable step.
+        assert!(loaded.patch().can_undo(), "import is undoable");
+    }
+
+    #[test]
+    fn importing_garbage_ron_is_a_clean_error_and_leaves_the_patch_intact() {
+        let mut app = EditorApp::new();
+        let before = app.patch().graph().node_count();
+        let err = app.import_project_ron("this is not ron").unwrap_err();
+        assert!(!err.is_empty(), "the failure is reported");
+        assert_eq!(
+            app.patch().graph().node_count(),
+            before,
+            "a failed import must not mutate the canvas"
+        );
     }
 
     #[test]
