@@ -22,6 +22,7 @@ pub mod generate;
 pub mod http;
 pub mod inspect;
 pub mod keystore;
+pub mod openai;
 pub mod privacy;
 pub mod prompt;
 pub mod provider;
@@ -44,6 +45,10 @@ pub use http::ReqwestTransport;
 pub use http::{Header, HttpReply, HttpTransport};
 pub use inspect::{inspect_request, RequestInspection, Segment, SessionInspector};
 pub use keystore::{KeyStore, KeyStoreError, MemoryKeyStore};
+// The OpenAI-compatible codec (`build_request_body` / `parse_response`) is reached as
+// `openai::…` to avoid colliding with the flat `anthropic::…` re-exports above; the
+// provider type is the primary entry point, so it is re-exported here.
+pub use openai::OpenAiProvider;
 pub use privacy::{preview_request, GuardedProvider, PrivacySettings};
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
 pub use provider::{
