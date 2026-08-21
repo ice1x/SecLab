@@ -16,6 +16,15 @@ eframe.workspace = true
 serde.workspace = true
 ron.workspace = true
 
+# WASM (browser) entry point only — see src/web.rs (backlog 000081). These compile solely
+# for the wasm32 target, so the native build is untouched. eframe brings the web renderer
+# (WebRunner/WebGL) itself; we only need the JS glue for the exported `start(canvas)` fn.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
+console_error_panic_hook = "0.1"
+
 [dev-dependencies]
 # Assistant crate, for the proposal → diff → apply integration test only. This is a
 # dev-dependency so it never enters the editor's runtime graph; vb-ai does not depend on

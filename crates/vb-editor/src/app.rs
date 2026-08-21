@@ -1036,8 +1036,12 @@ impl eframe::App for EditorApp {
 
 /// Opens the editor window and runs it to completion.
 ///
+/// Native only — the browser entry point is [`crate::web::start`], which hands the same
+/// [`EditorApp`] to eframe's `WebRunner` instead of opening an OS window.
+///
 /// # Errors
 /// Returns [`eframe::Error`] if the native window/GL context cannot be created.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

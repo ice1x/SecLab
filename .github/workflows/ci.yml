@@ -83,3 +83,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: build the plugin with the editor
         run: cargo build -p vb-plugin --features gui
+
+  # WASM proof of concept (backlog 000081): the editor compiles to the browser target and
+  # the platform-agnostic core (engine/nodes/project format) is portable. NON-blocking —
+  # the wasm32 toolchain is not a required gate — this only proves the web path still builds.
+  wasm:
+    name: wasm build (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: add the wasm32 target
+        run: rustup target add wasm32-unknown-unknown
+      - name: build the core crates for wasm32
+        run: cargo build -p vb-core -p vb-nodes -p vb-project --target wasm32-unknown-unknown
+      - name: build the editor for wasm32 (browser entry point)
+        run: cargo build -p vb-editor --target wasm32-unknown-unknown

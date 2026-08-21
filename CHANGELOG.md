@@ -75,6 +75,13 @@ the AI assistant from the ground up. Highlights by area:
   integration with the embedded [drevo](https://github.com/) graph store via its direct
   Rust API (`redb-backend`, no Bolt server), assessed with a CRUD smoke test. Off by
   default, so the standard build never compiles it.
+- **WASM proof of concept (`vb-editor`)** — the editor compiles to
+  `wasm32-unknown-unknown` and runs in a browser through eframe's `WebRunner` (WebGL) via a
+  cfg-split entry point (`vb_editor::web::start`), leaving the native winit launcher
+  untouched; the platform-agnostic core (`vb-core` / `vb-nodes` / `vb-project`) is portable
+  too, so `.vbp` files load on both. A non-blocking CI `wasm build` job compiles them on
+  every push. Build/serve steps in [`docs/wasm.md`](docs/wasm.md). (Browser audio and
+  persistence are separate, later tasks.)
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
