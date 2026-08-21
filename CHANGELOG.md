@@ -45,6 +45,11 @@ the AI assistant from the ground up. Highlights by area:
   cpal audio stream, and a CLAP instrument (nih-plug) that compiles a patch into the
   runtime engine and streams it to the host; VST3/AU via clap-wrapper, validated in CI with
   clap-validator.
+- **Signing & notarization (`xtask`)** — `cargo xtask sign` / `cargo xtask notarize`
+  code-sign the macOS bundles with a Developer ID identity (hardened runtime + secure
+  timestamp) and notarize + staple them via `notarytool`, driven by `$DEVELOPER_ID` /
+  `$NOTARY_PROFILE`. The order-sensitive tool argument vectors are pure, unit-tested
+  functions; the full process is written up in [`docs/signing.md`](docs/signing.md).
 - **AI assistant (`vb-ai`)** — a grounded, offline-testable assistant stack: system prompt
   built from the live node reference and the RON output contract; a provider abstraction
   with a BYOK keystore and a privacy gate (offline switch, consent, a "what will be sent?"

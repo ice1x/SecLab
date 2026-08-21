@@ -26,10 +26,17 @@
 //! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
 //!   editor standalone lives in `vb-standalone`).
+//! - `cargo xtask sign` — code-signs every bundle in `target/bundled/` with the Developer
+//!   ID identity in `$DEVELOPER_ID` (hardened runtime + secure timestamp), then verifies.
+//! - `cargo xtask notarize` — zips, submits to Apple's notary service via the
+//!   `$NOTARY_PROFILE` keychain profile, and staples the ticket to each bundle. See
+//!   [`docs/signing.md`](../docs/signing.md) for the full process and credential setup.
 //!
 //! Everything else is forwarded to nih-plug's xtask untouched.
 
 use std::path::{Path, PathBuf};
+
+mod sign;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1).peekable();
@@ -54,6 +61,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("bundle-standalone") => {
             args.next();
             bundle_wrapped(WrappedFormat::Standalone)
+        }
+        Some("sign") => {
+            args.next();
+            sign_bundles()
+        }
+        Some("notarize") => {
+            args.next();
+            notarize_bundles()
         }
         Some("demo-patch") => {
             args.next();
@@ -280,6 +295,104 @@ fn export(patch: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let dest = resources.join("patch.vbp");
     std::fs::copy(patch, &dest)?;
     println!("exported: {} (patch embedded)", bundle.display());
+    Ok(())
+}
+
+/// The `target/bundled/` directory holding the produced bundles.
+fn bundled_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    Ok(workspace_root()?.join("target").join("bundled"))
+}
+
+/// Code-signs every bundle in `target/bundled/` with a Developer ID identity.
+///
+/// The identity comes from `$DEVELOPER_ID` (e.g.
+/// `"Developer ID Application: Your Name (TEAMID)"`); without it, nothing is signed and the
+/// command explains what to set. See `docs/signing.md` for the full flow.
+fn sign_bundles() -> Result<(), Box<dyn std::error::Error>> {
+    let identity = std::env::var("DEVELOPER_ID").map_err(|_| {
+        "set DEVELOPER_ID to your signing identity, e.g. \
+         DEVELOPER_ID='Developer ID Application: Your Name (TEAMID)' \
+         (list identities with `security find-identity -v -p codesigning`); see docs/signing.md"
+    })?;
+
+    let dir = bundled_dir()?;
+    let bundles = sign::signable_bundles(&dir).map_err(|e| {
+        format!(
+            "no bundles to sign in {} ({e}); build them first with `cargo xtask bundle-vst3` etc.",
+            dir.display()
+        )
+    })?;
+    if bundles.is_empty() {
+        return Err(format!(
+            "no signable bundles in {}; build them first (bundle-vst3 / bundle-auv2 / bundle-standalone)",
+            dir.display()
+        )
+        .into());
+    }
+
+    for bundle in &bundles {
+        run(
+            std::process::Command::new("codesign").args(sign::codesign_args(&identity, bundle)),
+            &format!("codesign {}", bundle.display()),
+        )?;
+        run(
+            std::process::Command::new("codesign").args(sign::codesign_verify_args(bundle)),
+            &format!("verify signature of {}", bundle.display()),
+        )?;
+        println!("signed: {}", bundle.display());
+    }
+    println!(
+        "signed {} bundle(s). Next: `cargo xtask notarize`.",
+        bundles.len()
+    );
+    Ok(())
+}
+
+/// Notarizes every bundle in `target/bundled/`: zip → `notarytool submit --wait` → staple.
+///
+/// The notary credentials come from a stored keychain profile named by `$NOTARY_PROFILE`
+/// (create it once with `xcrun notarytool store-credentials`). Bundles must already be
+/// signed with a hardened runtime (`cargo xtask sign`). See `docs/signing.md`.
+fn notarize_bundles() -> Result<(), Box<dyn std::error::Error>> {
+    let profile = std::env::var("NOTARY_PROFILE").map_err(|_| {
+        "set NOTARY_PROFILE to a stored notarytool keychain profile \
+         (create it once with `xcrun notarytool store-credentials <profile> \
+         --apple-id <id> --team-id <TEAMID>`); see docs/signing.md"
+    })?;
+
+    let dir = bundled_dir()?;
+    let bundles = sign::signable_bundles(&dir)
+        .map_err(|e| format!("no bundles to notarize in {} ({e})", dir.display()))?;
+    if bundles.is_empty() {
+        return Err(format!(
+            "no bundles to notarize in {}; sign them first",
+            dir.display()
+        )
+        .into());
+    }
+
+    for bundle in &bundles {
+        let archive = sign::archive_path_for(bundle);
+        if archive.exists() {
+            std::fs::remove_file(&archive)?;
+        }
+        run(
+            std::process::Command::new("ditto").args(sign::ditto_zip_args(bundle, &archive)),
+            &format!("zip {} for notarization", bundle.display()),
+        )?;
+        run(
+            std::process::Command::new("xcrun")
+                .args(sign::notarytool_submit_args(&archive, &profile)),
+            &format!("notarize {}", archive.display()),
+        )?;
+        run(
+            std::process::Command::new("xcrun").args(sign::stapler_args(bundle)),
+            &format!("staple {}", bundle.display()),
+        )?;
+        std::fs::remove_file(&archive).ok();
+        println!("notarized + stapled: {}", bundle.display());
+    }
+    println!("notarized {} bundle(s).", bundles.len());
     Ok(())
 }
 
