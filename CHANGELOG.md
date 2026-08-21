@@ -56,6 +56,11 @@ the AI assistant from the ground up. Highlights by area:
   transport (`ReqwestTransport`, rustls) lives behind the optional `net` feature, so the
   default build (and CI) links no HTTP stack and can send nothing without an explicit
   opt-in and a BYOK key.
+- **OpenAI-compatible provider adapter (`vb-ai`)** — one `AiProvider` for the Chat
+  Completions family (OpenAI and the many gateways/local servers that copy its shape),
+  with a configurable endpoint. Same offline-tested codec + injectable-transport structure
+  as the Anthropic adapter; the system prompt maps to the leading `system` message and the
+  reply text to `choices[0].message.content`. Shares the `net`-gated HTTP transport.
 - **Patch library (`vb-library`, optional)** — behind the opt-in `library` feature, an
   integration with the embedded [drevo](https://github.com/) graph store via its direct
   Rust API (`redb-backend`, no Bolt server), assessed with a CRUD smoke test. Off by
