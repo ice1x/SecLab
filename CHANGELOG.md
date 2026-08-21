@@ -102,4 +102,15 @@ the AI assistant from the ground up. Highlights by area:
   produced bundles by an xtask test), a [signing/notarization guide](docs/signing.md), and
   tested starter patches under [`examples/`](examples).
 
+### Changed
+
+- **Unified egui on 0.31** — the workspace editor stack (`vb-editor`, `vb-standalone`) moved
+  from egui/eframe 0.36 to **0.31**, the version the plugin's in-window egui host
+  (`nih_plug_egui`) already uses. The tree previously carried two egui versions side by
+  side; now there is **one**. This removes the version wall that blocked reusing the real
+  `EditorApp` inside the plugin window, so the same editor code can render natively, in the
+  browser, and (next) embedded in a DAW — one shared codebase instead of a second,
+  drifting implementation. No behavioural change; native/wasm builds, tests, clippy
+  (`-D warnings`), and the `gui` build all stay green.
+
 [Unreleased]: https://github.com/ice1x/VST_bomb/commits/main
