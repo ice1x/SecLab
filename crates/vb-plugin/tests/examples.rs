@@ -27,6 +27,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("mono_lead", include_str!("../../../examples/mono_lead.ron")),
     ("minimoog", include_str!("../../../examples/minimoog.ron")),
     ("minitaur", include_str!("../../../examples/minitaur.ron")),
+    ("neutron", include_str!("../../../examples/neutron.ron")),
 ];
 
 #[test]
@@ -252,6 +253,45 @@ fn minitaur_is_a_playable_bass_with_glide() {
 }
 
 #[test]
+fn neutron_is_a_playable_voice_with_overdrive_and_delay() {
+    // The Behringer Neutron factory patch: two oscillators through a multimode filter,
+    // an overdrive (waveshaper) and an in-voice delay, gated by the note envelope.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/neutron.ron");
+    let doc = vb_project::open_ron(ron).expect("neutron loads");
+    // The overdrive + in-voice delay are what set the Neutron voice apart.
+    for kind in ["waveshaper", "fb-delay", "vcf"] {
+        assert!(
+            doc.nodes.iter().any(|e| e.node.kind == kind),
+            "neutron voice has a {kind}"
+        );
+    }
+
+    let render = |note: Option<u8>| {
+        let ctx = BuildContext::default();
+        if let Some(n) = note {
+            ctx.notes.note_on(n, 100);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        let mut peak = 0.0_f32;
+        for _ in 0..8 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+            assert!(out.iter().all(|s| s.is_finite()), "finite audio");
+        }
+        peak
+    };
+
+    assert!(render(None) < 1e-6, "neutron must be silent at rest");
+    assert!(render(Some(48)) > 0.05, "neutron must sound on a note");
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -268,7 +308,8 @@ fn the_example_set_is_the_expected_manifest() {
             "ladder_bass",
             "mono_lead",
             "minimoog",
-            "minitaur"
+            "minitaur",
+            "neutron"
         ]
     );
     // No example is empty.
