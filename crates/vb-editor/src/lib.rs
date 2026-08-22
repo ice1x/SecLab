@@ -13,11 +13,11 @@ pub mod palette;
 pub mod patch;
 pub mod preset;
 pub mod theme;
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;
 pub mod widgets;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "app"))]
 pub use app::run;
 pub use app::EditorApp;
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};

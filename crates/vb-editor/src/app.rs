@@ -996,6 +996,17 @@ impl EditorApp {
         }
     }
 
+    /// Replaces the edited patch with `doc` — e.g. seeding the editor with the patch a
+    /// plugin host is already playing — leaving **no** undo step back to the previous
+    /// contents (so a freshly-loaded editor can't be undone into its demo patch).
+    ///
+    /// Returns `false` if `doc` fails validation, in which case the patch is unchanged.
+    pub fn load_doc(&mut self, doc: &vb_project::ProjectDoc) -> bool {
+        let ok = self.patch.apply_doc(doc, &self.registry);
+        self.patch.clear_history();
+        ok
+    }
+
     /// Exports macro `id`'s inner patch to `dir/<name>.vbmod.ron`, returning the path.
     ///
     /// # Errors
@@ -1039,8 +1050,14 @@ impl EditorApp {
     }
 }
 
-impl eframe::App for EditorApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+impl EditorApp {
+    /// Draws the whole editor (toolbar, palette, inspector, canvas) into `ctx`.
+    ///
+    /// This is the frame-independent render entry: `impl eframe::App::update` calls it for
+    /// the standalone/browser windows, and the plugin's `nih_plug_egui` host calls it
+    /// directly inside its own egui context — one editor, drawn the same everywhere, no
+    /// `eframe::Frame` required.
+    pub fn render(&mut self, ctx: &egui::Context) {
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
         if self.visuals_dirty {
@@ -1119,6 +1136,16 @@ impl eframe::App for EditorApp {
     }
 }
 
+/// The standalone/browser launcher wiring: an [`EditorApp`] IS an eframe app, delegating
+/// every frame to [`EditorApp::render`]. Behind the `app` feature so an embedder that owns
+/// its own egui context (the plugin) does not pull eframe.
+#[cfg(feature = "app")]
+impl eframe::App for EditorApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.render(ctx);
+    }
+}
+
 /// Opens the editor window and runs it to completion.
 ///
 /// Native only — the browser entry point is [`crate::web::start`], which hands the same
@@ -1126,7 +1153,7 @@ impl eframe::App for EditorApp {
 ///
 /// # Errors
 /// Returns [`eframe::Error`] if the native window/GL context cannot be created.
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "app"))]
 pub fn run() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -1240,6 +1267,26 @@ mod tests {
         assert_eq!(loaded.patch().graph().edges().len(), expected_edges);
         // apply_doc lands as one undoable step.
         assert!(loaded.patch().can_undo(), "import is undoable");
+    }
+
+    #[test]
+    fn load_doc_seeds_the_patch_with_no_undo_history() {
+        // A doc from one editor (its demo + an extra node) loaded into another.
+        let mut source = EditorApp::new();
+        source.spawn_node("gain").expect("builtin");
+        let doc = source.patch().to_doc();
+        let nodes = doc.nodes.len();
+        let edges = doc.edges.len();
+
+        let mut app = EditorApp::new();
+        assert!(app.load_doc(&doc), "a valid doc loads");
+        assert_eq!(app.patch().graph().node_count(), nodes);
+        assert_eq!(app.patch().graph().edges().len(), edges);
+        // Seeding is not a user edit: there is nothing to undo back into.
+        assert!(
+            !app.patch().can_undo(),
+            "a freshly loaded patch carries no undo history"
+        );
     }
 
     #[test]

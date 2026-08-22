@@ -1,145 +1,72 @@
-//! The plugin's in-window editor (backlog 000067).
+//! The plugin's in-window editor — the full node editor, embedded (000067 → constructor
+//! in the DAW).
 //!
-//! A simplified **run-view**: the window shows which patch the plugin is playing (node
-//! counts by kind, wiring) and the current value of every host-automatable parameter. It
-//! is read-only for now — a first step toward embedding the full node editor — so a user
-//! who loads the plugin in a DAW can see what it is doing instead of a black box.
+//! Since egui was unified on 0.31 (PR #133), the plugin hosts the **same**
+//! [`vb_editor::EditorApp`] the standalone uses, rendered through `nih_plug_egui` into the
+//! plugin's own window — one editor, not a second drawing layer. The editor edits the
+//! plugin's shared project document; on a structural change it mirrors the new graph back
+//! and kicks a background engine rebuild, so the sound follows the canvas **inside the DAW**.
 //!
-//! The view-model ([`PatchSummary`]) is a pure function of the project document, always
-//! compiled and unit-tested. The egui glue lives behind the `gui` Cargo feature, so the
-//! default build ships no editor and a headless clap-validator never opens a window.
+//! Limits inherent to the plugin format, not bugs:
+//! - The host-automatable **parameter list is fixed at load** (a DAW plugin cannot add
+//!   parameters at runtime), so parameters of nodes *added* in-session are not exposed to
+//!   host automation until the plugin is reloaded.
+//! - The rebuild is **structural**: existing nodes keep their live parameter values; nodes
+//!   added in-session take their registry defaults.
+//!
+//! The whole module compiles only under the `gui` feature (see `lib.rs`), so the default
+//! build — and the headless clap-validator gate — never links an editor.
 
-use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex};
 
+use nih_plug::prelude::{AsyncExecutor, Editor};
+use nih_plug_egui::{create_egui_editor, EguiState};
+use vb_editor::EditorApp;
 use vb_project::ProjectDoc;
 
-/// A compact, display-ready summary of the loaded patch.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
-pub struct PatchSummary {
-    /// Number of nodes in the patch.
-    pub node_count: usize,
-    /// Number of edges (connections).
-    pub edge_count: usize,
-    /// Node kinds and how many of each, sorted by kind name.
-    pub kinds: Vec<(String, usize)>,
+use crate::{PluginTask, VstBomb};
+
+/// The editor's persistent state: the live editor plus the patch revision last mirrored into
+/// the shared doc, so a rebuild is kicked only when the graph actually changed.
+struct EditorHost {
+    app: EditorApp,
+    last_revision: u64,
 }
 
-/// Summarises `doc` for the run-view: node/edge counts and a per-kind tally.
-#[must_use]
-pub fn patch_summary(doc: &ProjectDoc) -> PatchSummary {
-    let mut kinds: BTreeMap<String, usize> = BTreeMap::new();
-    for entry in &doc.nodes {
-        *kinds.entry(entry.node.kind.clone()).or_default() += 1;
-    }
-    PatchSummary {
-        node_count: doc.nodes.len(),
-        edge_count: doc.edges.len(),
-        kinds: kinds.into_iter().collect(),
-    }
-}
-
-/// Builds the egui run-view editor for the plugin window.
-#[cfg(feature = "gui")]
+/// Builds the embedded node editor for the plugin window.
+///
+/// `doc` is the instance's shared project (also read by the background rebuild); `executor`
+/// schedules the off-audio-thread rebuild when the graph is edited.
 pub(crate) fn create(
-    egui_state: std::sync::Arc<nih_plug_egui::EguiState>,
-    doc: std::sync::Arc<std::sync::Mutex<std::sync::Arc<ProjectDoc>>>,
-    params: std::sync::Arc<crate::VstBombParams>,
-) -> Option<Box<dyn nih_plug::prelude::Editor>> {
-    use nih_plug_egui::{create_egui_editor, egui};
+    egui_state: Arc<EguiState>,
+    doc: Arc<Mutex<Arc<ProjectDoc>>>,
+    executor: AsyncExecutor<VstBomb>,
+) -> Option<Box<dyn Editor>> {
+    // Seed the editor with the patch this instance is playing, not the demo.
+    let mut app = EditorApp::new();
+    if let Ok(current) = doc.lock() {
+        app.load_doc(&current);
+    }
+    let last_revision = app.patch().revision();
 
     create_egui_editor(
         egui_state,
-        (),
+        EditorHost { app, last_revision },
         |_ctx, _state| {},
-        move |ctx, _setter, _state| {
-            egui::CentralPanel::default().show(ctx, |ui| {
-                ui.heading("VST_bomb");
+        move |ctx, _setter, state| {
+            state.app.render(ctx);
 
-                let summary = match doc.lock() {
-                    Ok(guard) => patch_summary(&guard),
-                    Err(_) => PatchSummary::default(),
-                };
-                ui.label(format!(
-                    "Patch: {} nodes, {} edges",
-                    summary.node_count, summary.edge_count
-                ));
-
-                ui.separator();
-                ui.label("Nodes:");
-                for (kind, count) in &summary.kinds {
-                    ui.label(format!("   {count}× {kind}"));
+            // A structural edit bumps the patch revision: mirror the new graph into the
+            // shared doc and rebuild the engine off the audio thread.
+            let revision = state.app.patch().revision();
+            if revision != state.last_revision {
+                state.last_revision = revision;
+                let new_doc = state.app.patch().to_doc();
+                if let Ok(mut slot) = doc.lock() {
+                    *slot = Arc::new(new_doc);
                 }
-
-                ui.separator();
-                ui.label("Parameters:");
-                let overview = params.overview();
-                if overview.is_empty() {
-                    ui.label("   (none)");
-                } else {
-                    for (name, value) in overview {
-                        ui.label(format!("   {name}: {value:.3}"));
-                    }
-                }
-            });
+                executor.execute_background(PluginTask::RebuildEngine);
+            }
         },
     )
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use vb_core::{Edge, GraphNode, NodeId, Port, PortId, SignalType};
-    use vb_project::{NodeEntry, FORMAT_VERSION};
-
-    fn node(id: u64, kind: &str) -> NodeEntry {
-        NodeEntry {
-            id: NodeId(id),
-            node: GraphNode::new(
-                kind,
-                vec![Port::input("in", SignalType::Audio)],
-                vec![Port::output("out", SignalType::Audio)],
-            ),
-        }
-    }
-
-    #[test]
-    fn summary_counts_nodes_edges_and_kinds() {
-        let doc = ProjectDoc {
-            version: FORMAT_VERSION,
-            nodes: vec![node(0, "oscillator"), node(1, "gain"), node(2, "gain")],
-            edges: vec![
-                Edge {
-                    from_node: NodeId(0),
-                    from_port: PortId(0),
-                    to_node: NodeId(1),
-                    to_port: PortId(0),
-                },
-                Edge {
-                    from_node: NodeId(1),
-                    from_port: PortId(0),
-                    to_node: NodeId(2),
-                    to_port: PortId(0),
-                },
-            ],
-        };
-        let summary = patch_summary(&doc);
-        assert_eq!(summary.node_count, 3);
-        assert_eq!(summary.edge_count, 2);
-        // Sorted by kind, gain tallied to 2.
-        assert_eq!(
-            summary.kinds,
-            vec![("gain".to_owned(), 2), ("oscillator".to_owned(), 1)]
-        );
-    }
-
-    #[test]
-    fn an_empty_patch_summarises_to_zeroes() {
-        let doc = ProjectDoc {
-            version: FORMAT_VERSION,
-            nodes: vec![],
-            edges: vec![],
-        };
-        let summary = patch_summary(&doc);
-        assert_eq!(summary, PatchSummary::default());
-    }
 }

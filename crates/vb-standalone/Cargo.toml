@@ -11,7 +11,9 @@ authors.workspace = true
 vb-core.workspace = true
 vb-nodes.workspace = true
 vb-runtime.workspace = true
-vb-editor.workspace = true
+# The standalone runs the editor as its own eframe window, so it needs the `app` feature
+# (off by default at the workspace level, where the plugin wants it off).
+vb-editor = { workspace = true, features = ["app"] }
 cpal.workspace = true
 midir.workspace = true
 egui.workspace = true

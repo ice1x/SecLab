@@ -11,6 +11,7 @@
 //! `libvb_plugin` cdylib renamed to `vb_bomb.clap` is a loadable CLAP bundle (the
 //! one-command bundler is task 000072).
 
+#[cfg(feature = "gui")]
 pub mod editor;
 pub mod engine_builder;
 
@@ -299,17 +300,14 @@ impl Plugin for VstBomb {
         self.params.clone()
     }
 
-    /// The embedded run-view editor (000067). Present only under the `gui` feature; the
-    /// default build returns `None`, so a headless validator never opens a window.
+    /// The embedded node editor (000067 → full editor). Present only under the `gui`
+    /// feature; the default build returns `None`, so a headless validator never opens a
+    /// window. The executor lets an edit kick the off-audio-thread engine rebuild.
     fn editor(&mut self, async_executor: AsyncExecutor<Self>) -> Option<Box<dyn Editor>> {
-        let _ = async_executor;
+        let _ = &async_executor;
         #[cfg(feature = "gui")]
         {
-            editor::create(
-                self.editor_state.clone(),
-                self.doc.clone(),
-                self.params.clone(),
-            )
+            editor::create(self.editor_state.clone(), self.doc.clone(), async_executor)
         }
         #[cfg(not(feature = "gui"))]
         {

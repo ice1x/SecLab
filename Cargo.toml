@@ -26,7 +26,10 @@ authors = ["ice1x"]
 vb-core = { path = "crates/vb-core" }
 vb-nodes = { path = "crates/vb-nodes" }
 vb-runtime = { path = "crates/vb-runtime" }
-vb-editor = { path = "crates/vb-editor" }
+# default-features off at the workspace level so the plugin can embed `EditorApp` without
+# eframe/winit; consumers that run the editor as its own window (vb-standalone, the WASM
+# build) opt back into `app` explicitly.
+vb-editor = { path = "crates/vb-editor", default-features = false }
 cpal = "0.18"
 midir = "0.11"
 criterion = "0.8"

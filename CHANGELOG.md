@@ -104,6 +104,19 @@ the AI assistant from the ground up. Highlights by area:
 
 ### Changed
 
+- **The full node editor now runs inside the plugin window (`vb-plugin`)** — the read-only
+  run-view (000067) is replaced by the real `vb_editor::EditorApp`, rendered through
+  `nih_plug_egui` into the plugin's own window: the same editor as the standalone, seeded
+  with the patch the instance is playing. A structural edit mirrors the new graph into the
+  shared project doc and kicks the off-audio-thread engine rebuild, so **the sound follows
+  the canvas inside a DAW**. `EditorApp` grew a frame-independent `render(ctx)` (called by
+  both eframe and the plugin host) and `load_doc`; `eframe` is now optional behind
+  `vb-editor`'s `app` feature, so the plugin embeds the editor **without** pulling
+  winit/eframe. Inherent plugin-format limits: the host-automatable parameter list is fixed
+  at load (parameters of nodes added in-session appear to host automation only after a
+  reload), and the rebuild is structural (new nodes take registry-default parameter values).
+  The `gui` build and its edit→rebuild wiring compile-check in CI; the interactive/audible
+  result is verified in a real host.
 - **Unified egui on 0.31** — the workspace editor stack (`vb-editor`, `vb-standalone`) moved
   from egui/eframe 0.36 to **0.31**, the version the plugin's in-window egui host
   (`nih_plug_egui`) already uses. The tree previously carried two egui versions side by

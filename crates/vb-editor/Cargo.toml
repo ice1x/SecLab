@@ -12,9 +12,20 @@ vb-core.workspace = true
 vb-nodes.workspace = true
 vb-project.workspace = true
 egui.workspace = true
-eframe.workspace = true
+# eframe (winit/glutin natively, WebRunner on wasm) is only needed to RUN the editor as its
+# own window/app. Behind the `app` feature (on by default) so an embedder that already owns
+# a window — the plugin's nih_plug_egui host — can depend on `vb-editor` with
+# `default-features = false` and get `EditorApp` + `render(ctx)` without pulling winit.
+eframe = { workspace = true, optional = true }
 serde.workspace = true
 ron.workspace = true
+
+[features]
+# `app` = the standalone/browser launchers (`run`, `web::start`, `impl eframe::App`). On by
+# default so `vb-standalone` and the WASM build are unchanged; turned OFF by the plugin,
+# which drives `EditorApp::render` inside its own egui context.
+default = ["app"]
+app = ["dep:eframe"]
 
 # WASM (browser) entry point only — see src/web.rs (backlog 000081). These compile solely
 # for the wasm32 target, so the native build is untouched. eframe brings the web renderer
