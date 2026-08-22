@@ -433,9 +433,10 @@ values), so a preset can pin exact knob settings, not just a graph.
   silent-until-note default. `NodeEntry` now carries an optional `values` list (registry
   `params()` order) that round-trips through RON; the plugin's engine builder honours a
   node's stored values unless host automation overrides it, so a preset pins its sound 🧪
-- [ ] 000135 — **Silent-until-note default patch** — note-gated (`midi-in → adsr → vca.cv`
-  with VCA `bias = 0`) so the instrument doesn't drone the instant it loads. Depends on
-  000134; flip the `default_patch is audible` test to "silent at rest, audible on a note" 🧪
+- [x] 000135 — **Silent-until-note default patch** — note-gated (`midi-in → adsr → vca.cv`
+  with VCA `bias = 0`) so the instrument doesn't drone the instant it loads. The default
+  patch is now `oscillator → svf → vca.in` for audio and `midi-in.gate → adsr → vca.cv` for
+  control, with the VCA stored biased shut; tests assert silent at rest, audible on a note 🧪
 - [ ] 000136 — **Moog Minitaur** clone (mono bass): 2 saw/pulse oscillators + sub, ladder
   low-pass, glide. Needs: ladder-filter node, sub-oscillator, glide
 - [ ] 000137 — **Minimoog Model D** clone: 3 oscillators, ladder filter — the classic

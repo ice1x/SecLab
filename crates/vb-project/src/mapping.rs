@@ -82,7 +82,14 @@ pub fn build_mappings(
 ) -> Vec<ParamMapping> {
     let mut mappings = Vec::new();
     for entry in &doc.nodes {
-        for (index, param) in params_of(&entry.node.kind).into_iter().enumerate() {
+        for (index, mut param) in params_of(&entry.node.kind).into_iter().enumerate() {
+            // A preset pins its knobs: a stored value for this parameter becomes the
+            // mapping's default (clamped to the registry range), so the host parameter
+            // and the editor widget both start where the preset put them instead of at
+            // the registry default.
+            if let Some(&stored) = entry.values.get(index) {
+                param.default = stored.clamp(param.min, param.max);
+            }
             mappings.push(ParamMapping {
                 id: ParamId::of(entry.id, index),
                 node: entry.id,
@@ -232,5 +239,26 @@ mod tests {
     fn a_kind_with_no_parameters_contributes_nothing() {
         let map = ParamMap::build(&doc(), |_| Vec::new());
         assert!(map.is_empty());
+    }
+
+    #[test]
+    fn stored_values_override_the_registry_default() {
+        let mut d = doc();
+        // Pin the gain node's single parameter to 0.25 (registry default is 1.0).
+        d.set_node_values(NodeId(5), vec![0.25]);
+        let map = ParamMap::build(&d, params_of);
+        let gain = map.by_target(NodeId(5), 0).unwrap();
+        assert_eq!(gain.param.default, 0.25);
+        // A node without stored values keeps the registry default.
+        let freq = map.by_target(NodeId(3), 1).unwrap();
+        assert_eq!(freq.param.default, 440.0);
+    }
+
+    #[test]
+    fn stored_values_are_clamped_to_the_registry_range() {
+        let mut d = doc();
+        d.set_node_values(NodeId(5), vec![99.0]); // gain range is 0..2
+        let map = ParamMap::build(&d, params_of);
+        assert_eq!(map.by_target(NodeId(5), 0).unwrap().param.default, 2.0);
     }
 }
