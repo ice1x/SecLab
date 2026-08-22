@@ -447,8 +447,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   oscillators (unison / +6 cents / octave-down) → mixer → env-swept `ladder` → note-gated
   VCA. Playable (tracks pitch), silent at rest. Added a `detune_semitones` param to
   `pitch-osc` for the oscillator stack
-- [ ] 000138 — **Moog Grandmother** clone (semi-modular): 2 oscillators, ladder filter, a
-  spring-reverb-style voice. Needs: spring-reverb node
+- [x] 000138 — **Moog Grandmother** clone (semi-modular): 2 oscillators, ladder filter, a
+  spring-reverb-style voice. Shipped as `examples/grandmother.ron`: a saw + triangle
+  (`pitch-osc`) → env-swept `ladder` → note-gated VCA → `reverb` (Freeverb, generous
+  dry/wet for the spring ambience). Built from existing nodes (the `reverb` node stands in
+  for the spring)
 - [x] 000139 — **Behringer Neutron** clone: 2 oscillators, multimode filter, overdrive,
   delay in the voice. Shipped as `examples/neutron.ron`: two detuned `pitch-osc` → `add` →
   env-swept multimode `vcf` → `waveshaper` (overdrive) → note-gated VCA, with an in-voice
