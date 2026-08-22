@@ -136,6 +136,47 @@ impl PolyNoteSource {
             .map_or(0, |slot| slot.load(Ordering::Acquire));
         (s >> 16 != 0, ((s >> 8) & 0xff) as u8, (s & 0xff) as u8)
     }
+
+    /// Whether `note` is currently held (gate on) in any voice. This is the note-addressed
+    /// view a drum kit needs: each drum listens for its own key, and because voices are
+    /// polyphonic, several keys (kick + hat) can be held at once.
+    #[must_use]
+    pub fn note_gate(&self, note: u8) -> bool {
+        self.shared.slots.iter().any(|slot| {
+            let s = slot.load(Ordering::Acquire);
+            s >> 16 != 0 && ((s >> 8) & 0xff) as u8 == note
+        })
+    }
+}
+
+/// A per-note gate: emits `1.0` while a specific MIDI note is held in any voice, else
+/// `0.0`. Wire one per drum (kick on 36, snare on 38, …) to trigger each voice's
+/// envelope independently, so a kit plays polyphonically off one note stream.
+pub struct KeyGate {
+    source: PolyNoteSource,
+    note: u8,
+}
+
+impl KeyGate {
+    /// Creates a gate that fires while `note` is held in `source`.
+    #[must_use]
+    pub fn new(source: PolyNoteSource, note: u8) -> Self {
+        Self { source, note }
+    }
+}
+
+impl Processor for KeyGate {
+    fn process(&mut self, ctx: &ProcessContext, _inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        let Some(out) = outputs.first_mut() else {
+            return;
+        };
+        let g = if self.source.note_gate(self.note) {
+            1.0
+        } else {
+            0.0
+        };
+        out[..ctx.frames].fill(g);
+    }
 }
 
 /// Per-voice counterpart of [`crate::midi::MidiIn`]: emits `gate` / `pitch_hz` /
@@ -226,6 +267,42 @@ mod tests {
             source.read(va).0 && source.read(vc).0,
             "others keep sounding"
         );
+    }
+
+    #[test]
+    fn note_gate_reports_each_key_independently() {
+        let source = PolyNoteSource::new();
+        assert!(!source.note_gate(36), "nothing held yet");
+        source.note_on(36, 100); // kick
+        source.note_on(42, 90); // hat, held at the same time
+        assert!(source.note_gate(36), "kick key held");
+        assert!(source.note_gate(42), "hat key held");
+        assert!(!source.note_gate(38), "snare key not held");
+        source.note_off(36);
+        assert!(!source.note_gate(36), "kick released");
+        assert!(source.note_gate(42), "hat still held");
+    }
+
+    #[test]
+    fn key_gate_node_fires_only_for_its_note() {
+        let source = PolyNoteSource::new();
+        let mut kick = KeyGate::new(source.clone(), 36);
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 4,
+        };
+        let run = |node: &mut KeyGate| {
+            let mut out = [0.0_f32; 4];
+            node.process(&ctx, &[], &mut [&mut out]);
+            out[0]
+        };
+        assert_eq!(run(&mut kick), 0.0, "silent before any note");
+        source.note_on(38, 100); // snare, not kick
+        assert_eq!(run(&mut kick), 0.0, "wrong note does not open the gate");
+        source.note_on(36, 100);
+        assert_eq!(run(&mut kick), 1.0, "kick note opens the gate");
+        source.note_off(36);
+        assert_eq!(run(&mut kick), 0.0, "gate closes on release");
     }
 
     #[test]

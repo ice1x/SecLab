@@ -135,6 +135,13 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `channel` — range 0..1, default 0
 
+### key-gate
+
+- **Inputs:** _(none)_
+- **Outputs:** `gate` (control)
+- **Parameters:**
+  - `note` — range 0..127, default 36
+
 ### midi-in
 
 - **Inputs:** _(none)_

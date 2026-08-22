@@ -171,6 +171,18 @@ the AI assistant from the ground up. Highlights by area:
   three-note chord and asserts it sums to more energy than a single note (and stays silent
   at rest). The digital multi-engine is approximated with the triangle oscillator; a true
   wavetable oscillator is left as a future node.
+- **Per-note gate node (`vb-nodes`, kind `key-gate`)** — emits `1.0` while a specific MIDI
+  note is held in any voice, else `0.0` (backed by a new `PolyNoteSource::note_gate(note)`
+  query). Because it reads the polyphonic note source, several keys can be held at once, so
+  a drum kit can trigger kick + hat together off one note stream.
+- **Drum-machine kit factory patch (`examples/drumkit.ron`, Epic 13 / 000141)** — a
+  TR-style kit synthesised from existing nodes: a kick (a `vco` sine whose pitch drops via a
+  fast envelope), a snare (`noise` + a tone), and a hat (highpassed `noise`), each fired by
+  its own `key-gate` on notes 36 / 38 / 42 and summed. Silent at rest, each drum triggers on
+  its note, and — because the gates are polyphonic — several drums sound together (all
+  asserted in the examples test). **This completes Epic 13** (factory preset library): six
+  factory patches ship — Minimoog Model D, Moog Minitaur, Moog Grandmother, Behringer
+  Neutron, Korg Minilogue XD (polyphonic), a multiband distortion effect, and this kit.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a

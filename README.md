@@ -464,8 +464,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   (digital effect). Each voice is two detuned saw VCOs + a triangle "digital" oscillator →
   env-swept `ladder` → note-gated VCA. (The digital engine is approximated with the
   triangle oscillator; a true wavetable oscillator is left as a future node.)
-- [ ] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices
-  (TR-style), triggered per note. Needs: drum-voice nodes (transient + noise + pitch env)
+- [x] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices
+  (TR-style), triggered per note. Shipped as `examples/drumkit.ron`: kick (pitch-enveloped
+  `vco` sine), snare (`noise` + tone), hat (highpassed `noise`), each fired by a `key-gate`
+  node on its own MIDI note (36 / 38 / 42). Added the `key-gate` node (+
+  `PolyNoteSource::note_gate`) so drums read the polyphonic note source and play together
 - [x] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):
   band-split → per-band drive/waveshape → mix. Shipped as `examples/maul.ron`: a rich saw
   split into three bands by two `svf` crossovers (low = lowpass, mid/high from the cascaded

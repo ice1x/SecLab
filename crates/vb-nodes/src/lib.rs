@@ -43,7 +43,7 @@ pub use midi::{midi_note_to_hz, BuildContext, MidiIn, NoteSource};
 pub use noise::{Noise, NoiseKind};
 pub use oscillator::{Oscillator, Waveform};
 pub use pitch_osc::PitchOsc;
-pub use poly::{PolyNoteSource, PolyVoiceIn, VoiceAllocator, MAX_VOICES};
+pub use poly::{KeyGate, PolyNoteSource, PolyVoiceIn, VoiceAllocator, MAX_VOICES};
 pub use registry::{NodeDescriptor, Registry};
 pub use reverb::Reverb;
 pub use routing::{Merger, Selector, Splitter};
