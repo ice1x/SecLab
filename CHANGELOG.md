@@ -131,6 +131,12 @@ the AI assistant from the ground up. Highlights by area:
   Epic 13 clones (000144). Ships the playable `examples/mono_lead.ron` (midi → `pitch-osc`
   → `ladder` → env-gated `vca`), whose test asserts a higher note sounds higher through the
   whole engine; regenerated [node reference](docs/nodes.md).
+- **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
+  first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
+  and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
+  tracks the played pitch, stays silent at rest, and sounds on a note (all asserted in the
+  examples test). `pitch-osc` gained a `detune_semitones` parameter (±24, backward
+  compatible) to build the oscillator stack that gives the voice its fatness.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a

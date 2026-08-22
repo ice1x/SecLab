@@ -10,6 +10,11 @@
 //! When the control input is unconnected or reads below the audio range (no note has
 //! played yet), it falls back to `base_hz`, so it produces a sensible tone at rest instead
 //! of silence or a DC offset.
+//!
+//! A `detune` offset (in semitones, fractional) transposes the tracked pitch — an octave
+//! switch (±12, ±24) or a few cents of fine detune. Stacking several pitch-tracking
+//! oscillators at slightly different detunes is what gives a Minimoog-style voice its
+//! fatness.
 
 use vb_core::{ProcessContext, Processor};
 
@@ -19,22 +24,26 @@ use crate::oscillator::{Oscillator, Waveform};
 const MIN_HZ: f32 = 20.0;
 const MAX_HZ: f32 = 20_000.0;
 
-/// An oscillator that tracks a `pitch_hz` control input, falling back to `base_hz`.
+/// An oscillator that tracks a `pitch_hz` control input, transposed by `detune`
+/// semitones, falling back to `base_hz` when no note is held.
 #[derive(Debug, Clone)]
 pub struct PitchOsc {
     osc: Oscillator,
     /// Frequency used when the pitch input carries no valid note (Hz).
     base_hz: f32,
+    /// Frequency multiplier from the detune offset (`2^(semitones/12)`).
+    detune_ratio: f32,
 }
 
 impl PitchOsc {
     /// Creates a pitch-tracking oscillator of `waveform`, resting at `base_hz` until a
-    /// note arrives on the pitch input.
+    /// note arrives, and transposing the tracked pitch by `detune_semitones`.
     #[must_use]
-    pub fn new(waveform: Waveform, base_hz: f32) -> Self {
+    pub fn new(waveform: Waveform, base_hz: f32, detune_semitones: f32) -> Self {
         Self {
             osc: Oscillator::new(waveform, base_hz),
             base_hz,
+            detune_ratio: 2.0_f32.powf(detune_semitones / 12.0),
         }
     }
 
@@ -55,11 +64,8 @@ impl Processor for PitchOsc {
             .and_then(|c| c.first())
             .copied()
             .unwrap_or(0.0);
-        let freq = if pitch >= MIN_HZ {
-            pitch.min(MAX_HZ)
-        } else {
-            self.base_hz
-        };
+        let tracked = if pitch >= MIN_HZ { pitch } else { self.base_hz };
+        let freq = (tracked * self.detune_ratio).clamp(MIN_HZ, MAX_HZ);
         self.osc.set_freq_hz(freq);
 
         // Delegate audio generation: the oscillator ignores inputs and writes outputs[0].
@@ -105,12 +111,12 @@ mod tests {
     fn tracks_the_pitch_input_frequency() {
         // A higher pitch input produces a higher-frequency output (more zero crossings).
         let low = render(
-            &mut PitchOsc::new(Waveform::Sine, 220.0),
+            &mut PitchOsc::new(Waveform::Sine, 220.0, 0.0),
             Some(200.0),
             4_800,
         );
         let high = render(
-            &mut PitchOsc::new(Waveform::Sine, 220.0),
+            &mut PitchOsc::new(Waveform::Sine, 220.0, 0.0),
             Some(800.0),
             4_800,
         );
@@ -125,7 +131,7 @@ mod tests {
     fn the_output_frequency_matches_the_pitch_input() {
         // 480 Hz over 4800 samples at 48 kHz ≈ 48 cycles ≈ 96 zero crossings.
         let out = render(
-            &mut PitchOsc::new(Waveform::Sine, 100.0),
+            &mut PitchOsc::new(Waveform::Sine, 100.0, 0.0),
             Some(480.0),
             4_800,
         );
@@ -139,35 +145,64 @@ mod tests {
     #[test]
     fn falls_back_to_base_when_the_pitch_input_is_silent() {
         // A zero pitch (the note source's value before any note) holds the base freq.
-        let mut osc = PitchOsc::new(Waveform::Sine, 330.0);
+        let mut osc = PitchOsc::new(Waveform::Sine, 330.0, 0.0);
         render(&mut osc, Some(0.0), 64);
         assert!((osc.freq_hz() - 330.0).abs() < 1e-3);
     }
 
     #[test]
     fn a_missing_pitch_input_uses_the_base_frequency() {
-        let mut osc = PitchOsc::new(Waveform::Sine, 261.63);
+        let mut osc = PitchOsc::new(Waveform::Sine, 261.63, 0.0);
         render(&mut osc, None, 64);
         assert!((osc.freq_hz() - 261.63).abs() < 1e-2);
     }
 
     #[test]
     fn a_valid_note_overrides_the_base_frequency() {
-        let mut osc = PitchOsc::new(Waveform::Sine, 100.0);
+        let mut osc = PitchOsc::new(Waveform::Sine, 100.0, 0.0);
         render(&mut osc, Some(440.0), 64);
         assert!((osc.freq_hz() - 440.0).abs() < 1e-3);
     }
 
     #[test]
+    fn detune_transposes_the_tracked_pitch() {
+        // +12 semitones doubles the frequency; -12 halves it.
+        let mut up = PitchOsc::new(Waveform::Sine, 100.0, 12.0);
+        render(&mut up, Some(220.0), 64);
+        assert!(
+            (up.freq_hz() - 440.0).abs() < 1e-2,
+            "up an octave: {}",
+            up.freq_hz()
+        );
+
+        let mut down = PitchOsc::new(Waveform::Sine, 100.0, -12.0);
+        render(&mut down, Some(220.0), 64);
+        assert!(
+            (down.freq_hz() - 110.0).abs() < 1e-2,
+            "down an octave: {}",
+            down.freq_hz()
+        );
+
+        // A few cents of fine detune nudges the frequency slightly off the note.
+        let mut fine = PitchOsc::new(Waveform::Sine, 100.0, 0.1);
+        render(&mut fine, Some(440.0), 64);
+        assert!(
+            fine.freq_hz() > 440.0 && fine.freq_hz() < 443.0,
+            "fine detune: {}",
+            fine.freq_hz()
+        );
+    }
+
+    #[test]
     fn pitch_is_clamped_to_the_audio_range() {
-        let mut osc = PitchOsc::new(Waveform::Sine, 200.0);
+        let mut osc = PitchOsc::new(Waveform::Sine, 200.0, 0.0);
         render(&mut osc, Some(50_000.0), 64);
         assert!((osc.freq_hz() - MAX_HZ).abs() < 1e-3, "clamped to max");
     }
 
     #[test]
     fn zero_sample_rate_is_safe() {
-        let mut osc = PitchOsc::new(Waveform::Saw, 440.0);
+        let mut osc = PitchOsc::new(Waveform::Saw, 440.0, 0.0);
         let ctx = ProcessContext {
             sample_rate: 0.0,
             frames: 8,

@@ -115,6 +115,7 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `waveform` — range 0..3, default 1
   - `base_hz` — range 20..20000, default 440
+  - `detune_semitones` — range -24..24, default 0
 
 ### vco
 

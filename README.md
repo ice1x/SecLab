@@ -439,8 +439,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   control, with the VCA stored biased shut; tests assert silent at rest, audible on a note 🧪
 - [ ] 000136 — **Moog Minitaur** clone (mono bass): 2 saw/pulse oscillators + sub, ladder
   low-pass, glide. Needs: ladder-filter node, sub-oscillator, glide
-- [ ] 000137 — **Minimoog Model D** clone: 3 oscillators, ladder filter — the classic
-  lead/bass voice. Needs: ladder-filter node (shared with 000136)
+- [x] 000137 — **Minimoog Model D** clone: 3 oscillators, ladder filter — the classic
+  lead/bass voice. Shipped as `examples/minimoog.ron`: three detuned pitch-tracking
+  oscillators (unison / +6 cents / octave-down) → mixer → env-swept `ladder` → note-gated
+  VCA. Playable (tracks pitch), silent at rest. Added a `detune_semitones` param to
+  `pitch-osc` for the oscillator stack
 - [ ] 000138 — **Moog Grandmother** clone (semi-modular): 2 oscillators, ladder filter, a
   spring-reverb-style voice. Needs: spring-reverb node
 - [ ] 000139 — **Behringer Neutron** clone: 2 oscillators, multimode filter, overdrive,
