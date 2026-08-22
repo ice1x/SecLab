@@ -457,8 +457,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   env-swept multimode `vcf` → `waveshaper` (overdrive) → note-gated VCA, with an in-voice
   `fb-delay` mixed back in (dry + wet) so echoes ring past the gate. Built from existing
   nodes
-- [ ] 000140 — **Korg Minilogue XD** clone: 2 VCO + a digital multi-engine voice, polyphony,
-  digital effects. Needs: polyphonic voice allocation, a digital/wavetable oscillator
+- [x] 000140 — **Korg Minilogue XD** clone: 2 VCO + a digital multi-engine voice, polyphony,
+  digital effects. Shipped as `examples/minilogue.ron`: a **4-voice polyphonic** patch —
+  four independent voice chains, each fed by a `voice-in` node bound to its own slot (the
+  `PolyNoteSource`/`VoiceAllocator` the plugin already drives), summed into a `reverb`
+  (digital effect). Each voice is two detuned saw VCOs + a triangle "digital" oscillator →
+  env-swept `ladder` → note-gated VCA. (The digital engine is approximated with the
+  triangle oscillator; a true wavetable oscillator is left as a future node.)
 - [ ] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices
   (TR-style), triggered per note. Needs: drum-voice nodes (transient + noise + pitch env)
 - [x] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):

@@ -161,6 +161,16 @@ the AI assistant from the ground up. Highlights by area:
   its own `waveshaper` (foldback / saturate / hard-clip) and recombined through a trim gain.
   An effect demo with a built-in source, so it sounds without a note; the examples test
   asserts the three-band structure and audible output.
+- **Korg Minilogue XD factory clone (`examples/minilogue.ron`, Epic 13 / 000140)** — the
+  first **polyphonic** factory patch, proving the voice-allocation system end to end. Four
+  independent voice chains, each fed by a `voice-in` node bound to its own slot of the
+  `PolyNoteSource` (which the plugin already drives through its `VoiceAllocator` on every
+  note), are summed into a `reverb`. Each voice is two detuned saw VCOs plus a triangle
+  "digital" oscillator → an envelope-swept `ladder` → a note-gated VCA. Polyphony needed no
+  engine change — it is expressed in the graph as parallel voices. The examples test plays a
+  three-note chord and asserts it sums to more energy than a single note (and stays silent
+  at rest). The digital multi-engine is approximated with the triangle oscillator; a true
+  wavetable oscillator is left as a future node.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
