@@ -22,7 +22,9 @@
 //!   and the `.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
 //! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
 //!   into `~/Library/Audio/Plug-Ins/Components`, validate with
-//!   `auval -v aumu gWrp clAd`).
+//!   `auval -v aumu gWrp clAd`). Deterministically installs clap-wrapper's generated
+//!   AudioComponents plist (its own install is flaky) and rebrands the manufacturer to
+//!   `ice1x` so hosts list it as `ice1x: VST_bomb`.
 //! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
 //!   editor standalone lives in `vb-standalone`).
@@ -235,6 +237,28 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
         std::fs::remove_dir_all(&dest)?;
     }
     copy_tree(&produced, &dest)?;
+
+    // Fix + brand the AU Info.plist. clap-wrapper GENERATES a correct AudioComponents plist
+    // (`…-build-helper-output/auv2_Info.plist`) but installs it into the `.component` only
+    // flakily — some rebuilds leave a default `APPL` plist with no AudioComponents, so the
+    // AU won't register (auval "didn't find the component"). Install the generated plist
+    // deterministically, then rebrand its "Manufacturer: Plugin" display name (clap-wrapper
+    // hardcodes "cleveraudio.org" in top_level_default.cmake, with no cache-var override).
+    if matches!(format, WrappedFormat::Auv2) {
+        let dest_plist = dest.join("Contents").join("Info.plist");
+        let generated = find_generated_au_plist(&build_dir).ok_or(
+            "could not find clap-wrapper's generated auv2_Info.plist to install; \
+             the AU would not register",
+        )?;
+        std::fs::copy(&generated, &dest_plist)?;
+        run(
+            std::process::Command::new("/usr/libexec/PlistBuddy")
+                .args(au_set_name_args(&dest_plist, AU_DISPLAY_NAME)),
+            "brand AU component display name",
+        )?;
+        println!("installed + branded AU plist as: {AU_DISPLAY_NAME}");
+    }
+
     println!("built: {}", dest.display());
     println!(
         "install: cp -r {} ~/Library/Audio/Plug-Ins/CLAP/ && cp -r {} {}",
@@ -243,6 +267,44 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
         format.install_dir()
     );
     Ok(())
+}
+
+/// The AU "Manufacturer: Plugin" display name hosts (Logic, GarageBand) group the component
+/// under. Mirrors vb-plugin's `VENDOR` / `NAME`; overrides clap-wrapper's hardcoded
+/// "cleveraudio.org: <output>" default (see `bundle_wrapped`).
+const AU_DISPLAY_NAME: &str = "ice1x: VST_bomb";
+
+/// Locates clap-wrapper's generated AU `Info.plist` under the AUv2 build dir — the file in
+/// a `*-build-helper-output/` subdirectory named `auv2_Info.plist`. This is the
+/// reliably-correct AudioComponents plist to install into the bundle (clap-wrapper's own
+/// install of it is flaky across rebuilds).
+fn find_generated_au_plist(build_dir: &std::path::Path) -> Option<PathBuf> {
+    for entry in std::fs::read_dir(build_dir).ok()?.flatten() {
+        let dir = entry.path();
+        let is_helper = dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.ends_with("-build-helper-output"));
+        if dir.is_dir() && is_helper {
+            let plist = dir.join("auv2_Info.plist");
+            if plist.exists() {
+                return Some(plist);
+            }
+        }
+    }
+    None
+}
+
+/// `PlistBuddy` args to set an AU component's AudioComponents display name.
+///
+/// PlistBuddy takes the whole `-c` string as one command, with everything after the key
+/// path as the (possibly space-containing) value — so the name needs no quoting here.
+fn au_set_name_args(plist: &std::path::Path, name: &str) -> Vec<String> {
+    vec![
+        "-c".to_owned(),
+        format!("Set :AudioComponents:0:name {name}"),
+        plist.display().to_string(),
+    ]
 }
 
 /// Runs a command, turning non-zero exits into errors with context.
@@ -423,7 +485,51 @@ fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::WrappedFormat;
+    use super::{au_set_name_args, WrappedFormat, AU_DISPLAY_NAME};
+    use std::path::Path;
+
+    #[test]
+    fn au_name_command_sets_the_first_audiocomponents_name() {
+        let args = au_set_name_args(
+            Path::new("/b/vb-plugin.component/Contents/Info.plist"),
+            AU_DISPLAY_NAME,
+        );
+        assert_eq!(args[0], "-c");
+        // Key path then the raw value (spaces and the colon in "ice1x: VST_bomb" are fine —
+        // PlistBuddy takes the rest of the -c string verbatim as the value).
+        assert_eq!(args[1], "Set :AudioComponents:0:name ice1x: VST_bomb");
+        assert_eq!(args[2], "/b/vb-plugin.component/Contents/Info.plist");
+    }
+
+    #[test]
+    fn finds_the_generated_au_plist_in_a_build_helper_output_dir() {
+        use super::find_generated_au_plist;
+        let root = std::env::temp_dir().join(format!("vbau-{}", std::process::id()));
+        let helper = root.join("vb_plugin_as_auv2-build-helper-output");
+        std::fs::create_dir_all(&helper).unwrap();
+        std::fs::write(helper.join("auv2_Info.plist"), b"<plist/>").unwrap();
+        // A decoy dir that is not the helper output.
+        std::fs::create_dir_all(root.join("cpm")).unwrap();
+
+        let found = find_generated_au_plist(&root).expect("generated plist located");
+        assert_eq!(found, helper.join("auv2_Info.plist"));
+
+        // Absent → None.
+        std::fs::remove_file(helper.join("auv2_Info.plist")).unwrap();
+        assert!(find_generated_au_plist(&root).is_none());
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn au_display_name_is_manufacturer_then_plugin() {
+        // Hosts split on ": " → manufacturer "ice1x", plugin "VST_bomb".
+        let (manufacturer, plugin) = AU_DISPLAY_NAME
+            .split_once(": ")
+            .expect("Manufacturer: Plugin");
+        assert_eq!(manufacturer, "ice1x");
+        assert_eq!(plugin, "VST_bomb");
+    }
 
     /// The real-host testing checklist must name every bundle the build produces, so the
     /// install table there cannot silently drift from what `bundle-*` actually emits.
