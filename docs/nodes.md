@@ -186,6 +186,13 @@ Auto-generated from the registry — do not edit by hand.
 
 ## modulation
 
+### glide
+
+- **Inputs:** `in` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `glide_ms` — range 0..5000, default 50
+
 ### lfo
 
 - **Inputs:** _(none)_

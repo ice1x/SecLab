@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
+use crate::glide::Glide;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
@@ -693,6 +694,20 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 1.0),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "glide",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "glide",
+                    vec![Port::input("in", SignalType::Control)],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Glide::new(50.0)),
+            || vec![Parameter::new("glide_ms", 0.0, 5_000.0, 50.0)],
+            |_, v| Box::new(Glide::new(arg(v, 0, 50.0))),
         ),
         NodeDescriptor::new(
             "pitch-osc",

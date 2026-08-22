@@ -437,8 +437,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   with VCA `bias = 0`) so the instrument doesn't drone the instant it loads. The default
   patch is now `oscillator → svf → vca.in` for audio and `midi-in.gate → adsr → vca.cv` for
   control, with the VCA stored biased shut; tests assert silent at rest, audible on a note 🧪
-- [ ] 000136 — **Moog Minitaur** clone (mono bass): 2 saw/pulse oscillators + sub, ladder
-  low-pass, glide. Needs: ladder-filter node, sub-oscillator, glide
+- [x] 000136 — **Moog Minitaur** clone (mono bass): 2 saw/pulse oscillators + sub, ladder
+  low-pass, glide. Shipped as `examples/minitaur.ron`: two detuned saws + a square sub an
+  octave down (`pitch-osc`), a `glide` (portamento) stage on the pitch, an env-swept
+  `ladder`, and a note-gated VCA. Added the `glide` node (control-signal slew over
+  `glide_ms`, wrapping the `Smoother`)
 - [x] 000137 — **Minimoog Model D** clone: 3 oscillators, ladder filter — the classic
   lead/bass voice. Shipped as `examples/minimoog.ron`: three detuned pitch-tracking
   oscillators (unison / +6 cents / octave-down) → mixer → env-swept `ladder` → note-gated
