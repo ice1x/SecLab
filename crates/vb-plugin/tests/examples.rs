@@ -32,6 +32,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         "grandmother",
         include_str!("../../../examples/grandmother.ron"),
     ),
+    ("maul", include_str!("../../../examples/maul.ron")),
 ];
 
 #[test]
@@ -332,6 +333,44 @@ fn grandmother_is_a_playable_voice_with_reverb() {
 }
 
 #[test]
+fn maul_is_a_three_band_distortion_effect() {
+    // The fxpansion-Maul-style multiband distortion: a rich source split into three bands
+    // (two `svf` crossovers), each driven by its own `waveshaper`, then recombined. An
+    // effect demo — it has a built-in source, so it sounds without a note.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/maul.ron");
+    let doc = vb_project::open_ron(ron).expect("maul loads");
+    assert_eq!(
+        doc.nodes
+            .iter()
+            .filter(|e| e.node.kind == "waveshaper")
+            .count(),
+        3,
+        "three bands, three waveshapers"
+    );
+    assert_eq!(
+        doc.nodes.iter().filter(|e| e.node.kind == "svf").count(),
+        2,
+        "two crossovers split three bands"
+    );
+
+    let (mut engine, sink) =
+        engine_from_doc(&doc, &registry, &BuildContext::default(), 512).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut peak = 0.0_f32;
+    for _ in 0..4 {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 512,
+        });
+        let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+        assert!(out.iter().all(|s| s.is_finite()), "finite audio");
+        peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+    }
+    assert!(peak > 0.05, "the distortion effect is audible: {peak}");
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -350,7 +389,8 @@ fn the_example_set_is_the_expected_manifest() {
             "minimoog",
             "minitaur",
             "neutron",
-            "grandmother"
+            "grandmother",
+            "maul"
         ]
     );
     // No example is empty.

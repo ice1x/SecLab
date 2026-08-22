@@ -461,9 +461,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   digital effects. Needs: polyphonic voice allocation, a digital/wavetable oscillator
 - [ ] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices
   (TR-style), triggered per note. Needs: drum-voice nodes (transient + noise + pitch env)
-- [ ] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):
-  band-split → per-band drive/waveshape → mix. Needs: crossover/band-split + a waveshaper
-  chain
+- [x] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):
+  band-split → per-band drive/waveshape → mix. Shipped as `examples/maul.ron`: a rich saw
+  split into three bands by two `svf` crossovers (low = lowpass, mid/high from the cascaded
+  highpass), each band driven by its own `waveshaper` (foldback / saturate / hard-clip),
+  then recombined. Built from existing nodes (the `svf` lowpass/highpass outputs are the
+  crossover)
 - [x] 000143 — 🧩 **Ladder-filter node** (`ladder`) — Moog-style four-pole (24 dB/oct)
   resonant low-pass, control-swept like the `vcf`. Zero-delay-feedback TPT design
   (accurately tuned, stable to self-oscillation). Shared prerequisite for 000136/000137;

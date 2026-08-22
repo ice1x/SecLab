@@ -154,6 +154,13 @@ the AI assistant from the ground up. Highlights by area:
   saw + triangle pair (`pitch-osc`) through an envelope-swept `ladder` and a note-gated VCA
   into the `reverb` node (Freeverb, generous dry/wet) for the semi-modular's spring-reverb
   ambience. Built from existing nodes; playable, silent at rest, sounds on a note.
+- **Multiband distortion effect patch (`examples/maul.ron`, Epic 13 / 000142)** — an
+  fxpansion-Maul-style three-band distortion, built from existing nodes: a rich saw split
+  into low / mid / high by two `svf` crossovers (the low band is one filter's lowpass; the
+  mid and high come from cascading the highpass into a second filter), each band driven by
+  its own `waveshaper` (foldback / saturate / hard-clip) and recombined through a trim gain.
+  An effect demo with a built-in source, so it sounds without a note; the examples test
+  asserts the three-band structure and audible output.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
