@@ -419,8 +419,40 @@ the definition of done.
 - [ ] 000129 — 🧩 Expose the same knowledge graph via drevo's MCP/server mode for external AI agents (dev tooling); off by default, does not change the embedded in-app path
 - [x] 000130 — 🧩 Keep the graph in sync: regenerate from the registry/docs on release, stale-graph diff check in CI — `Library::missing_ontology_kinds(registry)` diff (empty = in sync); CI test asserts a fresh build covers every registry kind 🧪
 
+### Epic 13 — Factory preset library (clones of real gear)
+
+Recognisable factory patches so a user hears something musical the moment the plugin loads
+and has real starting points to tweak — mono synths, polysynths, drum kits, effects. Many
+depend on DSP nodes we don't have yet (ladder filter, sub-oscillator, polyphony, spring
+reverb, noise, drum voices); those are noted per item and spawn their own 🧩 node subtasks
+as each patch is picked up. All of them depend on 000134 (patches must carry parameter
+values), so a preset can pin exact knob settings, not just a graph.
+
+- [ ] 000134 — 🧩 **Patches carry per-node parameter values** — a preset is structure **and**
+  knob settings, not just a graph. Enabler for every factory patch below and for a
+  silent-until-note default. Today `ProjectDoc` is structure-only and the plugin derives
+  values from registry defaults, so no preset can pin a sound 🧪
+- [ ] 000135 — **Silent-until-note default patch** — note-gated (`midi-in → adsr → vca.cv`
+  with VCA `bias = 0`) so the instrument doesn't drone the instant it loads. Depends on
+  000134; flip the `default_patch is audible` test to "silent at rest, audible on a note" 🧪
+- [ ] 000136 — **Moog Minitaur** clone (mono bass): 2 saw/pulse oscillators + sub, ladder
+  low-pass, glide. Needs: ladder-filter node, sub-oscillator, glide
+- [ ] 000137 — **Minimoog Model D** clone: 3 oscillators, ladder filter — the classic
+  lead/bass voice. Needs: ladder-filter node (shared with 000136)
+- [ ] 000138 — **Moog Grandmother** clone (semi-modular): 2 oscillators, ladder filter, a
+  spring-reverb-style voice. Needs: spring-reverb node
+- [ ] 000139 — **Behringer Neutron** clone: 2 oscillators, multimode filter, overdrive,
+  delay in the voice. Needs: overdrive/waveshaper + delay nodes in-voice
+- [ ] 000140 — **Korg Minilogue XD** clone: 2 VCO + a digital multi-engine voice, polyphony,
+  digital effects. Needs: polyphonic voice allocation, a digital/wavetable oscillator
+- [ ] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices
+  (TR-style), triggered per note. Needs: drum-voice nodes (transient + noise + pitch env)
+- [ ] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):
+  band-split → per-band drive/waveshape → mix. Needs: crossover/band-split + a waveshaper
+  chain
+
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000131, …); split a large task into 🧩 subtasks with
+the end with a new global number (000143, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
