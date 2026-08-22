@@ -28,6 +28,10 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("minimoog", include_str!("../../../examples/minimoog.ron")),
     ("minitaur", include_str!("../../../examples/minitaur.ron")),
     ("neutron", include_str!("../../../examples/neutron.ron")),
+    (
+        "grandmother",
+        include_str!("../../../examples/grandmother.ron"),
+    ),
 ];
 
 #[test]
@@ -292,6 +296,42 @@ fn neutron_is_a_playable_voice_with_overdrive_and_delay() {
 }
 
 #[test]
+fn grandmother_is_a_playable_voice_with_reverb() {
+    // The Moog Grandmother factory patch: two oscillators through an env-swept ladder and
+    // a note-gated VCA into a spring-reverb-style reverb tail.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/grandmother.ron");
+    let doc = vb_project::open_ron(ron).expect("grandmother loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "reverb"),
+        "grandmother has a reverb voice"
+    );
+
+    let peak = |note: Option<u8>| {
+        let ctx = BuildContext::default();
+        if let Some(n) = note {
+            ctx.notes.note_on(n, 100);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        let mut p = 0.0_f32;
+        for _ in 0..8 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            assert!(out.iter().all(|s| s.is_finite()), "finite audio");
+            p = p.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        p
+    };
+
+    assert!(peak(None) < 1e-6, "grandmother must be silent at rest");
+    assert!(peak(Some(52)) > 0.05, "grandmother must sound on a note");
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -309,7 +349,8 @@ fn the_example_set_is_the_expected_manifest() {
             "mono_lead",
             "minimoog",
             "minitaur",
-            "neutron"
+            "neutron",
+            "grandmother"
         ]
     );
     // No example is empty.

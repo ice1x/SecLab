@@ -150,6 +150,10 @@ the AI assistant from the ground up. Highlights by area:
   `waveshaper` overdrive and a note-gated VCA, with an in-voice `fb-delay` mixed back in
   (dry + wet) so the echoes ring on past the gate. Built entirely from existing nodes;
   playable, silent at rest, sounds on a note (asserted in the examples test).
+- **Moog Grandmother factory clone (`examples/grandmother.ron`, Epic 13 / 000138)** — a
+  saw + triangle pair (`pitch-osc`) through an envelope-swept `ladder` and a note-gated VCA
+  into the `reverb` node (Freeverb, generous dry/wet) for the semi-modular's spring-reverb
+  ambience. Built from existing nodes; playable, silent at rest, sounds on a note.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
