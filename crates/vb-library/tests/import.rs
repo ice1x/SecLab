@@ -16,10 +16,7 @@ fn audio_out(name: &str) -> Port {
 }
 
 fn node(id: u64, kind: &str, ins: Vec<Port>, outs: Vec<Port>) -> NodeEntry {
-    NodeEntry {
-        id: NodeId(id),
-        node: GraphNode::new(kind, ins, outs),
-    }
+    NodeEntry::new(NodeId(id), GraphNode::new(kind, ins, outs))
 }
 
 /// oscillator(0) → biquad(1) → gain(2).

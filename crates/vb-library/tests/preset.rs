@@ -13,14 +13,14 @@ use vb_project::{NodeEntry, ProjectDoc, FORMAT_VERSION};
 fn tiny_doc() -> ProjectDoc {
     ProjectDoc {
         version: FORMAT_VERSION,
-        nodes: vec![NodeEntry {
-            id: NodeId(0),
-            node: GraphNode::new(
+        nodes: vec![NodeEntry::new(
+            NodeId(0),
+            GraphNode::new(
                 "oscillator",
                 vec![],
                 vec![Port::output("out", SignalType::Audio)],
             ),
-        }],
+        )],
         edges: vec![],
     }
 }

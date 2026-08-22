@@ -17,10 +17,10 @@ fn audio_out(name: &str) -> Port {
 fn tiny_doc() -> ProjectDoc {
     ProjectDoc {
         version: FORMAT_VERSION,
-        nodes: vec![NodeEntry {
-            id: NodeId(0),
-            node: GraphNode::new("oscillator", vec![], vec![audio_out("out")]),
-        }],
+        nodes: vec![NodeEntry::new(
+            NodeId(0),
+            GraphNode::new("oscillator", vec![], vec![audio_out("out")]),
+        )],
         edges: vec![],
     }
 }

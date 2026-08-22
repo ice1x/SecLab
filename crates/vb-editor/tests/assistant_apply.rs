@@ -24,10 +24,7 @@ fn control_in(name: &str) -> Port {
 }
 
 fn node(id: u64, kind: &str, ins: Vec<Port>, outs: Vec<Port>) -> NodeEntry {
-    NodeEntry {
-        id: NodeId(id),
-        node: GraphNode::new(kind, ins, outs),
-    }
+    NodeEntry::new(NodeId(id), GraphNode::new(kind, ins, outs))
 }
 
 fn edge(fnode: u64, fport: usize, tnode: u64, tport: usize) -> Edge {

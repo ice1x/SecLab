@@ -41,22 +41,22 @@ fn broken() -> ProjectDoc {
     ProjectDoc {
         version: FORMAT_VERSION,
         nodes: vec![
-            NodeEntry {
-                id: NodeId(0),
-                node: GraphNode::new(
+            NodeEntry::new(
+                NodeId(0),
+                GraphNode::new(
                     "oscillator",
                     vec![],
                     vec![Port::output("out", SignalType::Audio)],
                 ),
-            },
-            NodeEntry {
-                id: NodeId(1),
-                node: GraphNode::new(
+            ),
+            NodeEntry::new(
+                NodeId(1),
+                GraphNode::new(
                     "adsr",
                     vec![Port::input("gate", SignalType::Control)],
                     vec![Port::output("env", SignalType::Control)],
                 ),
-            },
+            ),
         ],
         edges: vec![Edge {
             from_node: NodeId(0),
