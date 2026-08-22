@@ -449,8 +449,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   `pitch-osc` for the oscillator stack
 - [ ] 000138 — **Moog Grandmother** clone (semi-modular): 2 oscillators, ladder filter, a
   spring-reverb-style voice. Needs: spring-reverb node
-- [ ] 000139 — **Behringer Neutron** clone: 2 oscillators, multimode filter, overdrive,
-  delay in the voice. Needs: overdrive/waveshaper + delay nodes in-voice
+- [x] 000139 — **Behringer Neutron** clone: 2 oscillators, multimode filter, overdrive,
+  delay in the voice. Shipped as `examples/neutron.ron`: two detuned `pitch-osc` → `add` →
+  env-swept multimode `vcf` → `waveshaper` (overdrive) → note-gated VCA, with an in-voice
+  `fb-delay` mixed back in (dry + wet) so echoes ring past the gate. Built from existing
+  nodes
 - [ ] 000140 — **Korg Minilogue XD** clone: 2 VCO + a digital multi-engine voice, polyphony,
   digital effects. Needs: polyphonic voice allocation, a digital/wavetable oscillator
 - [ ] 000141 — **Drum-machine kit** patch(es): analog-style kick / snare / hat voices

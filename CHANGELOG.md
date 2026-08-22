@@ -145,6 +145,11 @@ the AI assistant from the ground up. Highlights by area:
   voice: two detuned saws plus a square sub an octave down (`pitch-osc`), a `glide` stage on
   the pitch, an envelope-swept `ladder`, and a note-gated VCA. Silent at rest, plays on a
   note, tracks pitch, and carries portamento (asserted in the examples test).
+- **Behringer Neutron factory clone (`examples/neutron.ron`, Epic 13 / 000139)** — two
+  detuned pitch-tracking oscillators through an envelope-swept multimode `vcf`, a
+  `waveshaper` overdrive and a note-gated VCA, with an in-voice `fb-delay` mixed back in
+  (dry + wet) so the echoes ring on past the gate. Built entirely from existing nodes;
+  playable, silent at rest, sounds on a note (asserted in the examples test).
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
