@@ -102,6 +102,16 @@ the AI assistant from the ground up. Highlights by area:
   produced bundles by an xtask test), a [signing/notarization guide](docs/signing.md), and
   tested starter patches under [`examples/`](examples).
 
+### Fixed
+
+- **AU (AudioUnit) bundle now registers and is branded (`xtask bundle-auv2`)** — clap-wrapper
+  generates a correct `AudioComponents` plist but installed it into the `.component` only
+  flakily, so some builds produced a bundle with an `APPL` plist and no registration
+  (`auval` "didn't find the component"). `bundle-auv2` now installs the generated plist
+  deterministically and rebrands the manufacturer, so the AU validates (`auval` succeeds)
+  and hosts list it as **`ice1x: VST_bomb`** instead of clap-wrapper's default
+  `cleveraudio.org: vb-plugin`.
+
 ### Changed
 
 - **The full node editor now runs inside the plugin window (`vb-plugin`)** — the read-only
