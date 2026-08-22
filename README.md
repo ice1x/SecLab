@@ -456,11 +456,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   resonant low-pass, control-swept like the `vcf`. Zero-delay-feedback TPT design
   (accurately tuned, stable to self-oscillation). Shared prerequisite for 000136/000137;
   demonstrated by the env-swept `examples/ladder_bass.ron` factory patch 🧪
-- [ ] 000144 — 🧩 **MIDI-pitch-tracking oscillator** — a generator whose frequency follows
-  the played note (`midi-in.pitch_hz → osc.freq`). Today `oscillator` has a fixed
-  frequency and `vco` takes an *exponential* octave CV, neither of which tracks the
-  absolute Hz `midi-in` emits — so every clone below is stuck at one pitch until this
-  lands. The real enabler that makes 000136–000140 *playable* 🧪
+- [x] 000144 — 🧩 **MIDI-pitch-tracking oscillator** (`pitch-osc`) — a generator whose
+  frequency follows the played note (`midi-in.pitch_hz → pitch-osc.pitch`), falling back to
+  `base_hz` when no note is held. The enabler that makes 000136–000140 *playable* (plain
+  `oscillator` is fixed-frequency; `vco` takes an exponential octave CV, not absolute Hz).
+  Demonstrated by the playable `examples/mono_lead.ron` (tracks note pitch end-to-end) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000145, …); split a large task into 🧩 subtasks with

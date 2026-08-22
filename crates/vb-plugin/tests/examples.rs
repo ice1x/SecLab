@@ -24,6 +24,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         "ladder_bass",
         include_str!("../../../examples/ladder_bass.ron"),
     ),
+    ("mono_lead", include_str!("../../../examples/mono_lead.ron")),
 ];
 
 #[test]
@@ -98,6 +99,47 @@ fn ladder_bass_is_silent_at_rest_and_sings_on_a_note() {
 }
 
 #[test]
+fn mono_lead_tracks_the_played_note_pitch() {
+    // The mono-lead factory patch is playable: its pitch-tracking oscillator follows
+    // midi-in.pitch_hz, so different notes come out at different pitches. Assert the
+    // whole engine — midi → pitch-osc → ladder → vca — produces a higher output
+    // frequency for a higher note.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/mono_lead.ron");
+    let doc = vb_project::open_ron(ron).expect("mono_lead loads");
+
+    // Zero crossings over a rendered tail — proportional to the output frequency.
+    let crossings_for = |note: u8| {
+        let ctx = BuildContext::default();
+        ctx.notes.note_on(note, 110);
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        // Let the envelope open, then count crossings over a settled block.
+        for _ in 0..6 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+        }
+        let out = engine
+            .node_output(sink)
+            .and_then(|b| b.channel(0))
+            .unwrap()
+            .to_vec();
+        out.windows(2)
+            .filter(|w| (w[0] <= 0.0) != (w[1] <= 0.0))
+            .count()
+    };
+
+    let low = crossings_for(45); // ~110 Hz
+    let high = crossings_for(69); // 440 Hz, two octaves up
+    assert!(
+        high > low * 2,
+        "a higher note must sound higher: {low} vs {high} crossings"
+    );
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -111,7 +153,8 @@ fn the_example_set_is_the_expected_manifest() {
             "filter_sweep",
             "vibrato",
             "first_synth",
-            "ladder_bass"
+            "ladder_bass",
+            "mono_lead"
         ]
     );
     // No example is empty.
