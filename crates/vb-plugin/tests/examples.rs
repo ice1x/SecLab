@@ -34,6 +34,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ),
     ("maul", include_str!("../../../examples/maul.ron")),
     ("minilogue", include_str!("../../../examples/minilogue.ron")),
+    ("drumkit", include_str!("../../../examples/drumkit.ron")),
 ];
 
 #[test]
@@ -425,6 +426,61 @@ fn minilogue_is_polyphonic() {
 }
 
 #[test]
+fn drumkit_triggers_each_voice_by_its_note_and_plays_them_together() {
+    // The TR-style drum kit: kick (36) / snare (38) / hat (42), each a `key-gate` firing
+    // its own synth voice. Because the gates read the polyphonic note source, several
+    // drums can sound at once — a real kit, not a mono demo.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/drumkit.ron");
+    let doc = vb_project::open_ron(ron).expect("drumkit loads");
+    assert_eq!(
+        doc.nodes
+            .iter()
+            .filter(|e| e.node.kind == "key-gate")
+            .count(),
+        3,
+        "kick, snare, hat"
+    );
+
+    // Peak over a short window with the given notes held.
+    let peak = |notes: &[u8]| {
+        let ctx = BuildContext::default();
+        for &n in notes {
+            ctx.poly.note_on(n, 110);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("builds");
+        let sink = sink.expect("has a sink");
+        let mut p = 0.0_f32;
+        for _ in 0..6 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 256,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            assert!(out.iter().all(|s| s.is_finite()), "finite audio");
+            p = p.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        p
+    };
+
+    assert!(peak(&[]) < 1e-6, "silent at rest");
+    assert!(
+        peak(&[40]) < 1e-6,
+        "a note with no drum mapped stays silent"
+    );
+    let kick = peak(&[36]);
+    let hat = peak(&[42]);
+    assert!(kick > 0.02, "kick sounds on note 36: {kick}");
+    assert!(hat > 0.02, "hat sounds on note 42: {hat}");
+    // Kick + hat held together: both voices sound (polyphonic), louder than the kick alone.
+    let together = peak(&[36, 42]);
+    assert!(
+        together > kick,
+        "simultaneous drums sum: kick {kick} vs kick+hat {together}"
+    );
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -445,7 +501,8 @@ fn the_example_set_is_the_expected_manifest() {
             "neutron",
             "grandmother",
             "maul",
-            "minilogue"
+            "minilogue",
+            "drumkit"
         ]
     );
     // No example is empty.
