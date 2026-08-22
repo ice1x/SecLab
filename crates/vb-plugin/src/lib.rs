@@ -542,8 +542,9 @@ mod tests {
         let doc = default_patch(&registry);
         let params = VstBombParams::for_doc(&doc, &registry);
 
-        // osc (waveform, freq_hz) + svf (cutoff_hz, q) + gain (gain) = 5 knobs.
-        assert_eq!(params.len(), 5);
+        // osc (waveform, freq_hz) + svf (cutoff_hz, q) + adsr (a, d, s, r) +
+        // vca (bias, amount) = 10 knobs; midi-in contributes none.
+        assert_eq!(params.len(), 10);
         let map = params.param_map();
         let ids: Vec<&str> = map.iter().map(|(id, _, _)| id.as_str()).collect();
         let mut unique = ids.clone();
@@ -560,15 +561,23 @@ mod tests {
         let params = VstBombParams::for_doc(&doc, &registry);
         let values = params.values_by_node();
 
-        assert_eq!(values.len(), 3, "three nodes carry parameters");
-        // Each group's defaults match the registry's declared defaults.
+        assert_eq!(
+            values.len(),
+            4,
+            "osc, svf, adsr and vca carry parameters (midi-in has none)"
+        );
+        // Each group matches the mapping's defaults: the registry defaults, except
+        // where the patch stores its own values (the VCA, biased shut at bias = 0).
         for entry in &doc.nodes {
-            let expected: Vec<f32> = registry
-                .get(&entry.node.kind)
-                .unwrap()
-                .params()
+            let params = registry.get(&entry.node.kind).unwrap().params();
+            if params.is_empty() {
+                continue;
+            }
+            let stored = doc.node_values(entry.id);
+            let expected: Vec<f32> = params
                 .iter()
-                .map(|p| p.default)
+                .enumerate()
+                .map(|(i, p)| stored.get(i).copied().unwrap_or(p.default))
                 .collect();
             assert_eq!(values[&entry.id], expected, "{}", entry.node.kind);
         }
@@ -577,7 +586,15 @@ mod tests {
     #[test]
     fn engine_rebuild_with_values_changes_the_sound() {
         let registry = Registry::with_builtins();
-        let doc = default_patch(&registry);
+        // A plain oscillator → gain voice: gain is the terminal and scales the level
+        // linearly, so an automated gain value shows up directly in the peak.
+        let mut graph = vb_core::Graph::new();
+        let osc = graph.add_node(registry.graph_node("oscillator").unwrap());
+        let amp = graph.add_node(registry.graph_node("gain").unwrap());
+        graph
+            .connect(osc, vb_core::PortId(0), amp, vb_core::PortId(0))
+            .unwrap();
+        let doc = ProjectDoc::from_graph(&graph);
         let ctx = BuildContext::default();
         let gain_node = doc
             .nodes

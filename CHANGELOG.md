@@ -105,6 +105,14 @@ the AI assistant from the ground up. Highlights by area:
   Threading values correctly also fixed a latent id bug: the builder now addresses runtime
   nodes through `ProjectDoc::to_graph_with_remap` instead of assuming document and runtime
   ids coincide.
+- **Silent-until-note default patch (`vb-plugin`)** — the shipped patch is now a
+  note-gated voice — `oscillator → svf → vca.in` for audio, `midi-in.gate → adsr → vca.cv`
+  for control — with the VCA stored biased shut (`bias = 0`, so `out = in · cv`). The
+  envelope is the only thing that opens it, so the instrument no longer drones the instant
+  it loads in a DAW; it is silent at rest and sounds when a note plays. Loading a preset
+  also seeds the host/editor parameter defaults from its stored values (via
+  `vb_project::build_mappings`), so the VCA's `bias = 0` actually takes effect instead of
+  reverting to the registry default.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
