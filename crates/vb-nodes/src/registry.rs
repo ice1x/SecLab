@@ -704,17 +704,19 @@ fn builtins() -> Vec<NodeDescriptor> {
                     vec![audio_out("out")],
                 )
             },
-            || Box::new(PitchOsc::new(Waveform::Saw, 440.0)),
+            || Box::new(PitchOsc::new(Waveform::Saw, 440.0, 0.0)),
             || {
                 vec![
                     Parameter::new("waveform", 0.0, 3.0, 1.0),
                     Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("detune_semitones", -24.0, 24.0, 0.0),
                 ]
             },
             |_, v| {
                 Box::new(PitchOsc::new(
                     waveform_from(arg(v, 0, 1.0)),
                     arg(v, 1, 440.0),
+                    arg(v, 2, 0.0),
                 ))
             },
         ),

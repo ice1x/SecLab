@@ -25,6 +25,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/ladder_bass.ron"),
     ),
     ("mono_lead", include_str!("../../../examples/mono_lead.ron")),
+    ("minimoog", include_str!("../../../examples/minimoog.ron")),
 ];
 
 #[test]
@@ -140,6 +141,60 @@ fn mono_lead_tracks_the_played_note_pitch() {
 }
 
 #[test]
+fn minimoog_is_a_playable_three_oscillator_voice() {
+    // The Minimoog Model D factory patch: three detuned pitch-tracking oscillators mixed
+    // into an envelope-swept ladder and a note-gated VCA. Silent at rest, plays on a note,
+    // and tracks the played pitch — a real playable clone.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/minimoog.ron");
+    let doc = vb_project::open_ron(ron).expect("minimoog loads");
+    // Three oscillators is the essence of the Model D voice.
+    assert_eq!(
+        doc.nodes
+            .iter()
+            .filter(|e| e.node.kind == "pitch-osc")
+            .count(),
+        3,
+        "Model D has three oscillators"
+    );
+
+    let render = |note: Option<u8>| {
+        let ctx = BuildContext::default();
+        if let Some(n) = note {
+            ctx.notes.note_on(n, 100);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        let mut peak = 0.0_f32;
+        let mut crossings = 0usize;
+        for _ in 0..6 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+            crossings = out
+                .windows(2)
+                .filter(|w| (w[0] <= 0.0) != (w[1] <= 0.0))
+                .count();
+        }
+        (peak, crossings)
+    };
+
+    let (at_rest, _) = render(None);
+    assert!(at_rest < 1e-6, "minimoog must be silent at rest: {at_rest}");
+
+    let (low_peak, low_cross) = render(Some(45)); // ~110 Hz
+    let (_, high_cross) = render(Some(69)); // 440 Hz
+    assert!(low_peak > 0.05, "minimoog must sound on a note: {low_peak}");
+    assert!(
+        high_cross > low_cross * 2,
+        "a higher note must sound higher: {low_cross} vs {high_cross}"
+    );
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -154,7 +209,8 @@ fn the_example_set_is_the_expected_manifest() {
             "vibrato",
             "first_synth",
             "ladder_bass",
-            "mono_lead"
+            "mono_lead",
+            "minimoog"
         ]
     );
     // No example is empty.
