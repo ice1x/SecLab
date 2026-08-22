@@ -1281,10 +1281,7 @@ mod tests {
         // An edge to a port that doesn't exist makes the doc invalid.
         let bad = ProjectDoc {
             version: vb_project::FORMAT_VERSION,
-            nodes: vec![vb_project::NodeEntry {
-                id: NodeId(0),
-                node: gain(),
-            }],
+            nodes: vec![vb_project::NodeEntry::new(NodeId(0), gain())],
             edges: vec![Edge {
                 from_node: NodeId(0),
                 from_port: PortId(9),

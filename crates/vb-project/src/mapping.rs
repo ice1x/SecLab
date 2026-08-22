@@ -150,14 +150,14 @@ mod tests {
     use vb_core::{GraphNode, Port, SignalType};
 
     fn node(id: u64, kind: &str) -> NodeEntry {
-        NodeEntry {
-            id: NodeId(id),
-            node: GraphNode::new(
+        NodeEntry::new(
+            NodeId(id),
+            GraphNode::new(
                 kind,
                 vec![Port::input("in", SignalType::Audio)],
                 vec![Port::output("out", SignalType::Audio)],
             ),
-        }
+        )
     }
 
     /// A doc with an oscillator (id 3) and a gain (id 5).

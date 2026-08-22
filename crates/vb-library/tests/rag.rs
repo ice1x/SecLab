@@ -20,18 +20,18 @@ fn synth_doc() -> ProjectDoc {
     ProjectDoc {
         version: FORMAT_VERSION,
         nodes: vec![
-            NodeEntry {
-                id: NodeId(0),
-                node: GraphNode::new("oscillator", vec![], vec![audio_out("out")]),
-            },
-            NodeEntry {
-                id: NodeId(1),
-                node: GraphNode::new("biquad", vec![audio_in("in")], vec![audio_out("out")]),
-            },
-            NodeEntry {
-                id: NodeId(2),
-                node: GraphNode::new("gain", vec![audio_in("in")], vec![audio_out("out")]),
-            },
+            NodeEntry::new(
+                NodeId(0),
+                GraphNode::new("oscillator", vec![], vec![audio_out("out")]),
+            ),
+            NodeEntry::new(
+                NodeId(1),
+                GraphNode::new("biquad", vec![audio_in("in")], vec![audio_out("out")]),
+            ),
+            NodeEntry::new(
+                NodeId(2),
+                GraphNode::new("gain", vec![audio_in("in")], vec![audio_out("out")]),
+            ),
         ],
         edges: vec![
             Edge {

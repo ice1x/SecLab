@@ -38,10 +38,8 @@ fn a_sound_document_has_no_issues() {
 fn duplicate_node_ids_are_reported() {
     let mut doc = valid_doc();
     let clashing = doc.nodes[0].id;
-    doc.nodes.push(NodeEntry {
-        id: clashing,
-        node: source("oscillator"),
-    });
+    doc.nodes
+        .push(NodeEntry::new(clashing, source("oscillator")));
     assert!(doc.validate().contains(&Issue::DuplicateNodeId(clashing)));
 }
 

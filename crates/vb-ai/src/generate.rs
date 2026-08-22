@@ -367,25 +367,25 @@ mod tests {
         let edited = ProjectDoc {
             version: vb_project::FORMAT_VERSION,
             nodes: vec![
-                vb_project::NodeEntry {
-                    id: vb_core::NodeId(0),
-                    node: GraphNode::new(
+                vb_project::NodeEntry::new(
+                    vb_core::NodeId(0),
+                    GraphNode::new(
                         "oscillator",
                         vec![],
                         vec![Port::output("out", SignalType::Audio)],
                     ),
-                },
-                vb_project::NodeEntry {
-                    id: vb_core::NodeId(1),
-                    node: GraphNode::new(
+                ),
+                vb_project::NodeEntry::new(
+                    vb_core::NodeId(1),
+                    GraphNode::new(
                         "gain",
                         vec![Port::input("in", SignalType::Audio)],
                         vec![Port::output("out", SignalType::Audio)],
                     ),
-                },
-                vb_project::NodeEntry {
-                    id: vb_core::NodeId(2),
-                    node: GraphNode::new(
+                ),
+                vb_project::NodeEntry::new(
+                    vb_core::NodeId(2),
+                    GraphNode::new(
                         "biquad",
                         vec![
                             Port::input("in", SignalType::Audio),
@@ -393,7 +393,7 @@ mod tests {
                         ],
                         vec![Port::output("out", SignalType::Audio)],
                     ),
-                },
+                ),
             ],
             edges: vec![
                 vb_core::Edge {

@@ -428,10 +428,11 @@ reverb, noise, drum voices); those are noted per item and spawn their own 🧩 n
 as each patch is picked up. All of them depend on 000134 (patches must carry parameter
 values), so a preset can pin exact knob settings, not just a graph.
 
-- [ ] 000134 — 🧩 **Patches carry per-node parameter values** — a preset is structure **and**
+- [x] 000134 — 🧩 **Patches carry per-node parameter values** — a preset is structure **and**
   knob settings, not just a graph. Enabler for every factory patch below and for a
-  silent-until-note default. Today `ProjectDoc` is structure-only and the plugin derives
-  values from registry defaults, so no preset can pin a sound 🧪
+  silent-until-note default. `NodeEntry` now carries an optional `values` list (registry
+  `params()` order) that round-trips through RON; the plugin's engine builder honours a
+  node's stored values unless host automation overrides it, so a preset pins its sound 🧪
 - [ ] 000135 — **Silent-until-note default patch** — note-gated (`midi-in → adsr → vca.cv`
   with VCA `bias = 0`) so the instrument doesn't drone the instant it loads. Depends on
   000134; flip the `default_patch is audible` test to "silent at rest, audible on a note" 🧪

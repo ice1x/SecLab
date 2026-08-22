@@ -95,6 +95,16 @@ the AI assistant from the ground up. Highlights by area:
   by the CI `wasm build` job (which now also builds `vb-runtime` and the default
   `vb-library`). Written up in
   [`docs/architecture-boundary.md`](docs/architecture-boundary.md).
+- **Patches carry per-node parameter values (`vb-project`, `vb-plugin`)** — a `.vbp`
+  document is now structure **and** knob settings, not just a graph. `NodeEntry` grew an
+  optional `values` list (registry `params()` order) that round-trips through RON and is
+  omitted when empty, so structure-only and pre-existing documents load unchanged. The
+  plugin's engine builder honours a node's stored values when nothing overrides them, so a
+  preset can pin a specific sound; host automation still overrides per node at rebuild. This
+  is the enabler for the factory preset library (Epic 13) and a silent-until-note default.
+  Threading values correctly also fixed a latent id bug: the builder now addresses runtime
+  nodes through `ProjectDoc::to_graph_with_remap` instead of assuming document and runtime
+  ids coincide.
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a

@@ -227,10 +227,7 @@ fn parse_node_line<'a>(
         parse_ports(in_seg, true)?,
         parse_ports(out_seg, false)?,
     );
-    Ok(NodeEntry {
-        id: NodeId(id),
-        node,
-    })
+    Ok(NodeEntry::new(NodeId(id), node))
 }
 
 /// Parses an `edge <from>.<port> -> <to>.<port>` line against the parsed nodes.

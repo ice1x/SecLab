@@ -50,9 +50,14 @@ pub fn engine_from_doc(
     engine_from_doc_with_values(doc, registry, ctx, frames, &HashMap::new())
 }
 
-/// Like [`engine_from_doc`], but nodes listed in `values` get their processors built
-/// from those parameter values (in registry `params()` order) — the host-automation
-/// path: the plugin snapshots its automatable parameters and rebuilds through here.
+/// Like [`engine_from_doc`], but any node whose document id appears in `overrides`
+/// is built from those parameter values (in registry `params()` order) instead of
+/// the values the document itself stores. This is the host-automation path: the plugin
+/// snapshots its automatable parameters and rebuilds through here, while the document's
+/// own stored values pin the preset's sound for every node it does not override.
+///
+/// `overrides` is keyed by **document** node id (as stored in [`ProjectDoc::nodes`]);
+/// the runtime ids the engine uses are resolved internally via the graph remap.
 ///
 /// # Errors
 ///
@@ -62,36 +67,42 @@ pub fn engine_from_doc_with_values(
     registry: &Registry,
     ctx: &BuildContext,
     frames: usize,
-    values: &HashMap<NodeId, Vec<f32>>,
+    overrides: &HashMap<NodeId, Vec<f32>>,
 ) -> Result<(RtEngine, Option<NodeId>), BuildError> {
-    let graph = doc
-        .to_graph()
+    let (graph, remap) = doc
+        .to_graph_with_remap()
         .map_err(|e| BuildError::Project(e.to_string()))?;
 
     let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
-    for id in graph.node_ids() {
-        let kind = &graph.node(id).expect("listed id exists").kind;
+    for entry in &doc.nodes {
+        let kind = &entry.node.kind;
         let descriptor = registry
             .get(kind)
             .ok_or_else(|| BuildError::UnknownKind(kind.clone()))?;
-        let node_values = values.get(&id).map(Vec::as_slice).unwrap_or(&[]);
-        procs.insert(id, descriptor.processor_with(ctx, node_values));
+        // An override wins over the document's stored values; a node with neither
+        // falls back to the registry defaults (empty slice).
+        let node_values = overrides
+            .get(&entry.id)
+            .map_or(entry.values.as_slice(), Vec::as_slice);
+        let runtime_id = remap[&entry.id];
+        procs.insert(runtime_id, descriptor.processor_with(ctx, node_values));
     }
 
-    // Sink: the last terminal audio node in document order (deterministic).
+    // Sink: the last terminal audio node in document order, addressed by its runtime id
+    // (deterministic).
     let sink = doc
         .nodes
         .iter()
         .rev()
-        .find(|entry| {
+        .filter(|entry| {
             entry
                 .node
                 .outputs
                 .iter()
                 .any(|p| p.signal == SignalType::Audio)
-                && !graph.edges().iter().any(|e| e.from_node == entry.id)
         })
-        .map(|entry| entry.id);
+        .map(|entry| remap[&entry.id])
+        .find(|&runtime_id| !graph.edges().iter().any(|e| e.from_node == runtime_id));
 
     let engine =
         RtEngine::compile(&graph, procs, frames).map_err(|e| BuildError::Engine(e.to_string()))?;
@@ -142,6 +153,36 @@ mod tests {
     }
 
     #[test]
+    fn stored_node_values_pin_the_sound_without_overrides() {
+        // A preset is structure AND knob settings: a gain of 0.0 stored on the
+        // terminal node must silence the patch through the plain `engine_from_doc`
+        // path — no host-automation overrides supplied.
+        let registry = Registry::with_builtins();
+        let mut doc = default_patch(&registry);
+        // The gain node is the terminal (its output feeds nothing).
+        let gain_id = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "gain")
+            .expect("default patch has a gain")
+            .id;
+        doc.set_node_values(gain_id, vec![0.0]);
+
+        let (mut engine, sink) =
+            engine_from_doc(&doc, &registry, &BuildContext::default(), 256).expect("compiles");
+        let sink = sink.expect("terminal gain is the sink");
+        engine.process(&ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let out = engine.node_output(sink).unwrap().channel(0).unwrap();
+        assert!(
+            out.iter().all(|&s| s.abs() < 1e-6),
+            "stored gain=0 must silence the patch"
+        );
+    }
+
+    #[test]
     fn unknown_kinds_are_reported_by_name() {
         let mut graph = Graph::new();
         graph.add_node(GraphNode::new(
@@ -172,5 +213,37 @@ mod tests {
         let restored = vb_project::open_ron(&ron).expect("parses and validates");
         let built = engine_from_doc(&restored, &registry, &BuildContext::default(), 128);
         assert!(built.is_ok());
+    }
+
+    #[test]
+    fn stored_values_survive_ron_and_still_pin_the_sound() {
+        // The exact path a factory preset takes: a patch carrying knob settings is
+        // saved to a `.vbp` RON file, reopened, and must sound the same — here a
+        // stored gain of 0.0 keeps the reopened patch silent with no overrides.
+        let registry = Registry::with_builtins();
+        let mut doc = default_patch(&registry);
+        let gain_id = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "gain")
+            .expect("default patch has a gain")
+            .id;
+        doc.set_node_values(gain_id, vec![0.0]);
+
+        let ron = vb_project::to_ron(&doc).expect("serializes");
+        let restored = vb_project::open_ron(&ron).expect("parses and validates");
+
+        let (mut engine, sink) =
+            engine_from_doc(&restored, &registry, &BuildContext::default(), 256).expect("compiles");
+        let sink = sink.expect("terminal gain is the sink");
+        engine.process(&ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let out = engine.node_output(sink).unwrap().channel(0).unwrap();
+        assert!(
+            out.iter().all(|&s| s.abs() < 1e-6),
+            "a preset's stored gain=0 must stay silent across a RON round trip"
+        );
     }
 }
