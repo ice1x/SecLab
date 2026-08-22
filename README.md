@@ -452,9 +452,18 @@ values), so a preset can pin exact knob settings, not just a graph.
 - [ ] 000142 — **Multiband distortion / waveshaper** effect patch (fxpansion Maul-style):
   band-split → per-band drive/waveshape → mix. Needs: crossover/band-split + a waveshaper
   chain
+- [x] 000143 — 🧩 **Ladder-filter node** (`ladder`) — Moog-style four-pole (24 dB/oct)
+  resonant low-pass, control-swept like the `vcf`. Zero-delay-feedback TPT design
+  (accurately tuned, stable to self-oscillation). Shared prerequisite for 000136/000137;
+  demonstrated by the env-swept `examples/ladder_bass.ron` factory patch 🧪
+- [ ] 000144 — 🧩 **MIDI-pitch-tracking oscillator** — a generator whose frequency follows
+  the played note (`midi-in.pitch_hz → osc.freq`). Today `oscillator` has a fixed
+  frequency and `vco` takes an *exponential* octave CV, neither of which tracks the
+  absolute Hz `midi-in` emits — so every clone below is stuck at one pitch until this
+  lands. The real enabler that makes 000136–000140 *playable* 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000143, …); split a large task into 🧩 subtasks with
+the end with a new global number (000145, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

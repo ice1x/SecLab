@@ -113,6 +113,15 @@ the AI assistant from the ground up. Highlights by area:
   also seeds the host/editor parameter defaults from its stored values (via
   `vb_project::build_mappings`), so the VCA's `bias = 0` actually takes effect instead of
   reverting to the registry default.
+- **Ladder-filter node (`vb-nodes`, kind `ladder`)** — a Moog-style four-pole
+  (24 dB/octave) resonant low-pass, control-swept like the `vcf`
+  (`cutoff = clamp(base_hz + amount_hz · cv)`). Built from `tan`-prewarped TPT one-pole
+  stages closed with a **zero-delay-feedback** resonance loop (Zavalishin), so the cutoff
+  tunes accurately and it stays stable right up to self-oscillation instead of blowing up
+  the way a naive delayed-feedback ladder does. Steeper roll-off and singing resonance the
+  two-pole `svf`/`biquad` can't give — the shared filter prerequisite for the Epic 13 Moog
+  clones (000143). Ships the env-swept `examples/ladder_bass.ron` factory patch (silent at
+  rest, sings on a note) and is in the generated [node reference](docs/nodes.md).
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a

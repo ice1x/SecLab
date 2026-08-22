@@ -13,6 +13,7 @@ use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
+use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
 use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
@@ -637,6 +638,32 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 1, 1_000.0),
                     arg(v, 2, 0.707),
                     arg(v, 3, 4_000.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "ladder",
+            "filter",
+            || {
+                GraphNode::new(
+                    "ladder",
+                    vec![audio_in("in"), Port::input("cutoff", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Ladder::new(1_000.0, 0.3, 4_000.0)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("resonance", 0.0, 1.0, 0.3),
+                    Parameter::new("amount_hz", -20_000.0, 20_000.0, 4_000.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Ladder::new(
+                    arg(v, 0, 1_000.0),
+                    arg(v, 1, 0.3),
+                    arg(v, 2, 4_000.0),
                 ))
             },
         ),

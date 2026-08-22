@@ -20,6 +20,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         "first_synth",
         include_str!("../../../examples/first_synth.ron"),
     ),
+    (
+        "ladder_bass",
+        include_str!("../../../examples/ladder_bass.ron"),
+    ),
 ];
 
 #[test]
@@ -55,6 +59,45 @@ fn every_example_loads_validates_and_builds_an_engine() {
 }
 
 #[test]
+fn ladder_bass_is_silent_at_rest_and_sings_on_a_note() {
+    // The ladder-bass factory patch: an envelope-swept resonant ladder gated by a note.
+    // Its stored VCA bias = 0 keeps it silent until a note opens the envelope.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/ladder_bass.ron");
+    let doc = vb_project::open_ron(ron).expect("ladder_bass loads");
+
+    let peak = |ctx: &BuildContext| {
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, ctx, 256).expect("builds");
+        let sink = sink.expect("has a sink");
+        // A few blocks so the filter/amp envelope has time to open.
+        let mut p = 0.0_f32;
+        for _ in 0..8 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 256,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            p = p.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        p
+    };
+
+    let at_rest = peak(&BuildContext::default());
+    assert!(
+        at_rest < 1e-6,
+        "ladder_bass must be silent at rest: {at_rest}"
+    );
+
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 100); // ~110 Hz
+    let on_note = peak(&ctx);
+    assert!(
+        on_note > 0.01,
+        "ladder_bass must sound on a note: {on_note}"
+    );
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -67,7 +110,8 @@ fn the_example_set_is_the_expected_manifest() {
             "tremolo",
             "filter_sweep",
             "vibrato",
-            "first_synth"
+            "first_synth",
+            "ladder_bass"
         ]
     );
     // No example is empty.
