@@ -122,6 +122,15 @@ the AI assistant from the ground up. Highlights by area:
   two-pole `svf`/`biquad` can't give — the shared filter prerequisite for the Epic 13 Moog
   clones (000143). Ships the env-swept `examples/ladder_bass.ron` factory patch (silent at
   rest, sings on a note) and is in the generated [node reference](docs/nodes.md).
+- **Pitch-tracking oscillator node (`vb-nodes`, kind `pitch-osc`)** — the missing link
+  between `midi-in` and audible pitch: it reads the played note's absolute frequency
+  (`midi-in.pitch_hz`, in Hz) from a control input and retunes its oscillator to it each
+  block, falling back to `base_hz` when no note is held. Plain `oscillator` runs at a fixed
+  frequency and `vco` takes an *exponential* octave CV — neither tracks absolute Hz — so
+  this is what makes a keyboard-tracking (playable) voice possible, the enabler for the
+  Epic 13 clones (000144). Ships the playable `examples/mono_lead.ron` (midi → `pitch-osc`
+  → `ladder` → env-gated `vca`), whose test asserts a higher note sounds higher through the
+  whole engine; regenerated [node reference](docs/nodes.md).
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a

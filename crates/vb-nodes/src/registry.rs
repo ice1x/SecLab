@@ -19,6 +19,7 @@ use crate::math::{Add, Clamp, Gain, Mix, Mul};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::pitch_osc::PitchOsc;
 use crate::poly::{PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
@@ -690,6 +691,30 @@ fn builtins() -> Vec<NodeDescriptor> {
                     waveform_from(arg(v, 0, 0.0)),
                     arg(v, 1, 440.0),
                     arg(v, 2, 1.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "pitch-osc",
+            "generator",
+            || {
+                GraphNode::new(
+                    "pitch-osc",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(PitchOsc::new(Waveform::Saw, 440.0)),
+            || {
+                vec![
+                    Parameter::new("waveform", 0.0, 3.0, 1.0),
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                ]
+            },
+            |_, v| {
+                Box::new(PitchOsc::new(
+                    waveform_from(arg(v, 0, 1.0)),
+                    arg(v, 1, 440.0),
                 ))
             },
         ),
