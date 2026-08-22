@@ -21,11 +21,16 @@ nih_plug.workspace = true
 # headless validator never has to open a window. Same git source as nih_plug so the two
 # resolve to one nih-plug revision.
 nih_plug_egui = { git = "https://github.com/robbert-vdh/nih-plug.git", optional = true }
+# The real node editor, embedded in the plugin window (000067 → full editor). `gui`-only and
+# with `default-features = false` so it brings `EditorApp` + `render(ctx)` WITHOUT eframe's
+# winit — the plugin owns its window via nih_plug_egui. Both now share egui 0.31 (PR #133),
+# so the same editor code renders here as in the standalone.
+vb-editor = { workspace = true, optional = true }
 
 [features]
-# Embed the egui run-view in the plugin window. Build bundles with `--features gui` to
-# get an in-host editor.
-gui = ["dep:nih_plug_egui"]
+# Embed the full egui node editor in the plugin window. Build bundles with `--features gui`
+# to get an in-host editor.
+gui = ["dep:nih_plug_egui", "dep:vb-editor"]
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

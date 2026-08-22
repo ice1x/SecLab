@@ -4275,6 +4275,7 @@ dependencies = [
  "nih_plug_egui",
  "vb-ai",
  "vb-core",
+ "vb-editor",
  "vb-nodes",
  "vb-project",
  "vb-runtime",

@@ -1,12 +1,13 @@
 //! Launches the VST_bomb node editor window.
 //!
-//! Native only: on `wasm32` the editor is booted from JavaScript through
-//! [`vb_editor::web::start`], not from a `main`, so this binary compiles to a no-op there.
+//! Only meaningful for the native standalone build (the `app` feature). On `wasm32` the
+//! editor is booted from JavaScript through [`vb_editor::web::start`], and when `app` is
+//! off (the editor embedded in another host, e.g. the plugin) this binary is a no-op.
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(all(not(target_arch = "wasm32"), feature = "app"))]
 fn main() -> Result<(), eframe::Error> {
     vb_editor::run()
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(not(all(not(target_arch = "wasm32"), feature = "app")))]
 fn main() {}
