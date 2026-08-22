@@ -33,6 +33,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/grandmother.ron"),
     ),
     ("maul", include_str!("../../../examples/maul.ron")),
+    ("minilogue", include_str!("../../../examples/minilogue.ron")),
 ];
 
 #[test]
@@ -371,6 +372,59 @@ fn maul_is_a_three_band_distortion_effect() {
 }
 
 #[test]
+fn minilogue_is_polyphonic() {
+    // The Korg Minilogue XD factory patch: four independent voice chains, each fed by a
+    // `voice-in` node bound to its own slot, summed into a reverb. Polyphony proof: a
+    // three-note chord fills three voices and sums to more energy than a single note.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/minilogue.ron");
+    let doc = vb_project::open_ron(ron).expect("minilogue loads");
+    assert_eq!(
+        doc.nodes
+            .iter()
+            .filter(|e| e.node.kind == "voice-in")
+            .count(),
+        4,
+        "four-voice polyphony"
+    );
+
+    let rms = |notes: &[u8]| {
+        let ctx = BuildContext::default();
+        for &n in notes {
+            ctx.poly.note_on(n, 100);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        // Let the envelopes open, then measure a settled block.
+        let mut last = Vec::new();
+        for _ in 0..8 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+            last = engine
+                .node_output(sink)
+                .and_then(|b| b.channel(0))
+                .unwrap()
+                .to_vec();
+            assert!(last.iter().all(|s| s.is_finite()), "finite audio");
+        }
+        (last.iter().map(|s| s * s).sum::<f32>() / last.len() as f32).sqrt()
+    };
+
+    let silent = rms(&[]);
+    assert!(silent < 1e-6, "minilogue must be silent at rest: {silent}");
+
+    let one = rms(&[60]);
+    let chord = rms(&[60, 64, 67]);
+    assert!(one > 0.01, "a single note sounds: {one}");
+    assert!(
+        chord > one * 1.4,
+        "a chord sums several voices, louder than one note: {one} vs {chord}"
+    );
+}
+
+#[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
     let names: Vec<&str> = EXAMPLES.iter().map(|(n, _)| *n).collect();
@@ -390,7 +444,8 @@ fn the_example_set_is_the_expected_manifest() {
             "minitaur",
             "neutron",
             "grandmother",
-            "maul"
+            "maul",
+            "minilogue"
         ]
     );
     // No example is empty.
