@@ -137,6 +137,14 @@ the AI assistant from the ground up. Highlights by area:
   tracks the played pitch, stays silent at rest, and sounds on a note (all asserted in the
   examples test). `pitch-osc` gained a `detune_semitones` parameter (±24, backward
   compatible) to build the oscillator stack that gives the voice its fatness.
+- **Glide (portamento) node (`vb-nodes`, kind `glide`)** — a control-rate slew that ramps
+  its input toward each new value over `glide_ms`, so a pitch wired through it slides
+  between notes instead of jumping. Wraps the existing `Smoother`; the first value snaps in
+  (a patch sounds at pitch on the first note) and `glide_ms = 0` is transparent pass-through.
+- **Moog Minitaur factory clone (`examples/minitaur.ron`, Epic 13 / 000136)** — a mono bass
+  voice: two detuned saws plus a square sub an octave down (`pitch-osc`), a `glide` stage on
+  the pitch, an envelope-swept `ladder`, and a note-gated VCA. Silent at rest, plays on a
+  note, tracks pitch, and carries portamento (asserted in the examples test).
 - **Documentation** — a [node reference](docs/nodes.md), a
   [user guide](docs/first-plugin.md) (build your first plugin), a
   [developer guide](docs/adding-a-node.md) (add your own node), a
