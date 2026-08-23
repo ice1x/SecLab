@@ -25,7 +25,19 @@ jobs:
     runs-on: [self-hosted, macOS, ARM64]
     steps:
       - uses: actions/checkout@v4
-      - run: cargo fmt --all --check
+      # Format-check only THIS workspace's crates, never `--all`. `cargo fmt --all`
+      # descends into local path-dependency packages, and `vb-library` depends on the
+      # sibling `drevo` checkout by absolute path — so `--all` would format ~184 drevo
+      # files and fail this required gate whenever that shared, external working tree has
+      # unformatted edits (another dev/session mid-work). We scope to workspace members,
+      # enumerated from `cargo metadata --no-deps` so a newly-added crate is picked up
+      # automatically (no hand-maintained list, and `cargo fmt` has no `--exclude`).
+      - name: rustfmt (workspace crates only, excludes path-dep drevo)
+        run: |
+          cargo metadata --no-deps --format-version 1 \
+            | jq -r '.packages[].name' \
+            | sed 's/^/-p /' \
+            | xargs cargo fmt --check
 
   check:
     name: clippy & test (macos-self-hosted)
