@@ -13,7 +13,11 @@
 
 #[cfg(feature = "gui")]
 pub mod editor;
-pub mod engine_builder;
+
+// The instrument core now lives in the host-framework-free `vb-engine` crate (so it stays
+// wasm32-portable for the browser audio path, backlog 000083). Re-exported under the old
+// `engine_builder` name so existing `vb_plugin::engine_builder::…` paths keep resolving.
+pub use vb_engine as engine_builder;
 
 use std::collections::{BTreeMap, HashMap};
 use std::num::NonZeroU32;
@@ -28,7 +32,7 @@ use vb_runtime::RtEngine;
 
 use vb_runtime::{engine_swap, EngineReceiver};
 
-pub use engine_builder::{default_patch, engine_from_doc, engine_from_doc_with_values, BuildError};
+pub use vb_engine::{default_patch, engine_from_doc, engine_from_doc_with_values, BuildError};
 
 /// The VST_bomb instrument plugin.
 pub struct VstBomb {

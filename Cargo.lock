@@ -4249,6 +4249,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "vb-engine"
+version = "0.0.0"
+dependencies = [
+ "vb-core",
+ "vb-nodes",
+ "vb-project",
+ "vb-runtime",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "vb-library"
 version = "0.0.0"
 dependencies = [
@@ -4276,6 +4287,7 @@ dependencies = [
  "vb-ai",
  "vb-core",
  "vb-editor",
+ "vb-engine",
  "vb-nodes",
  "vb-project",
  "vb-runtime",

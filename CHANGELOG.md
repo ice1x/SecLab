@@ -80,8 +80,19 @@ the AI assistant from the ground up. Highlights by area:
   cfg-split entry point (`vb_editor::web::start`), leaving the native winit launcher
   untouched; the platform-agnostic core (`vb-core` / `vb-nodes` / `vb-project`) is portable
   too, so `.vbp` files load on both. A non-blocking CI `wasm build` job compiles them on
-  every push. Build/serve steps in [`docs/wasm.md`](docs/wasm.md). (Browser audio is a
-  separate, later task.)
+  every push. Build/serve steps in [`docs/wasm.md`](docs/wasm.md). (Browser **audio** is the
+  `vb-engine` crate, below.)
+- **Browser audio engine (`vb-engine`)** — the instrument core (`default_patch`,
+  `engine_from_doc`) moved out of `vb-plugin` into a new crate that depends only on the DSP
+  stack (`vb-core` / `vb-nodes` / `vb-project` / `vb-runtime`), so it carries **no** host
+  framework and compiles to `wasm32-unknown-unknown`. `HeadlessSynth` drives a compiled patch
+  block by block — build from the default patch or a `.vbp` RON string, feed MIDI note
+  on/off, render fixed 128-sample quanta — and the wasm32-only `WasmSynth` (`wasm-bindgen`)
+  wraps it as the object a WebAudio `AudioWorklet` calls (`new` / `fromRon` / `noteOn` /
+  `noteOff` / `render`). `vb-plugin` re-exports the crate as `engine_builder`, so its API is
+  unchanged; the CI `wasm build` job now also compiles `vb-engine`. This lands the *engine in
+  WASM* half of the browser-audio task; the AudioWorklet/page wiring and in-browser playback
+  remain (backlog 000083).
 - **In-app project serialization (`vb-editor`)** — `EditorApp::export_project_ron` /
   `import_project_ron` round-trip the whole patch through the `.vbp` RON format using only
   `vb-project` and in-memory strings (no filesystem), wired to an egui text-buffer panel.
