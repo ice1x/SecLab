@@ -97,6 +97,10 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
       - name: build the core crates for wasm32
         run: cargo build -p vb-core -p vb-nodes -p vb-project -p vb-runtime --target wasm32-unknown-unknown
+      # The browser audio engine (000083): the nih-plug-free instrument core plus its
+      # AudioWorklet binding must keep compiling to a loadable wasm module.
+      - name: build the audio engine for wasm32 (WebAudio/AudioWorklet path)
+        run: cargo build -p vb-engine --target wasm32-unknown-unknown
       - name: build the editor for wasm32 (browser entry point)
         run: cargo build -p vb-editor --target wasm32-unknown-unknown
       # The default vb-library must stay wasm-portable: the drevo/redb knowledge graph is a

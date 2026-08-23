@@ -5,6 +5,7 @@ members = [
     "crates/vb-nodes",
     "crates/vb-project",
     "crates/vb-runtime",
+    "crates/vb-engine",
     "crates/vb-editor",
     "crates/vb-standalone",
     "crates/vb-plugin",
@@ -26,6 +27,9 @@ authors = ["ice1x"]
 vb-core = { path = "crates/vb-core" }
 vb-nodes = { path = "crates/vb-nodes" }
 vb-runtime = { path = "crates/vb-runtime" }
+# The nih-plug-free instrument core, shared by the plugin and the browser (WASM) audio
+# path. Split out of vb-plugin so it stays wasm32-portable — no host framework in its tree.
+vb-engine = { path = "crates/vb-engine" }
 # default-features off at the workspace level so the plugin can embed `EditorApp` without
 # eframe/winit; consumers that run the editor as its own window (vb-standalone, the WASM
 # build) opt back into `app` explicitly.
