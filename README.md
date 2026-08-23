@@ -330,7 +330,7 @@ the definition of done.
 
 - [x] 000081 — Build `vb-editor` to **WASM** (egui/eframe web target) — proof of concept
 - [x] 000082 — Edit the graph in the browser (no audio) with serialization
-- [ ] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM)
+- [x] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM) — the nih-plug-free [`vb-engine`](crates/vb-engine) core compiles to wasm; a runnable AudioWorklet demo + headless Node smoke test live in [`web/audio`](web/audio) 🧪
 - [x] 000084 — Define the web/native runtime boundary and a shared project format
 
 ### Epic 10 — Documentation, examples, release

@@ -90,9 +90,17 @@ the AI assistant from the ground up. Highlights by area:
   on/off, render fixed 128-sample quanta — and the wasm32-only `WasmSynth` (`wasm-bindgen`)
   wraps it as the object a WebAudio `AudioWorklet` calls (`new` / `fromRon` / `noteOn` /
   `noteOff` / `render`). `vb-plugin` re-exports the crate as `engine_builder`, so its API is
-  unchanged; the CI `wasm build` job now also compiles `vb-engine`. This lands the *engine in
-  WASM* half of the browser-audio task; the AudioWorklet/page wiring and in-browser playback
-  remain (backlog 000083).
+  unchanged; the CI `wasm build` job now also compiles `vb-engine`.
+- **Browser audio prototype (`web/audio`, backlog 000083)** — the engine runs in the browser
+  through a WebAudio `AudioWorklet`: a demo page loads the `vb-engine` wasm into the audio
+  thread (the worklet module is the wasm-bindgen `no-modules` glue + a `TextEncoder`/
+  `TextDecoder` polyfill — `AudioWorkletGlobalScope` has neither — + the processor, assembled
+  into one Blob), a QWERTY keyboard sends MIDI note on/off, and each `process()` quantum is
+  one `WasmSynth.render()`. A headless `node web/audio/test/smoke.mjs` verifies the whole
+  Rust → wasm → JS path (silent at rest, audible on a note, decays on release, 128-sample
+  blocks, malformed patch throws) and runs as a NON-blocking CI `browser audio` job. Verified
+  end to end in a real browser via the page's self-test (plays A4, reports the measured output
+  peak). Build/run/test steps in [`web/audio/README.md`](web/audio/README.md).
 - **In-app project serialization (`vb-editor`)** — `EditorApp::export_project_ron` /
   `import_project_ron` round-trip the whole patch through the `.vbp` RON format using only
   `vb-project` and in-memory strings (no filesystem), wired to an egui text-buffer panel.
