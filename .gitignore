@@ -80,3 +80,9 @@ Testing/
 # Editor-exported reusable macro modules (runtime output)
 /modules/
 *.vbmod.ron
+
+# Generated wasm-pack output for the browser-audio demo (built locally / in CI, see
+# web/audio/README.md). The source (html/js) is committed; the compiled wasm package is not.
+/web/audio/pkg-node/
+/web/audio/pkg-nomod/
+/web/audio/pkg/

@@ -68,9 +68,17 @@ Graph editing works in the web build, and so does save/load: the palette panel h
 `vb-project` and an in-memory text buffer — no browser file API — so copy the RON out to
 save, or paste a `.vbp` in and load it. This is [000082](../README.md).
 
+## Audio in the browser (WebAudio / AudioWorklet)
+
+The instrument engine runs in the browser too — not through `cpal` (which the wasm build
+lacks) but through a WebAudio `AudioWorklet`. The engine core lives in the nih-plug-free
+[`vb-engine`](../crates/vb-engine) crate, compiled to `wasm32` and driven from JS via its
+`WasmSynth` binding (`new` / `noteOn` / `noteOff` / `render`, one 128-sample quantum per
+`process()` call). A runnable prototype — demo page, the worklet processor, and a headless
+Node smoke test of the whole Rust → wasm → JS path — is in [`web/audio/`](../web/audio),
+with build/run/test steps in its README. This is [000083](../README.md).
+
 ## Not covered here
 
-- **Audio** — the browser build has no `cpal` stream; running the engine under
-  WebAudio/AudioWorklet is [000083](../README.md).
 - **Native file dialogs / local storage** — the in-app RON buffer is the portable path;
   richer browser persistence (a file picker, `localStorage`) can build on it later.

@@ -120,3 +120,20 @@ jobs:
       # the default here guards the boundary defined in docs/architecture-boundary.md.
       - name: build the default library façade for wasm32
         run: cargo build -p vb-library --target wasm32-unknown-unknown
+
+  # Browser audio prototype (backlog 000083): build the vb-engine wasm package with its JS
+  # bindings and run the headless Node smoke test — the exact Rust → wasm → JS path the
+  # browser AudioWorklet drives (silent at rest, audible on a note, decays on release).
+  # NON-blocking: the wasm/JS toolchain is not a required gate. See web/audio/.
+  browser-audio:
+    name: browser audio (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: ensure wasm-pack is available
+        run: command -v wasm-pack >/dev/null 2>&1 || cargo install wasm-pack
+      - name: build the audio engine to a Node wasm package
+        run: wasm-pack build crates/vb-engine --target nodejs --out-dir ../../web/audio/pkg-node --out-name vb_engine
+      - name: run the headless audio smoke test
+        run: node web/audio/test/smoke.mjs

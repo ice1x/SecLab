@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>VST_bomb — browser synth (WASM)</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 40rem; margin: 3rem auto; padding: 0 1rem; }
+  button { font-size: 1rem; padding: .5rem 1rem; margin-right: .5rem; }
+  #peak { font-family: ui-monospace, monospace; font-weight: 600; }
+  kbd { background:#eee; border:1px solid #ccc; border-radius:3px; padding:0 .3rem; }
+</style></head>
+<body>
+  <h1>VST_bomb in the browser 🔊</h1>
+  <p>The instrument engine (Rust → WASM) running in a WebAudio <code>AudioWorklet</code>.</p>
+  <p><button id="start">Start audio</button>
+     <button id="selftest" disabled>Self-test (play A4)</button></p>
+  <p>Status: <span id="status">idle — click Start (browser needs a gesture)</span></p>
+  <p>Self-test: <span id="peak">—</span></p>
+  <p>Play with <kbd>a</kbd> <kbd>s</kbd> <kbd>d</kbd> <kbd>f</kbd> … (white keys), <kbd>w</kbd> <kbd>e</kbd> <kbd>t</kbd> <kbd>y</kbd> <kbd>u</kbd> (black).</p>
+  <script type="module" src="app.js"></script>
+</body></html>
