@@ -219,6 +219,15 @@ the AI assistant from the ground up. Highlights by area:
   width clamp; hard-sync — ratio 1 is a plain saw, higher ratio adds crossings, output stays
   periodic at the master pitch, pitch tracking + ratio clamp) plus a registry test; regenerated
   [node reference](docs/nodes.md).
+- **Showcase example patches for the new nodes (`examples/`, 000160)** — three factory patches
+  demonstrating the recent additions end-to-end in the real engine: `supersaw_lead.ron`
+  (supersaw → envelope-swept ladder → note-gated VCA, a fat trance lead), `fm_ep.ron` (a
+  two-operator FM electric piano — a `fm-op` modulator into a `fm-op` carrier's `mod` input,
+  plucked by a no-sustain envelope), and `auto_wah.ron` (a built-in saw drone through a
+  `tremolo` whose amplitude an `env-follower` tracks to sweep a `vcf` cutoff — the classic
+  auto-wah). Each is wired into the `vb-plugin` examples manifest and covered by a targeted
+  engine test (supersaw lead / FM EP silent at rest and sounding on a note; auto-wah drones
+  audibly and stays bounded).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It

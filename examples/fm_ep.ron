@@ -1,0 +1,187 @@
+(
+    version: 1,
+    nodes: [
+        (
+            id: (0),
+            node: (
+                kind: "fm-op",
+                inputs: [
+                    (
+                        name: "pitch",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                    (
+                        name: "mod",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                440.0,
+                3.0,
+                0.0,
+            ],
+        ),
+        (
+            id: (1),
+            node: (
+                kind: "fm-op",
+                inputs: [
+                    (
+                        name: "pitch",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                    (
+                        name: "mod",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                440.0,
+                1.0,
+                5.0,
+            ],
+        ),
+        (
+            id: (2),
+            node: (
+                kind: "midi-in",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "gate",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                    (
+                        name: "pitch_hz",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                    (
+                        name: "velocity",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+        (
+            id: (3),
+            node: (
+                kind: "adsr",
+                inputs: [
+                    (
+                        name: "gate",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "level",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.002,
+                0.7,
+                0.0,
+                0.4,
+            ],
+        ),
+        (
+            id: (4),
+            node: (
+                kind: "vca",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                    (
+                        name: "cv",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.0,
+                1.0,
+            ],
+        ),
+    ],
+    edges: [
+        (
+            from_node: (2),
+            from_port: (1),
+            to_node: (0),
+            to_port: (0),
+        ),
+        (
+            from_node: (2),
+            from_port: (1),
+            to_node: (1),
+            to_port: (0),
+        ),
+        (
+            from_node: (0),
+            from_port: (0),
+            to_node: (1),
+            to_port: (1),
+        ),
+        (
+            from_node: (1),
+            from_port: (0),
+            to_node: (4),
+            to_port: (0),
+        ),
+        (
+            from_node: (2),
+            from_port: (0),
+            to_node: (3),
+            to_port: (0),
+        ),
+        (
+            from_node: (3),
+            from_port: (0),
+            to_node: (4),
+            to_port: (1),
+        ),
+    ],
+)
