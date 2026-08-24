@@ -11,6 +11,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::ad_env::AdEnv;
 use crate::bitcrusher::Bitcrusher;
+use crate::chorus::Chorus;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
@@ -33,6 +34,7 @@ use crate::sample_hold::SampleHold;
 use crate::slew::Slew;
 use crate::supersaw::Supersaw;
 use crate::svf::Svf;
+use crate::tremolo::Tremolo;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
 use crate::vco::Vco;
@@ -546,6 +548,33 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
         ),
         NodeDescriptor::new(
+            "tremolo",
+            "effect",
+            || GraphNode::new("tremolo", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Tremolo::new(5.0, 0.5)),
+            || {
+                vec![
+                    Parameter::new("rate_hz", 0.1, 20.0, 5.0),
+                    Parameter::new("depth", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| Box::new(Tremolo::new(arg(v, 0, 5.0), arg(v, 1, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "chorus",
+            "effect",
+            || GraphNode::new("chorus", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Chorus::new(0.8, 4.0, 0.5)),
+            || {
+                vec![
+                    Parameter::new("rate_hz", 0.05, 10.0, 0.8),
+                    Parameter::new("depth_ms", 0.0, 10.0, 4.0),
+                    Parameter::new("mix", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| Box::new(Chorus::new(arg(v, 0, 0.8), arg(v, 1, 4.0), arg(v, 2, 0.5))),
+        ),
+        NodeDescriptor::new(
             "splitter",
             "routing",
             || {
@@ -1021,6 +1050,30 @@ mod tests {
             vec!["scale", "offset"]
         );
         assert!(r.processor("attenuvert").is_some());
+    }
+
+    #[test]
+    fn tremolo_and_chorus_are_registered_as_effects() {
+        let r = Registry::with_builtins();
+        for kind in ["tremolo", "chorus"] {
+            let d = r.get(kind).unwrap_or_else(|| panic!("{kind} registered"));
+            assert_eq!(d.category(), "effect");
+            let node = r.graph_node(kind).unwrap();
+            assert_eq!(node.inputs.len(), 1);
+            assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+            assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+            assert!(r.processor(kind).is_some());
+        }
+        let tr = r.get("tremolo").unwrap().params();
+        assert_eq!(
+            tr.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["rate_hz", "depth"]
+        );
+        let ch = r.get("chorus").unwrap().params();
+        assert_eq!(
+            ch.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["rate_hz", "depth_ms", "mix"]
+        );
     }
 
     #[test]

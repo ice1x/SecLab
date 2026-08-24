@@ -23,6 +23,15 @@ Auto-generated from the registry — do not edit by hand.
   - `downsample` — range 1..64, default 1
   - `mix` — range 0..1, default 1
 
+### chorus
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `rate_hz` — range 0.05..10, default 0.8
+  - `depth_ms` — range 0..10, default 4
+  - `mix` — range 0..1, default 0.5
+
 ### fb-delay
 
 - **Inputs:** `in` (audio)
@@ -47,6 +56,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `freq_hz` — range 1..8000, default 200
   - `mix` — range 0..1, default 1
+
+### tremolo
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `rate_hz` — range 0.1..20, default 5
+  - `depth` — range 0..1, default 0.5
 
 ### waveshaper
 

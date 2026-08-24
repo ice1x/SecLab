@@ -199,6 +199,16 @@ the AI assistant from the ground up. Highlights by area:
   shifts the centre, together mapping a modulator into the range a destination wants. Added to
   `vb-nodes/src/math.rs` alongside the existing gain/add/mul/mix/clamp; unit-tested and covered
   by a registry test; regenerated [node reference](docs/nodes.md).
+- **Tremolo and chorus effect nodes (`vb-nodes`, kinds `tremolo` / `chorus`)** — two
+  time-varying effects, each self-contained with its own internal LFO. `tremolo` scales the
+  amplitude with a sine LFO (`rate_hz`, `depth`), sweeping the gain between unity and
+  `1 - depth` — the vintage amp shimmer / pulsing pad. `chorus` mixes in one LFO-modulated
+  delay tap (a fractional, linearly-interpolated delay line wobbling around ~12 ms by
+  `depth_ms` at `rate_hz`), whose moving-tap Doppler detune thickens and widens the sound,
+  balanced dry/wet by `mix`. Unit-tested (tremolo — depth-0 transparency, gain swings between
+  1 and 1-depth on a DC input, faster rate → more troughs, depth clamp; chorus — dry
+  passthrough, the delayed tap starts silent then sounds, wet reshapes the signal, silent
+  stays silent, mix clamp) plus a registry test; regenerated [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
