@@ -209,6 +209,16 @@ the AI assistant from the ground up. Highlights by area:
   1 and 1-depth on a DC input, faster rate → more troughs, depth clamp; chorus — dry
   passthrough, the delayed tap starts silent then sounds, wet reshapes the signal, silent
   stays silent, mix clamp) plus a registry test; regenerated [node reference](docs/nodes.md).
+- **Pulse-width and hard-sync oscillator nodes (`vb-nodes`, kinds `pwm` / `hard-sync`)** — two
+  more pitch-tracking generators. `pwm` is a PolyBLEP band-limited pulse with an adjustable
+  duty cycle (`width`): 50% is a square, narrower widths thin the waveform toward a bright,
+  nasal spike; both discontinuities are PolyBLEP-corrected so it stays alias-free. `hard-sync`
+  runs a slave sawtooth at `sync_ratio ×` the master (played) pitch and hard-resets the slave's
+  phase every master cycle — the tearing, formant-swept "sync lead"; at ratio 1 it is a plain
+  saw. Unit-tested (pwm — 50% is a balanced square, narrow pulse is asymmetric, pitch tracking,
+  width clamp; hard-sync — ratio 1 is a plain saw, higher ratio adds crossings, output stays
+  periodic at the master pitch, pitch tracking + ratio clamp) plus a registry test; regenerated
+  [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
