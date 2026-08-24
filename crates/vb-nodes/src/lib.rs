@@ -25,6 +25,8 @@ pub mod poly;
 pub mod registry;
 pub mod reverb;
 pub mod routing;
+pub mod sample_hold;
+pub mod slew;
 pub mod smooth;
 pub mod supersaw;
 pub mod svf;
@@ -54,6 +56,8 @@ pub use poly::{KeyGate, PolyNoteSource, PolyVoiceIn, VoiceAllocator, MAX_VOICES}
 pub use registry::{NodeDescriptor, Registry};
 pub use reverb::Reverb;
 pub use routing::{Merger, Selector, Splitter};
+pub use sample_hold::SampleHold;
+pub use slew::Slew;
 pub use smooth::{ramp_samples, Smoother};
 pub use supersaw::Supersaw;
 pub use svf::Svf;
