@@ -496,9 +496,15 @@ values), so a preset can pin exact knob settings, not just a graph.
 - [x] 000148 — 🧩 **Envelope follower node** (`env-follower`) — rectifies an audio input and
   smooths it (attack/release ballistics) into a control signal, for auto-wah, dynamic
   tremolo and ducking (audio → CV) 🧪
+- [x] 000149 — 🧩 **Sample & hold node** (`sample-hold`) — latches its `in` value on each
+  rising edge of a `trig` input and holds it, for stepped-random modulation (noise + clock)
+  and clocked LFO staircases 🧪
+- [x] 000150 — 🧩 **Slew limiter node** (`slew`) — bounds a control signal's rate of change
+  with separate rise/fall times, for portamento, rounded edges and lopsided ramps (a
+  generalised, asymmetric `glide`) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000149, …); split a large task into 🧩 subtasks with
+the end with a new global number (000151, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

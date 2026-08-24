@@ -245,6 +245,20 @@ Auto-generated from the registry — do not edit by hand.
   - `bpm` — range 20..300, default 120
   - `division` — range 0..4, default 2
 
+### sample-hold
+
+- **Inputs:** `in` (control), `trig` (control)
+- **Outputs:** `out` (control)
+- **Parameters:** _(none)_
+
+### slew
+
+- **Inputs:** `in` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `rise_s` — range 0..5, default 0.05
+  - `fall_s` — range 0..5, default 0.05
+
 ## output
 
 ### audio-out

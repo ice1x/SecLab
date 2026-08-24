@@ -27,6 +27,8 @@ use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
+use crate::sample_hold::SampleHold;
+use crate::slew::Slew;
 use crate::supersaw::Supersaw;
 use crate::svf::Svf;
 use crate::vca::Vca;
@@ -769,6 +771,42 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Glide::new(arg(v, 0, 50.0))),
         ),
         NodeDescriptor::new(
+            "sample-hold",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "sample-hold",
+                    vec![
+                        Port::input("in", SignalType::Control),
+                        Port::input("trig", SignalType::Control),
+                    ],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(SampleHold::new()),
+            Vec::new,
+            |_, _| Box::new(SampleHold::new()),
+        ),
+        NodeDescriptor::new(
+            "slew",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "slew",
+                    vec![Port::input("in", SignalType::Control)],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Slew::new(0.05, 0.05)),
+            || {
+                vec![
+                    Parameter::new("rise_s", 0.0, 5.0, 0.05),
+                    Parameter::new("fall_s", 0.0, 5.0, 0.05),
+                ]
+            },
+            |_, v| Box::new(Slew::new(arg(v, 0, 0.05), arg(v, 1, 0.05))),
+        ),
+        NodeDescriptor::new(
             "pitch-osc",
             "generator",
             || {
@@ -891,6 +929,35 @@ mod tests {
         let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
         assert!(r.processor("vco").is_some(), "a processor can be built");
+    }
+
+    #[test]
+    fn sample_hold_and_slew_are_registered_as_modulation() {
+        let r = Registry::with_builtins();
+
+        // Sample & hold: signal + trigger control inputs → control output; no params.
+        let sh = r.get("sample-hold").expect("sample-hold is registered");
+        assert_eq!(sh.category(), "modulation");
+        let node = r.graph_node("sample-hold").unwrap();
+        assert_eq!(node.inputs.len(), 2);
+        assert!(node
+            .inputs
+            .iter()
+            .all(|p| p.signal == vb_core::SignalType::Control));
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert!(sh.params().is_empty());
+        assert!(r.processor("sample-hold").is_some());
+
+        // Slew: one control input → control output; rise/fall params.
+        let slew = r.get("slew").expect("slew is registered");
+        assert_eq!(slew.category(), "modulation");
+        let node = r.graph_node("slew").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        let slew_desc_params = slew.params();
+        let slew_params: Vec<&str> = slew_desc_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(slew_params, vec!["rise_s", "fall_s"]);
+        assert!(r.processor("slew").is_some());
     }
 
     #[test]

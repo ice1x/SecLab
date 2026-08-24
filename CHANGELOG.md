@@ -170,6 +170,16 @@ the AI assistant from the ground up. Highlights by area:
   ducking (audio → CV). Unit-tested (AD — rise/fall to zero, release ignored, retrigger, idle;
   follower — tracks amplitude, louder→higher, decays on silence, attack faster than release)
   plus a registry test; regenerated [node reference](docs/nodes.md).
+- **Sample & hold and slew-limiter nodes (`vb-nodes`, kinds `sample-hold` / `slew`)** — two
+  modulation utilities. `sample-hold` latches its `in` value on each rising edge of a `trig`
+  input and holds it between triggers — fed noise and a clock it gives stepped-random
+  modulation, fed an LFO it quantises it into clocked stairs. `slew` bounds a control signal's
+  rate of change with **separate rise and fall** limits (a generalised, asymmetric `glide`):
+  portamento, rounded steps, lopsided ramps, and taming of abrupt CV jumps; zero times pass
+  through unchanged. Unit-tested (S&H — holds until first trigger, latches on the edge,
+  re-samples each edge; slew — step is rate-limited, rise/fall independent, zero passes
+  through, primes to the first input) plus a registry test; regenerated
+  [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
