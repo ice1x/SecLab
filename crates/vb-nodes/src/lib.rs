@@ -5,6 +5,7 @@
 //! plugs into the [`vb_core`] graph engine.
 
 pub mod ad_env;
+pub mod bitcrusher;
 pub mod cards;
 pub mod delay;
 pub mod docs;
@@ -24,6 +25,7 @@ pub mod pitch_osc;
 pub mod poly;
 pub mod registry;
 pub mod reverb;
+pub mod ring_mod;
 pub mod routing;
 pub mod sample_hold;
 pub mod slew;
@@ -36,6 +38,7 @@ pub mod vco;
 pub mod waveshaper;
 
 pub use ad_env::AdEnv;
+pub use bitcrusher::Bitcrusher;
 pub use cards::{node_card, node_reference};
 pub use delay::{FbDelay, MAX_DELAY_S};
 pub use docs::node_reference_markdown;
@@ -55,6 +58,7 @@ pub use pitch_osc::PitchOsc;
 pub use poly::{KeyGate, PolyNoteSource, PolyVoiceIn, VoiceAllocator, MAX_VOICES};
 pub use registry::{NodeDescriptor, Registry};
 pub use reverb::Reverb;
+pub use ring_mod::RingMod;
 pub use routing::{Merger, Selector, Splitter};
 pub use sample_hold::SampleHold;
 pub use slew::Slew;

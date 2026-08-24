@@ -14,6 +14,15 @@ Auto-generated from the registry — do not edit by hand.
 
 ## effect
 
+### bitcrusher
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `bits` — range 1..16, default 8
+  - `downsample` — range 1..64, default 1
+  - `mix` — range 0..1, default 1
+
 ### fb-delay
 
 - **Inputs:** `in` (audio)
@@ -30,6 +39,14 @@ Auto-generated from the registry — do not edit by hand.
   - `room_size` — range 0..1, default 0.5
   - `damping` — range 0..1, default 0.5
   - `mix` — range 0..1, default 0.3
+
+### ring-mod
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `freq_hz` — range 1..8000, default 200
+  - `mix` — range 0..1, default 1
 
 ### waveshaper
 
