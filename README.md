@@ -512,9 +512,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   fuzz for audio, bipolar→unipolar for control) 🧪
 - [x] 000155 — 🧩 **Attenuverter node** (`attenuvert`) — `out = in·scale + offset`, the
   workhorse CV utility (negative scale inverts; offset shifts range) 🧪
+- [x] 000156 — 🧩 **Tremolo node** (`tremolo`) — periodic amplitude modulation by an internal
+  sine LFO (`rate_hz`, `depth`), the vintage amp shimmer / pulsing pad 🧪
+- [x] 000157 — 🧩 **Chorus node** (`chorus`) — a short LFO-modulated delay (`rate_hz`,
+  `depth_ms`) mixed with the dry signal, thickening/widening via the moving-tap detune 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000156, …); split a large task into 🧩 subtasks with
+the end with a new global number (000158, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
