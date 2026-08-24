@@ -92,6 +92,15 @@ Auto-generated from the registry — do not edit by hand.
 
 ## generator
 
+### fm-op
+
+- **Inputs:** `pitch` (control), `mod` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `ratio` — range 0..16, default 1
+  - `index` — range 0..24, default 0
+
 ### noise
 
 - **Inputs:** _(none)_
@@ -116,6 +125,15 @@ Auto-generated from the registry — do not edit by hand.
   - `waveform` — range 0..3, default 1
   - `base_hz` — range 20..20000, default 440
   - `detune_semitones` — range -24..24, default 0
+
+### supersaw
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `detune_semitones` — range 0..2, default 0.3
+  - `voices` — range 1..9, default 7
 
 ### vco
 

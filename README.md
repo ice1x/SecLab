@@ -484,9 +484,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   `base_hz` when no note is held. The enabler that makes 000136–000140 *playable* (plain
   `oscillator` is fixed-frequency; `vco` takes an exponential octave CV, not absolute Hz).
   Demonstrated by the playable `examples/mono_lead.ron` (tracks note pitch end-to-end) 🧪
+- [x] 000145 — 🧩 **FM operator node** (`fm-op`) — a pitch-tracking sine carrier with a
+  phase-modulation (`mod`) input and a harmonic `ratio`/`index`; chaining operators
+  (`op → op.mod`) at musical ratios is the basis of FM synthesis (bell/EP/metallic tones) 🧪
+- [x] 000146 — 🧩 **Supersaw oscillator node** (`supersaw`) — a pitch-tracking unison stack
+  of up to nine PolyBLEP sawtooths, symmetrically detuned and amplitude-normalised, for fat
+  trance/EDM leads 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000145, …); split a large task into 🧩 subtasks with
+the end with a new global number (000147, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
