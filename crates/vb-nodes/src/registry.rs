@@ -9,7 +9,9 @@ use std::collections::BTreeMap;
 
 use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
+use crate::ad_env::AdEnv;
 use crate::delay::{FbDelay, MAX_DELAY_S};
+use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::fm_op::FmOp;
@@ -381,6 +383,44 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 3, 0.2),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "ad",
+            "envelope",
+            || {
+                GraphNode::new(
+                    "ad",
+                    vec![Port::input("gate", SignalType::Control)],
+                    vec![Port::output("level", SignalType::Control)],
+                )
+            },
+            || Box::new(AdEnv::new(0.005, 0.15)),
+            || {
+                vec![
+                    Parameter::new("attack_s", 0.0, 5.0, 0.005),
+                    Parameter::new("decay_s", 0.0, 5.0, 0.15),
+                ]
+            },
+            |_, v| Box::new(AdEnv::new(arg(v, 0, 0.005), arg(v, 1, 0.15))),
+        ),
+        NodeDescriptor::new(
+            "env-follower",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "env-follower",
+                    vec![audio_in("in")],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(EnvFollower::new(0.005, 0.05)),
+            || {
+                vec![
+                    Parameter::new("attack_s", 0.0, 1.0, 0.005),
+                    Parameter::new("release_s", 0.0, 2.0, 0.05),
+                ]
+            },
+            |_, v| Box::new(EnvFollower::new(arg(v, 0, 0.005), arg(v, 1, 0.05))),
         ),
         NodeDescriptor::new(
             "fb-delay",
@@ -851,6 +891,34 @@ mod tests {
         let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
         assert!(r.processor("vco").is_some(), "a processor can be built");
+    }
+
+    #[test]
+    fn ad_and_env_follower_are_registered() {
+        let r = Registry::with_builtins();
+
+        // AD: gate control input → level control output; envelope category.
+        let ad = r.get("ad").expect("ad is registered");
+        assert_eq!(ad.category(), "envelope");
+        let node = r.graph_node("ad").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        let ad_desc_params = ad.params();
+        let ad_params: Vec<&str> = ad_desc_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(ad_params, vec!["attack_s", "decay_s"]);
+        assert!(r.processor("ad").is_some());
+
+        // Envelope follower: audio input → control output; modulation category.
+        let ef = r.get("env-follower").expect("env-follower is registered");
+        assert_eq!(ef.category(), "modulation");
+        let node = r.graph_node("env-follower").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        let ef_desc_params = ef.params();
+        let ef_params: Vec<&str> = ef_desc_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(ef_params, vec!["attack_s", "release_s"]);
+        assert!(r.processor("env-follower").is_some());
     }
 
     #[test]
