@@ -35,6 +35,12 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("maul", include_str!("../../../examples/maul.ron")),
     ("minilogue", include_str!("../../../examples/minilogue.ron")),
     ("drumkit", include_str!("../../../examples/drumkit.ron")),
+    (
+        "supersaw_lead",
+        include_str!("../../../examples/supersaw_lead.ron"),
+    ),
+    ("fm_ep", include_str!("../../../examples/fm_ep.ron")),
+    ("auto_wah", include_str!("../../../examples/auto_wah.ron")),
 ];
 
 #[test]
@@ -480,6 +486,70 @@ fn drumkit_triggers_each_voice_by_its_note_and_plays_them_together() {
     );
 }
 
+/// Peak absolute output over `blocks` blocks of `frames`, for a patch built with `ctx`.
+fn peak_over(ron: &str, ctx: &BuildContext, frames: usize, blocks: usize) -> f32 {
+    let registry = Registry::with_builtins();
+    let doc = vb_project::open_ron(ron).expect("loads");
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, ctx, frames).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut p = 0.0_f32;
+    for _ in 0..blocks {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames,
+        });
+        let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+        for s in out {
+            assert!(s.is_finite(), "non-finite sample");
+            p = p.max(s.abs());
+        }
+    }
+    p
+}
+
+#[test]
+fn supersaw_lead_is_silent_at_rest_and_fat_on_a_note() {
+    let ron = include_str!("../../../examples/supersaw_lead.ron");
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "supersaw lead must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(52, 110); // ~165 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 8) > 0.01,
+        "supersaw lead must sound on a note"
+    );
+}
+
+#[test]
+fn fm_ep_is_silent_at_rest_and_rings_on_a_note() {
+    let ron = include_str!("../../../examples/fm_ep.ron");
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "FM EP must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(60, 110); // middle C
+    assert!(
+        peak_over(ron, &ctx, 256, 8) > 0.01,
+        "FM EP must ring out on a note"
+    );
+}
+
+#[test]
+fn auto_wah_drones_and_stays_bounded() {
+    // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
+    // an envelope-follower-swept filter. It should produce sustained, bounded audio.
+    let ron = include_str!("../../../examples/auto_wah.ron");
+    let peak = peak_over(ron, &BuildContext::default(), 256, 16);
+    assert!(
+        peak > 0.01,
+        "auto-wah drone must be audible without a note: {peak}"
+    );
+    assert!(peak <= 4.0, "auto-wah output stays bounded: {peak}");
+}
+
 #[test]
 fn the_example_set_is_the_expected_manifest() {
     // A guard so the committed set and this manifest stay in step.
@@ -502,7 +572,10 @@ fn the_example_set_is_the_expected_manifest() {
             "grandmother",
             "maul",
             "minilogue",
-            "drumkit"
+            "drumkit",
+            "supersaw_lead",
+            "fm_ep",
+            "auto_wah"
         ]
     );
     // No example is empty.

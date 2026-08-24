@@ -520,9 +520,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   band-limited pulse with adjustable duty (`width`); 50% = square, narrower = brighter/nasal 🧪
 - [x] 000159 — 🧩 **Hard-sync oscillator node** (`hard-sync`) — a slave saw hard-reset each
   master cycle (`sync_ratio`), the aggressive tearing "sync lead"; pitch-tracking 🧪
+- [x] 000160 — 🧩 **Showcase example patches** for the new nodes — `examples/supersaw_lead.ron`
+  (supersaw → ladder → note-gated VCA), `examples/fm_ep.ron` (2-operator FM electric piano),
+  `examples/auto_wah.ron` (saw drone → tremolo → envelope-follower-swept VCF); each wired into
+  the `vb-plugin` examples manifest with a targeted engine test 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000160, …); split a large task into 🧩 subtasks with
+the end with a new global number (000161, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
