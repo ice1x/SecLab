@@ -506,9 +506,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   sine carrier (`freq_hz`, dry/wet `mix`), for metallic/clangorous inharmonic tones 🧪
 - [x] 000152 — 🧩 **Bitcrusher node** (`bitcrusher`) — lo-fi degradation via bit-depth
   quantisation (`bits`) and sample-rate decimation (`downsample`), with dry/wet `mix` 🧪
+- [x] 000153 — 🧩 **Subtract node** (`sub`) — `out = a - b`, the difference counterpart to
+  `add` (phase cancellation, mid/side, error signals) 🧪
+- [x] 000154 — 🧩 **Rectify node** (`rectify`) — `out = |in|`, full-wave rectifier (octave-up
+  fuzz for audio, bipolar→unipolar for control) 🧪
+- [x] 000155 — 🧩 **Attenuverter node** (`attenuvert`) — `out = in·scale + offset`, the
+  workhorse CV utility (negative scale inverts; offset shifts range) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000153, …); split a large task into 🧩 subtasks with
+the end with a new global number (000156, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

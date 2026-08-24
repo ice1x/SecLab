@@ -191,6 +191,14 @@ the AI assistant from the ground up. Highlights by area:
   clamp; bitcrusher — dry passthrough, low bit depth collapses to few levels, downsampling
   holds runs of samples, param clamp) plus a registry test; regenerated
   [node reference](docs/nodes.md).
+- **Math utility nodes: subtract, rectify, attenuvert (`vb-nodes`, kinds `sub` / `rectify` /
+  `attenuvert`)** — three small stateless utilities filling out the math category. `sub` is
+  `a - b` (the difference counterpart to `add`). `rectify` is `|in|` (full-wave rectifier —
+  octave-up fuzz for audio, bipolar→unipolar for control). `attenuvert` is `in·scale + offset`,
+  the workhorse CV utility: a negative `scale` inverts (subsuming a plain invert), `offset`
+  shifts the centre, together mapping a modulator into the range a destination wants. Added to
+  `vb-nodes/src/math.rs` alongside the existing gain/add/mul/mix/clamp; unit-tested and covered
+  by a registry test; regenerated [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It

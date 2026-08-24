@@ -20,7 +20,7 @@ use crate::glide::Glide;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
-use crate::math::{Add, Clamp, Gain, Mix, Mul};
+use crate::math::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
@@ -332,6 +332,41 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(Mul),
             Vec::new,
             |_, _| Box::new(Mul),
+        ),
+        NodeDescriptor::new(
+            "sub",
+            "math",
+            || {
+                GraphNode::new(
+                    "sub",
+                    vec![audio_in("a"), audio_in("b")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Sub),
+            Vec::new,
+            |_, _| Box::new(Sub),
+        ),
+        NodeDescriptor::new(
+            "rectify",
+            "math",
+            || GraphNode::new("rectify", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Rectify),
+            Vec::new,
+            |_, _| Box::new(Rectify),
+        ),
+        NodeDescriptor::new(
+            "attenuvert",
+            "math",
+            || GraphNode::new("attenuvert", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Attenuvert::new(1.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("scale", -2.0, 2.0, 1.0),
+                    Parameter::new("offset", -1.0, 1.0, 0.0),
+                ]
+            },
+            |_, v| Box::new(Attenuvert::new(arg(v, 0, 1.0), arg(v, 1, 0.0))),
         ),
         NodeDescriptor::new(
             "mix",
@@ -964,6 +999,28 @@ mod tests {
         let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
         assert!(r.processor("vco").is_some(), "a processor can be built");
+    }
+
+    #[test]
+    fn math_utility_nodes_are_registered() {
+        let r = Registry::with_builtins();
+        // Binary difference.
+        let sub = r.graph_node("sub").expect("sub registered");
+        assert_eq!(sub.inputs.len(), 2);
+        assert_eq!(r.get("sub").unwrap().category(), "math");
+        assert!(r.get("sub").unwrap().params().is_empty());
+        // Unary rectify.
+        let rect = r.graph_node("rectify").expect("rectify registered");
+        assert_eq!(rect.inputs.len(), 1);
+        assert!(r.get("rectify").unwrap().params().is_empty());
+        // Attenuverter with scale/offset.
+        assert_eq!(r.get("attenuvert").unwrap().category(), "math");
+        let att = r.get("attenuvert").unwrap().params();
+        assert_eq!(
+            att.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["scale", "offset"]
+        );
+        assert!(r.processor("attenuvert").is_some());
     }
 
     #[test]

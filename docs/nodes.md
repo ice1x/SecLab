@@ -206,6 +206,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Outputs:** `out` (audio)
 - **Parameters:** _(none)_
 
+### attenuvert
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `scale` — range -2..2, default 1
+  - `offset` — range -1..1, default 0
+
 ### clamp
 
 - **Inputs:** `in` (audio)
@@ -229,6 +237,18 @@ Auto-generated from the registry — do not edit by hand.
   - `t` — range 0..1, default 0.5
 
 ### mul
+
+- **Inputs:** `a` (audio), `b` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:** _(none)_
+
+### rectify
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:** _(none)_
+
+### sub
 
 - **Inputs:** `a` (audio), `b` (audio)
 - **Outputs:** `out` (audio)

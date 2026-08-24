@@ -110,9 +110,72 @@ impl Processor for Clamp {
     }
 }
 
+/// Subtracts the second input from the first sample-wise: `out = a - b`.
+///
+/// The difference counterpart to [`Add`] — useful for phase cancellation, mid/side tricks,
+/// or forming an error/difference control signal.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Sub;
+
+impl Processor for Sub {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        for (o, (a, b)) in outputs[0]
+            .iter_mut()
+            .zip(inputs[0].iter().zip(inputs[1].iter()))
+            .take(ctx.frames)
+        {
+            *o = *a - *b;
+        }
+    }
+}
+
+/// Full-wave rectifier: `out = |in|`.
+///
+/// Folds the negative half of a signal up, doubling its frequency for audio (a cheap
+/// octave-up fuzz) and turning a bipolar control signal into a unipolar one.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Rectify;
+
+impl Processor for Rectify {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        for (o, x) in outputs[0].iter_mut().zip(inputs[0].iter()).take(ctx.frames) {
+            *o = x.abs();
+        }
+    }
+}
+
+/// Attenuverter: scale (with optional inversion) then offset a signal: `out = in*scale + offset`.
+///
+/// The workhorse CV utility. A negative `scale` inverts; `offset` shifts the signal's centre.
+/// It subsumes a plain invert (`scale = -1, offset = 0`) and a DC offset (`scale = 1`), and is
+/// what maps a bipolar modulator into the exact range a destination wants.
+#[derive(Debug, Clone, Copy)]
+pub struct Attenuvert {
+    /// Multiplier applied before the offset (negative inverts).
+    pub scale: f32,
+    /// Constant added after scaling.
+    pub offset: f32,
+}
+
+impl Attenuvert {
+    /// Creates an attenuverter with `scale` and `offset`.
+    #[must_use]
+    pub fn new(scale: f32, offset: f32) -> Self {
+        Self { scale, offset }
+    }
+}
+
+impl Processor for Attenuvert {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        for (o, x) in outputs[0].iter_mut().zip(inputs[0].iter()).take(ctx.frames) {
+            *o = *x * self.scale + self.offset;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Add, Clamp, Gain, Mix, Mul};
+    use super::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
     use vb_core::{ProcessContext, Processor};
 
     fn ctx(frames: usize) -> ProcessContext {
@@ -170,6 +233,33 @@ mod tests {
         assert_eq!(
             run1(&mut Clamp::new(-1.0, 1.0), &[-2.0, 0.5, 3.0]),
             vec![-1.0, 0.5, 1.0]
+        );
+    }
+
+    #[test]
+    fn sub_differences_inputs() {
+        assert_eq!(run2(&mut Sub, &[5.0, 2.0], &[3.0, 8.0]), vec![2.0, -6.0]);
+    }
+
+    #[test]
+    fn rectify_takes_absolute_value() {
+        assert_eq!(
+            run1(&mut Rectify, &[-2.0, 0.0, 3.0, -0.5]),
+            vec![2.0, 0.0, 3.0, 0.5]
+        );
+    }
+
+    #[test]
+    fn attenuvert_scales_and_offsets() {
+        // out = in*scale + offset.
+        assert_eq!(
+            run1(&mut Attenuvert::new(2.0, 1.0), &[0.0, 1.0, -1.0]),
+            vec![1.0, 3.0, -1.0]
+        );
+        // A negative scale inverts (subsumes a plain invert).
+        assert_eq!(
+            run1(&mut Attenuvert::new(-1.0, 0.0), &[0.5, -0.25]),
+            vec![-0.5, 0.25]
         );
     }
 }

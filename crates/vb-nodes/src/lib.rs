@@ -50,7 +50,7 @@ pub use glide::Glide;
 pub use io::{AudioBus, AudioInput, AudioOutput, MAX_IO_CHANNELS};
 pub use ladder::Ladder;
 pub use lfo::{Division, Lfo};
-pub use math::{Add, Clamp, Gain, Mix, Mul};
+pub use math::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
 pub use midi::{midi_note_to_hz, BuildContext, MidiIn, NoteSource};
 pub use noise::{Noise, NoiseKind};
 pub use oscillator::{Oscillator, Waveform};
