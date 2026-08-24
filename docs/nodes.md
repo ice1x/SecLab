@@ -143,6 +143,14 @@ Auto-generated from the registry — do not edit by hand.
   - `ratio` — range 0..16, default 1
   - `index` — range 0..24, default 0
 
+### hard-sync
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `sync_ratio` — range 1..8, default 2
+
 ### noise
 
 - **Inputs:** _(none)_
@@ -167,6 +175,14 @@ Auto-generated from the registry — do not edit by hand.
   - `waveform` — range 0..3, default 1
   - `base_hz` — range 20..20000, default 440
   - `detune_semitones` — range -24..24, default 0
+
+### pwm
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `width` — range 0.01..0.99, default 0.5
 
 ### supersaw
 

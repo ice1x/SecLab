@@ -18,6 +18,7 @@ use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
 use crate::fm_op::FmOp;
 use crate::glide::Glide;
+use crate::hard_sync::HardSync;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
@@ -27,6 +28,7 @@ use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
+use crate::pwm::Pwm;
 use crate::reverb::Reverb;
 use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
@@ -977,6 +979,44 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ))
             },
         ),
+        NodeDescriptor::new(
+            "pwm",
+            "generator",
+            || {
+                GraphNode::new(
+                    "pwm",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Pwm::new(440.0, 0.5)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("width", 0.01, 0.99, 0.5),
+                ]
+            },
+            |_, v| Box::new(Pwm::new(arg(v, 0, 440.0), arg(v, 1, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "hard-sync",
+            "generator",
+            || {
+                GraphNode::new(
+                    "hard-sync",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(HardSync::new(440.0, 2.0)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("sync_ratio", 1.0, 8.0, 2.0),
+                ]
+            },
+            |_, v| Box::new(HardSync::new(arg(v, 0, 440.0), arg(v, 1, 2.0))),
+        ),
     ]
 }
 
@@ -1155,6 +1195,30 @@ mod tests {
         let ef_params: Vec<&str> = ef_desc_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(ef_params, vec!["attack_s", "release_s"]);
         assert!(r.processor("env-follower").is_some());
+    }
+
+    #[test]
+    fn pwm_and_hard_sync_are_registered_as_generators() {
+        let r = Registry::with_builtins();
+        for kind in ["pwm", "hard-sync"] {
+            let d = r.get(kind).unwrap_or_else(|| panic!("{kind} registered"));
+            assert_eq!(d.category(), "generator");
+            let node = r.graph_node(kind).unwrap();
+            assert_eq!(node.inputs.len(), 1);
+            assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+            assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+            assert!(r.processor(kind).is_some());
+        }
+        let pwm = r.get("pwm").unwrap().params();
+        assert_eq!(
+            pwm.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["base_hz", "width"]
+        );
+        let hs = r.get("hard-sync").unwrap().params();
+        assert_eq!(
+            hs.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["base_hz", "sync_ratio"]
+        );
     }
 
     #[test]
