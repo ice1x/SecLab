@@ -28,6 +28,9 @@
 //! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
 //!   editor standalone lives in `vb-standalone`).
+//! - `cargo xtask validate-au` — builds+installs the AUv2 and runs Apple's `auval` on it
+//!   (reading its type/subtype/manufacturer from the Info.plist), the authoritative
+//!   AudioUnit check. It bundles the AU itself, so it needs no prior `bundle-auv2`.
 //! - `cargo xtask sign` — code-signs every bundle in `target/bundled/` with the Developer
 //!   ID identity in `$DEVELOPER_ID` (hardened runtime + secure timestamp), then verifies.
 //! - `cargo xtask notarize` — zips, submits to Apple's notary service via the
@@ -71,6 +74,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("notarize") => {
             args.next();
             notarize_bundles()
+        }
+        Some("validate-au") => {
+            args.next();
+            validate_au()
         }
         Some("demo-patch") => {
             args.next();
@@ -316,6 +323,78 @@ fn run(cmd: &mut std::process::Command, what: &str) -> Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Arguments for Apple's `auval` to validate a single AudioUnit by its component codes
+/// (`auval -v <type> <subtype> <manufacturer>`).
+#[must_use]
+pub fn auval_args(kind: &str, subtype: &str, manufacturer: &str) -> Vec<String> {
+    vec![
+        "-v".to_owned(),
+        kind.to_owned(),
+        subtype.to_owned(),
+        manufacturer.to_owned(),
+    ]
+}
+
+/// Reads one `AudioComponents:0:<key>` value from an AU `Info.plist` via `PlistBuddy`.
+fn au_code(plist: &Path, key: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let out = std::process::Command::new("/usr/libexec/PlistBuddy")
+        .arg("-c")
+        .arg(format!("Print :AudioComponents:0:{key}"))
+        .arg(plist)
+        .output()
+        .map_err(|e| format!("PlistBuddy read {key}: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "could not read AudioComponents:0:{key} from {}",
+            plist.display()
+        )
+        .into());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+}
+
+/// Builds the AUv2 component and validates it with Apple's `auval`.
+///
+/// It bundles+installs the AU itself (rather than relying on a prior `bundle-auv2` step) so
+/// the build location and the validation location are resolved by the *same* `workspace_root`
+/// call in one process — in CI the runner checkout is nested inside the developer clone, and
+/// splitting the two across steps let them disagree on which `target/bundled` to use.
+///
+/// Reads the component's type/subtype/manufacturer codes from its `Info.plist` and runs
+/// `auval -v` on them — the authoritative macOS AudioUnit check (format negotiation, render
+/// at many sample rates, parameters, MIDI).
+///
+/// # Errors
+///
+/// Returns an error if the AU cannot be built, its codes cannot be read, or `auval` fails.
+fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
+    // Build + install the AU first, in this same process (see the note above).
+    bundle_wrapped(WrappedFormat::Auv2)?;
+
+    let component = workspace_root()?
+        .join("target")
+        .join("bundled")
+        .join("vb-plugin.component");
+    let plist = component.join("Contents").join("Info.plist");
+    if !plist.exists() {
+        return Err(format!(
+            "no AU component at {} after bundling — the clap-wrapper build may have failed",
+            component.display()
+        )
+        .into());
+    }
+    let kind = au_code(&plist, "type")?;
+    let subtype = au_code(&plist, "subtype")?;
+    let manufacturer = au_code(&plist, "manufacturer")?;
+    println!("validating AU ({kind} {subtype} {manufacturer}) with auval…");
+    let mut cmd = std::process::Command::new("auval");
+    cmd.args(auval_args(&kind, &subtype, &manufacturer));
+    run(&mut cmd, "auval").map_err(|e| {
+        format!("{e}; ensure the AU is installed (bundle-auv2 installs it) and auval is on PATH")
+            .into()
+    })
+}
+
 /// Recursively copies a bundle directory.
 fn copy_tree(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(to)?;
@@ -485,8 +564,17 @@ fn workspace_root() -> Result<PathBuf, Box<dyn std::error::Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{au_set_name_args, WrappedFormat, AU_DISPLAY_NAME};
+    use super::{au_set_name_args, auval_args, WrappedFormat, AU_DISPLAY_NAME};
     use std::path::Path;
+
+    #[test]
+    fn auval_args_pass_the_component_codes_after_v() {
+        // auval -v <type> <subtype> <manufacturer> — the order auval expects.
+        assert_eq!(
+            auval_args("aumu", "gWrp", "clAd"),
+            vec!["-v", "aumu", "gWrp", "clAd"]
+        );
+    }
 
     #[test]
     fn au_name_command_sets_the_first_audiocomponents_name() {

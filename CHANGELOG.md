@@ -228,6 +228,14 @@ the AI assistant from the ground up. Highlights by area:
   auto-wah). Each is wired into the `vb-plugin` examples manifest and covered by a targeted
   engine test (supersaw lead / FM EP silent at rest and sounding on a note; auto-wah drones
   audibly and stays bounded).
+- **AudioUnit validation gate (`cargo xtask validate-au` + CI, 000161)** — a new xtask
+  subcommand reads the built `.component`'s type/subtype/manufacturer codes from its
+  `Info.plist` and runs Apple's `auval -v` on them — the authoritative macOS AudioUnit check
+  (format negotiation, render at every sample rate, parameter setting, MIDI). A non-blocking CI
+  `au validate` job builds the AUv2 via clap-wrapper and runs it, so the wrapped **AU export is
+  proven in CI**, not just the CLAP (which the required `clap-validator` gate already covers).
+  The `auval_args` argument builder is unit-tested; the job is advisory because the wrapped-AU
+  build is heavy and `auval` is macOS-only.
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It

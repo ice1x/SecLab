@@ -524,9 +524,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   (supersaw → ladder → note-gated VCA), `examples/fm_ep.ron` (2-operator FM electric piano),
   `examples/auto_wah.ron` (saw drone → tremolo → envelope-follower-swept VCF); each wired into
   the `vb-plugin` examples manifest with a targeted engine test 🧪
+- [x] 000161 — 🧩 **AudioUnit validation gate** — `cargo xtask validate-au` reads the built
+  `.component`'s codes and runs Apple's `auval` (authoritative AU check: format negotiation,
+  render at all sample rates, params, MIDI); a non-blocking CI `au validate` job builds the
+  AUv2 and runs it, so the VST3/AU export is proven, not just the CLAP (`auval_args` unit-tested) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000161, …); split a large task into 🧩 subtasks with
+the end with a new global number (000162, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
