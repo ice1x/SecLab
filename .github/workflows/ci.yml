@@ -149,7 +149,8 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: build + install the AUv2 component
-        run: cargo xtask bundle-auv2
-      - name: validate the AU with auval
+      # validate-au builds+installs the AUv2 itself, then runs auval — one step so the build
+      # and validation resolve the same target/bundled path (the runner checkout is nested
+      # inside the developer clone, so splitting them let the two disagree).
+      - name: build the AUv2 and validate it with auval
         run: cargo xtask validate-au

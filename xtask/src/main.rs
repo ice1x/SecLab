@@ -28,9 +28,9 @@
 //! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
 //!   editor standalone lives in `vb-standalone`).
-//! - `cargo xtask validate-au` — runs Apple's `auval` on the built `.component` (reading
-//!   its type/subtype/manufacturer from the Info.plist), the authoritative AudioUnit check.
-//!   Run `bundle-auv2` first so the AU is built and registered.
+//! - `cargo xtask validate-au` — builds+installs the AUv2 and runs Apple's `auval` on it
+//!   (reading its type/subtype/manufacturer from the Info.plist), the authoritative
+//!   AudioUnit check. It bundles the AU itself, so it needs no prior `bundle-auv2`.
 //! - `cargo xtask sign` — code-signs every bundle in `target/bundled/` with the Developer
 //!   ID identity in `$DEVELOPER_ID` (hardened runtime + secure timestamp), then verifies.
 //! - `cargo xtask notarize` — zips, submits to Apple's notary service via the
@@ -353,17 +353,24 @@ fn au_code(plist: &Path, key: &str) -> Result<String, Box<dyn std::error::Error>
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
-/// Validates the built AU component with Apple's `auval`.
+/// Builds the AUv2 component and validates it with Apple's `auval`.
+///
+/// It bundles+installs the AU itself (rather than relying on a prior `bundle-auv2` step) so
+/// the build location and the validation location are resolved by the *same* `workspace_root`
+/// call in one process — in CI the runner checkout is nested inside the developer clone, and
+/// splitting the two across steps let them disagree on which `target/bundled` to use.
 ///
 /// Reads the component's type/subtype/manufacturer codes from its `Info.plist` and runs
 /// `auval -v` on them — the authoritative macOS AudioUnit check (format negotiation, render
-/// at many sample rates, parameters, MIDI). Requires `cargo xtask bundle-auv2` to have built
-/// and installed the component first (auval validates the *registered* AU).
+/// at many sample rates, parameters, MIDI).
 ///
 /// # Errors
 ///
-/// Returns an error if the component is missing, its codes cannot be read, or `auval` fails.
+/// Returns an error if the AU cannot be built, its codes cannot be read, or `auval` fails.
 fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
+    // Build + install the AU first, in this same process (see the note above).
+    bundle_wrapped(WrappedFormat::Auv2)?;
+
     let component = workspace_root()?
         .join("target")
         .join("bundled")
@@ -371,7 +378,7 @@ fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
     let plist = component.join("Contents").join("Info.plist");
     if !plist.exists() {
         return Err(format!(
-            "no AU component at {} — run `cargo xtask bundle-auv2` first",
+            "no AU component at {} after bundling — the clap-wrapper build may have failed",
             component.display()
         )
         .into());
