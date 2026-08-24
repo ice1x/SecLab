@@ -137,3 +137,19 @@ jobs:
         run: wasm-pack build crates/vb-engine --target nodejs --out-dir ../../web/audio/pkg-node --out-name vb_engine
       - name: run the headless audio smoke test
         run: node web/audio/test/smoke.mjs
+
+  # AudioUnit validation (000092): build the AUv2 via clap-wrapper and run Apple's `auval`
+  # on it — the authoritative check that the exported AU actually loads, negotiates formats,
+  # renders at every sample rate, and handles parameters/MIDI. NON-blocking: the wrapped-AU
+  # build is heavy (clones/builds clap-wrapper) and auval is macOS-only, so it is a signal,
+  # not a required gate. The required CLAP gate stays `clap-validator`.
+  au-validate:
+    name: au validate (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: build + install the AUv2 component
+        run: cargo xtask bundle-auv2
+      - name: validate the AU with auval
+        run: cargo xtask validate-au
