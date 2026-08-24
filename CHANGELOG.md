@@ -180,6 +180,17 @@ the AI assistant from the ground up. Highlights by area:
   re-samples each edge; slew — step is rate-limited, rise/fall independent, zero passes
   through, primes to the first input) plus a registry test; regenerated
   [node reference](docs/nodes.md).
+- **Ring modulator and bitcrusher effect nodes (`vb-nodes`, kinds `ring-mod` / `bitcrusher`)**
+  — two effects broadening the effect category. `ring-mod` multiplies the input by an internal
+  sine carrier (`freq_hz`) with a dry/wet `mix`, producing the inharmonic sum-and-difference
+  sidebands of the classic ring modulator (metallic, bell, robot-voice) — self-contained,
+  unlike the bare `mul` node. `bitcrusher` degrades the signal two ways: bit-depth
+  quantisation to `2^bits` levels and sample-rate decimation (hold each sample for
+  `downsample` steps), with a dry/wet `mix`. Unit-tested (ring-mod — dry passthrough at
+  mix 0, bounded full-wet product that reshapes the signal, carrier frequency matters, param
+  clamp; bitcrusher — dry passthrough, low bit depth collapses to few levels, downsampling
+  holds runs of samples, param clamp) plus a registry test; regenerated
+  [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It

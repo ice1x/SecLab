@@ -502,9 +502,13 @@ values), so a preset can pin exact knob settings, not just a graph.
 - [x] 000150 — 🧩 **Slew limiter node** (`slew`) — bounds a control signal's rate of change
   with separate rise/fall times, for portamento, rounded edges and lopsided ramps (a
   generalised, asymmetric `glide`) 🧪
+- [x] 000151 — 🧩 **Ring modulator node** (`ring-mod`) — multiplies the input by an internal
+  sine carrier (`freq_hz`, dry/wet `mix`), for metallic/clangorous inharmonic tones 🧪
+- [x] 000152 — 🧩 **Bitcrusher node** (`bitcrusher`) — lo-fi degradation via bit-depth
+  quantisation (`bits`) and sample-rate decimation (`downsample`), with dry/wet `mix` 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000151, …); split a large task into 🧩 subtasks with
+the end with a new global number (000153, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

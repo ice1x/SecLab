@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::ad_env::AdEnv;
+use crate::bitcrusher::Bitcrusher;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
@@ -26,6 +27,7 @@ use crate::oscillator::{Oscillator, Waveform};
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
+use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::slew::Slew;
@@ -472,6 +474,39 @@ fn builtins() -> Vec<NodeDescriptor> {
                     shape_from(arg(v, 0, 0.0)),
                     arg(v, 1, 2.0),
                     arg(v, 2, 0.8),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "ring-mod",
+            "effect",
+            || GraphNode::new("ring-mod", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(RingMod::new(200.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("freq_hz", 1.0, 8_000.0, 200.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(RingMod::new(arg(v, 0, 200.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "bitcrusher",
+            "effect",
+            || GraphNode::new("bitcrusher", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Bitcrusher::new(8.0, 1, 1.0)),
+            || {
+                vec![
+                    Parameter::new("bits", 1.0, 16.0, 8.0),
+                    Parameter::new("downsample", 1.0, 64.0, 1.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Bitcrusher::new(
+                    arg(v, 0, 8.0),
+                    arg(v, 1, 1.0).round().max(1.0) as usize,
+                    arg(v, 2, 1.0),
                 ))
             },
         ),
@@ -929,6 +964,30 @@ mod tests {
         let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
         assert!(r.processor("vco").is_some(), "a processor can be built");
+    }
+
+    #[test]
+    fn ring_mod_and_bitcrusher_are_registered_as_effects() {
+        let r = Registry::with_builtins();
+        for kind in ["ring-mod", "bitcrusher"] {
+            let d = r.get(kind).unwrap_or_else(|| panic!("{kind} registered"));
+            assert_eq!(d.category(), "effect");
+            let node = r.graph_node(kind).unwrap();
+            assert_eq!(node.inputs.len(), 1);
+            assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+            assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+            assert!(r.processor(kind).is_some());
+        }
+        let rm = r.get("ring-mod").unwrap().params();
+        assert_eq!(
+            rm.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["freq_hz", "mix"]
+        );
+        let bc = r.get("bitcrusher").unwrap().params();
+        assert_eq!(
+            bc.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["bits", "downsample", "mix"]
+        );
     }
 
     #[test]
