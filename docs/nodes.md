@@ -42,6 +42,14 @@ Auto-generated from the registry — do not edit by hand.
 
 ## envelope
 
+### ad
+
+- **Inputs:** `gate` (control)
+- **Outputs:** `level` (control)
+- **Parameters:**
+  - `attack_s` — range 0..5, default 0.005
+  - `decay_s` — range 0..5, default 0.15
+
 ### adsr
 
 - **Inputs:** `gate` (control)
@@ -210,6 +218,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:** _(none)_
 
 ## modulation
+
+### env-follower
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `attack_s` — range 0..1, default 0.005
+  - `release_s` — range 0..2, default 0.05
 
 ### glide
 

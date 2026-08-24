@@ -490,9 +490,15 @@ values), so a preset can pin exact knob settings, not just a graph.
 - [x] 000146 — 🧩 **Supersaw oscillator node** (`supersaw`) — a pitch-tracking unison stack
   of up to nine PolyBLEP sawtooths, symmetrically detuned and amplitude-normalised, for fat
   trance/EDM leads 🧪
+- [x] 000147 — 🧩 **AD (attack–decay) envelope node** (`ad`) — a one-shot envelope that fires
+  a full attack→decay contour on each gate edge and ignores the release, for percussion and
+  plucks (the second envelope generator alongside `adsr`) 🧪
+- [x] 000148 — 🧩 **Envelope follower node** (`env-follower`) — rectifies an audio input and
+  smooths it (attack/release ballistics) into a control signal, for auto-wah, dynamic
+  tremolo and ducking (audio → CV) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000147, …); split a large task into 🧩 subtasks with
+the end with a new global number (000149, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

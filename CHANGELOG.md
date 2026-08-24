@@ -160,6 +160,16 @@ the AI assistant from the ground up. Highlights by area:
   `midi-in.pitch_hz` and rest on `base_hz`; unit-tested (pure sine at `ratio × pitch`, FM
   sidebands enrich the spectrum, detuned unison differs from a single saw, pitch tracking,
   bounded output) plus a registry test; regenerated [node reference](docs/nodes.md).
+- **AD envelope and envelope-follower nodes (`vb-nodes`, kinds `ad` / `env-follower`)** —
+  two additions filling out the thin envelope/modulation categories. `ad` is a one-shot
+  attack→decay envelope: a rising gate edge fires the full contour and it ignores the gate
+  release (a new edge re-triggers) — the "trigger and forget" shape percussion and plucks are
+  built from, complementing the sustaining `adsr`. `env-follower` rectifies an audio input and
+  smooths it with separate attack/release one-pole ballistics into a control signal that rides
+  the input's loudness — the source for auto-wah (envelope → cutoff), dynamic tremolo and
+  ducking (audio → CV). Unit-tested (AD — rise/fall to zero, release ignored, retrigger, idle;
+  follower — tracks amplitude, louder→higher, decays on silence, attack faster than release)
+  plus a registry test; regenerated [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
