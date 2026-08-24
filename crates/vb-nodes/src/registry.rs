@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::envelope::Adsr;
 use crate::filter::{Biquad, FilterKind};
+use crate::fm_op::FmOp;
 use crate::glide::Glide;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
@@ -24,6 +25,7 @@ use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::reverb::Reverb;
 use crate::routing::{Merger, Selector, Splitter};
+use crate::supersaw::Supersaw;
 use crate::svf::Svf;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
@@ -752,6 +754,52 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ))
             },
         ),
+        NodeDescriptor::new(
+            "fm-op",
+            "generator",
+            || {
+                GraphNode::new(
+                    "fm-op",
+                    vec![Port::input("pitch", SignalType::Control), audio_in("mod")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(FmOp::new(440.0, 1.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("ratio", 0.0, 16.0, 1.0),
+                    Parameter::new("index", 0.0, 24.0, 0.0),
+                ]
+            },
+            |_, v| Box::new(FmOp::new(arg(v, 0, 440.0), arg(v, 1, 1.0), arg(v, 2, 0.0))),
+        ),
+        NodeDescriptor::new(
+            "supersaw",
+            "generator",
+            || {
+                GraphNode::new(
+                    "supersaw",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Supersaw::new(440.0, 0.3, 7)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("detune_semitones", 0.0, 2.0, 0.3),
+                    Parameter::new("voices", 1.0, 9.0, 7.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Supersaw::new(
+                    arg(v, 0, 440.0),
+                    arg(v, 1, 0.3),
+                    arg(v, 2, 7.0).round().max(1.0) as usize,
+                ))
+            },
+        ),
     ]
 }
 
@@ -803,6 +851,35 @@ mod tests {
         let params: Vec<&str> = descriptor_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(params, vec!["waveform", "base_hz", "amount_oct"]);
         assert!(r.processor("vco").is_some(), "a processor can be built");
+    }
+
+    #[test]
+    fn fm_op_and_supersaw_are_registered_as_generators() {
+        let r = Registry::with_builtins();
+
+        // The FM operator: pitch CV + an audio modulator input, one audio output.
+        let fm = r.get("fm-op").expect("fm-op is registered");
+        assert_eq!(fm.category(), "generator");
+        let node = r.graph_node("fm-op").unwrap();
+        assert_eq!(node.inputs.len(), 2);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control); // pitch
+        assert_eq!(node.inputs[1].signal, vb_core::SignalType::Audio); // mod
+        assert_eq!(node.outputs.len(), 1);
+        let fm_desc_params = fm.params();
+        let fm_params: Vec<&str> = fm_desc_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(fm_params, vec!["base_hz", "ratio", "index"]);
+        assert!(r.processor("fm-op").is_some());
+
+        // The supersaw: a single pitch CV input, one audio output.
+        let ss = r.get("supersaw").expect("supersaw is registered");
+        assert_eq!(ss.category(), "generator");
+        let node = r.graph_node("supersaw").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        let ss_desc_params = ss.params();
+        let ss_params: Vec<&str> = ss_desc_params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(ss_params, vec!["base_hz", "detune_semitones", "voices"]);
+        assert!(r.processor("supersaw").is_some());
     }
 
     #[test]

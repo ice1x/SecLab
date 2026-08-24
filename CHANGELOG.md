@@ -150,6 +150,16 @@ the AI assistant from the ground up. Highlights by area:
   Epic 13 clones (000144). Ships the playable `examples/mono_lead.ron` (midi → `pitch-osc`
   → `ladder` → env-gated `vca`), whose test asserts a higher note sounds higher through the
   whole engine; regenerated [node reference](docs/nodes.md).
+- **FM operator and supersaw oscillator nodes (`vb-nodes`, kinds `fm-op` / `supersaw`)** —
+  two new pitch-tracking generators broadening the sound-source palette. `fm-op` is a sine
+  carrier with a phase-modulation (`mod`) input and a harmonic `ratio`/`index`: chaining
+  operators (`op → op.mod`) at musical ratios yields FM synthesis's bell, electric-piano and
+  metallic timbres; with `index = 0` or nothing patched into `mod` it is a clean sine.
+  `supersaw` is a unison stack of up to nine PolyBLEP sawtooths, symmetrically detuned around
+  the tracked pitch and amplitude-normalised (`1/√N`), for fat trance/EDM leads. Both track
+  `midi-in.pitch_hz` and rest on `base_hz`; unit-tested (pure sine at `ratio × pitch`, FM
+  sidebands enrich the spectrum, detuned unison differs from a single saw, pitch tracking,
+  bounded output) plus a registry test; regenerated [node reference](docs/nodes.md).
 - **Minimoog Model D factory clone (`examples/minimoog.ron`, Epic 13 / 000137)** — the
   first full playable clone: three detuned pitch-tracking oscillators (unison, +6 cents,
   and one an octave down) mixed into an envelope-swept `ladder` and a note-gated VCA. It
