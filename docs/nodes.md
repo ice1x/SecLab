@@ -155,6 +155,15 @@ Auto-generated from the registry — do not edit by hand.
 
 ## generator
 
+### additive
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `partials` — range 1..32, default 8
+  - `tilt` — range 0..2, default 1
+
 ### fm-op
 
 - **Inputs:** `pitch` (control), `mod` (audio)
@@ -204,6 +213,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `base_hz` — range 20..20000, default 440
   - `width` — range 0.01..0.99, default 0.5
+
+### sub-osc
+
+- **Inputs:** `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `octaves` — range 1..2, default 1
 
 ### supersaw
 

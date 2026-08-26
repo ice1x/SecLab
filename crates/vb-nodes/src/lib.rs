@@ -5,6 +5,7 @@
 //! plugs into the [`vb_core`] graph engine.
 
 pub mod ad_env;
+pub mod additive;
 pub mod bitcrusher;
 pub mod cards;
 pub mod chorus;
@@ -39,6 +40,7 @@ pub mod routing;
 pub mod sample_hold;
 pub mod slew;
 pub mod smooth;
+pub mod sub_osc;
 pub mod supersaw;
 pub mod svf;
 pub mod tremolo;
@@ -48,6 +50,7 @@ pub mod vco;
 pub mod waveshaper;
 
 pub use ad_env::AdEnv;
+pub use additive::Additive;
 pub use bitcrusher::Bitcrusher;
 pub use cards::{node_card, node_reference};
 pub use chorus::Chorus;
@@ -82,6 +85,7 @@ pub use routing::{Merger, Selector, Splitter};
 pub use sample_hold::SampleHold;
 pub use slew::Slew;
 pub use smooth::{ramp_samples, Smoother};
+pub use sub_osc::SubOsc;
 pub use supersaw::Supersaw;
 pub use svf::Svf;
 pub use tremolo::Tremolo;
