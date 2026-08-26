@@ -283,6 +283,18 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `gain` — range 0..2, default 1
 
+### max
+
+- **Inputs:** `a` (audio), `b` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:** _(none)_
+
+### min
+
+- **Inputs:** `a` (audio), `b` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:** _(none)_
+
 ### mix
 
 - **Inputs:** `a` (audio), `b` (audio)
