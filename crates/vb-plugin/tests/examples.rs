@@ -41,6 +41,22 @@ const EXAMPLES: &[(&str, &str)] = &[
     ),
     ("fm_ep", include_str!("../../../examples/fm_ep.ron")),
     ("auto_wah", include_str!("../../../examples/auto_wah.ron")),
+    (
+        "super_bass",
+        include_str!("../../../examples/super_bass.ron"),
+    ),
+    (
+        "organ_phaser",
+        include_str!("../../../examples/organ_phaser.ron"),
+    ),
+    (
+        "stair_glide",
+        include_str!("../../../examples/stair_glide.ron"),
+    ),
+    (
+        "clock_poly",
+        include_str!("../../../examples/clock_poly.ron"),
+    ),
 ];
 
 #[test]
@@ -575,9 +591,90 @@ fn the_example_set_is_the_expected_manifest() {
             "drumkit",
             "supersaw_lead",
             "fm_ep",
-            "auto_wah"
+            "auto_wah",
+            "super_bass",
+            "organ_phaser",
+            "stair_glide",
+            "clock_poly"
         ]
     );
     // No example is empty.
     assert!(EXAMPLES.iter().all(|(_, ron)| !ron.trim().is_empty()));
+}
+
+/// Peak absolute output over `blocks` processed frames of `ron`, in the given context.
+fn showcase_peak(ron: &str, ctx: &BuildContext, blocks: usize) -> f32 {
+    let registry = Registry::with_builtins();
+    let doc = vb_project::open_ron(ron).expect("showcase loads");
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut peak = 0.0_f32;
+    for _ in 0..blocks {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+        assert!(out.iter().all(|s| s.is_finite()), "non-finite output");
+        peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+    }
+    peak
+}
+
+#[test]
+fn super_bass_is_silent_at_rest_and_sounds_on_a_note() {
+    // pitch-osc + sub-osc → compressor, gated by a note (VCA bias 0 → silent at rest).
+    let ron = include_str!("../../../examples/super_bass.ron");
+    assert!(
+        showcase_peak(ron, &BuildContext::default(), 8) < 1e-6,
+        "super_bass must be silent at rest"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(33, 100); // ~55 Hz
+    assert!(
+        showcase_peak(ron, &ctx, 8) > 0.01,
+        "super_bass must sound on a note"
+    );
+}
+
+#[test]
+fn organ_phaser_is_silent_at_rest_and_sounds_on_a_note() {
+    // additive organ → phaser, gated by a note.
+    let ron = include_str!("../../../examples/organ_phaser.ron");
+    assert!(
+        showcase_peak(ron, &BuildContext::default(), 8) < 1e-6,
+        "organ_phaser must be silent at rest"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(57, 100); // ~220 Hz
+    assert!(
+        showcase_peak(ron, &ctx, 8) > 0.01,
+        "organ_phaser must sound on a note"
+    );
+}
+
+#[test]
+fn stair_glide_is_silent_at_rest_and_sounds_on_a_note() {
+    // glide → quantizer → pitch-osc, gated by a note.
+    let ron = include_str!("../../../examples/stair_glide.ron");
+    assert!(
+        showcase_peak(ron, &BuildContext::default(), 8) < 1e-6,
+        "stair_glide must be silent at rest"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(60, 100); // middle C
+    assert!(
+        showcase_peak(ron, &ctx, 8) > 0.01,
+        "stair_glide must sound on a note"
+    );
+}
+
+#[test]
+fn clock_poly_plays_itself_without_a_note() {
+    // clock + clock-divider gate two voices — a self-playing polyrhythm, audible at rest.
+    let ron = include_str!("../../../examples/clock_poly.ron");
+    // A few seconds of blocks so several clock beats (and a divided beat) land.
+    let peak = showcase_peak(ron, &BuildContext::default(), 400);
+    assert!(peak > 0.01, "clock_poly plays itself: peak {peak}");
+    assert!(peak <= 4.0, "clock_poly output stays bounded: {peak}");
 }
