@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::ad_env::AdEnv;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
+use crate::compressor::Compressor;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
@@ -26,6 +27,7 @@ use crate::math::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::phaser::Phaser;
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::pwm::Pwm;
@@ -577,6 +579,52 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Chorus::new(arg(v, 0, 0.8), arg(v, 1, 4.0), arg(v, 2, 0.5))),
         ),
         NodeDescriptor::new(
+            "compressor",
+            "effect",
+            || GraphNode::new("compressor", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Compressor::new(-18.0, 4.0, 10.0, 100.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("threshold_db", -60.0, 0.0, -18.0),
+                    Parameter::new("ratio", 1.0, 20.0, 4.0),
+                    Parameter::new("attack_ms", 0.1, 100.0, 10.0),
+                    Parameter::new("release_ms", 1.0, 1000.0, 100.0),
+                    Parameter::new("makeup_db", 0.0, 24.0, 0.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Compressor::new(
+                    arg(v, 0, -18.0),
+                    arg(v, 1, 4.0),
+                    arg(v, 2, 10.0),
+                    arg(v, 3, 100.0),
+                    arg(v, 4, 0.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "phaser",
+            "effect",
+            || GraphNode::new("phaser", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Phaser::new(0.5, 0.7, 0.3, 0.5)),
+            || {
+                vec![
+                    Parameter::new("rate_hz", 0.05, 10.0, 0.5),
+                    Parameter::new("depth", 0.0, 1.0, 0.7),
+                    Parameter::new("feedback", 0.0, 0.95, 0.3),
+                    Parameter::new("mix", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| {
+                Box::new(Phaser::new(
+                    arg(v, 0, 0.5),
+                    arg(v, 1, 0.7),
+                    arg(v, 2, 0.3),
+                    arg(v, 3, 0.5),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
             "splitter",
             "routing",
             || {
@@ -1113,6 +1161,36 @@ mod tests {
         assert_eq!(
             ch.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
             vec!["rate_hz", "depth_ms", "mix"]
+        );
+    }
+
+    #[test]
+    fn compressor_and_phaser_are_registered_as_effects() {
+        let r = Registry::with_builtins();
+        for kind in ["compressor", "phaser"] {
+            let d = r.get(kind).unwrap_or_else(|| panic!("{kind} registered"));
+            assert_eq!(d.category(), "effect");
+            let node = r.graph_node(kind).unwrap();
+            assert_eq!(node.inputs.len(), 1);
+            assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+            assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+            assert!(r.processor(kind).is_some());
+        }
+        let comp = r.get("compressor").unwrap().params();
+        assert_eq!(
+            comp.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec![
+                "threshold_db",
+                "ratio",
+                "attack_ms",
+                "release_ms",
+                "makeup_db"
+            ]
+        );
+        let ph = r.get("phaser").unwrap().params();
+        assert_eq!(
+            ph.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
+            vec!["rate_hz", "depth", "feedback", "mix"]
         );
     }
 

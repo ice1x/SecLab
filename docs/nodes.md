@@ -32,6 +32,17 @@ Auto-generated from the registry — do not edit by hand.
   - `depth_ms` — range 0..10, default 4
   - `mix` — range 0..1, default 0.5
 
+### compressor
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `threshold_db` — range -60..0, default -18
+  - `ratio` — range 1..20, default 4
+  - `attack_ms` — range 0.1..100, default 10
+  - `release_ms` — range 1..1000, default 100
+  - `makeup_db` — range 0..24, default 0
+
 ### fb-delay
 
 - **Inputs:** `in` (audio)
@@ -39,6 +50,16 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `delay_s` — range 0.001..2, default 0.25
   - `feedback` — range 0..0.95, default 0.4
+
+### phaser
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `rate_hz` — range 0.05..10, default 0.5
+  - `depth` — range 0..1, default 0.7
+  - `feedback` — range 0..0.95, default 0.3
+  - `mix` — range 0..1, default 0.5
 
 ### reverb
 
