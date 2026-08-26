@@ -10,6 +10,7 @@ use std::collections::BTreeMap;
 use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::ad_env::AdEnv;
+use crate::additive::Additive;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
 use crate::clock::Clock;
@@ -40,6 +41,7 @@ use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::slew::Slew;
+use crate::sub_osc::SubOsc;
 use crate::supersaw::Supersaw;
 use crate::svf::Svf;
 use crate::tremolo::Tremolo;
@@ -1129,6 +1131,56 @@ fn builtins() -> Vec<NodeDescriptor> {
             },
         ),
         NodeDescriptor::new(
+            "additive",
+            "generator",
+            || {
+                GraphNode::new(
+                    "additive",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Additive::new(440.0, 8, 1.0)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("partials", 1.0, 32.0, 8.0),
+                    Parameter::new("tilt", 0.0, 2.0, 1.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Additive::new(
+                    arg(v, 0, 440.0),
+                    arg(v, 1, 8.0).round().max(1.0) as u32,
+                    arg(v, 2, 1.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "sub-osc",
+            "generator",
+            || {
+                GraphNode::new(
+                    "sub-osc",
+                    vec![Port::input("pitch", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(SubOsc::new(440.0, 1)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("octaves", 1.0, 2.0, 1.0),
+                ]
+            },
+            |_, v| {
+                Box::new(SubOsc::new(
+                    arg(v, 0, 440.0),
+                    arg(v, 1, 1.0).round().clamp(1.0, 2.0) as u32,
+                ))
+            },
+        ),
+        NodeDescriptor::new(
             "pwm",
             "generator",
             || {
@@ -1513,6 +1565,43 @@ mod tests {
         let ss_params: Vec<&str> = ss_desc_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(ss_params, vec!["base_hz", "detune_semitones", "voices"]);
         assert!(r.processor("supersaw").is_some());
+    }
+
+    #[test]
+    fn additive_and_sub_osc_are_registered_as_generators() {
+        let r = Registry::with_builtins();
+
+        // Additive: one pitch CV input → one audio output; base/partials/tilt params.
+        let a = r.get("additive").expect("additive is registered");
+        assert_eq!(a.category(), "generator");
+        let node = r.graph_node("additive").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            a.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["base_hz", "partials", "tilt"]
+        );
+        assert!(r.processor("additive").is_some());
+
+        // Sub oscillator: one pitch CV input → one audio output; base/octaves params.
+        let s = r.get("sub-osc").expect("sub-osc is registered");
+        assert_eq!(s.category(), "generator");
+        let node = r.graph_node("sub-osc").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            s.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["base_hz", "octaves"]
+        );
+        assert!(r.processor("sub-osc").is_some());
     }
 
     #[test]
