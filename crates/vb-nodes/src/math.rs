@@ -173,9 +173,48 @@ impl Processor for Attenuvert {
     }
 }
 
+/// Sample-wise minimum of two inputs: `out = min(a, b)`.
+///
+/// A signal utility and a logic gate in one: on bipolar audio it takes the lower of two
+/// signals; on `0`/`1` gates it is a logical AND (high only when both are high). Pairs with
+/// [`Max`] to combine the outputs of comparators, clocks or envelopes.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Min;
+
+impl Processor for Min {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        for (o, (a, b)) in outputs[0]
+            .iter_mut()
+            .zip(inputs[0].iter().zip(inputs[1].iter()))
+            .take(ctx.frames)
+        {
+            *o = a.min(*b);
+        }
+    }
+}
+
+/// Sample-wise maximum of two inputs: `out = max(a, b)`.
+///
+/// The counterpart to [`Min`]: the higher of two signals, or a logical OR on `0`/`1` gates
+/// (high when either is high). Useful for merging triggers or taking an envelope's peak.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Max;
+
+impl Processor for Max {
+    fn process(&mut self, ctx: &ProcessContext, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        for (o, (a, b)) in outputs[0]
+            .iter_mut()
+            .zip(inputs[0].iter().zip(inputs[1].iter()))
+            .take(ctx.frames)
+        {
+            *o = a.max(*b);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
+    use super::{Add, Attenuvert, Clamp, Gain, Max, Min, Mix, Mul, Rectify, Sub};
     use vb_core::{ProcessContext, Processor};
 
     fn ctx(frames: usize) -> ProcessContext {
@@ -217,6 +256,31 @@ mod tests {
     #[test]
     fn mul_multiplies_inputs() {
         assert_eq!(run2(&mut Mul, &[2.0, 3.0], &[4.0, 5.0]), vec![8.0, 15.0]);
+    }
+
+    #[test]
+    fn min_takes_the_lower_input() {
+        assert_eq!(
+            run2(&mut Min, &[1.0, 5.0, -2.0], &[3.0, 2.0, -1.0]),
+            vec![1.0, 2.0, -2.0]
+        );
+    }
+
+    #[test]
+    fn max_takes_the_higher_input() {
+        assert_eq!(
+            run2(&mut Max, &[1.0, 5.0, -2.0], &[3.0, 2.0, -1.0]),
+            vec![3.0, 5.0, -1.0]
+        );
+    }
+
+    #[test]
+    fn min_and_max_act_as_gate_logic() {
+        // On 0/1 gates: min = AND, max = OR.
+        let a = [0.0, 0.0, 1.0, 1.0];
+        let b = [0.0, 1.0, 0.0, 1.0];
+        assert_eq!(run2(&mut Min, &a, &b), vec![0.0, 0.0, 0.0, 1.0], "AND");
+        assert_eq!(run2(&mut Max, &a, &b), vec![0.0, 1.0, 1.0, 1.0], "OR");
     }
 
     #[test]

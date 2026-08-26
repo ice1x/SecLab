@@ -26,7 +26,7 @@ use crate::hard_sync::HardSync;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
-use crate::math::{Add, Attenuvert, Clamp, Gain, Mix, Mul, Rectify, Sub};
+use crate::math::{Add, Attenuvert, Clamp, Gain, Max, Min, Mix, Mul, Rectify, Sub};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
@@ -356,6 +356,34 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(Sub),
             Vec::new,
             |_, _| Box::new(Sub),
+        ),
+        NodeDescriptor::new(
+            "min",
+            "math",
+            || {
+                GraphNode::new(
+                    "min",
+                    vec![audio_in("a"), audio_in("b")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Min),
+            Vec::new,
+            |_, _| Box::new(Min),
+        ),
+        NodeDescriptor::new(
+            "max",
+            "math",
+            || {
+                GraphNode::new(
+                    "max",
+                    vec![audio_in("a"), audio_in("b")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Max),
+            Vec::new,
+            |_, _| Box::new(Max),
         ),
         NodeDescriptor::new(
             "rectify",
@@ -1211,6 +1239,16 @@ mod tests {
             vec!["scale", "offset"]
         );
         assert!(r.processor("attenuvert").is_some());
+        // Binary min/max (signal utility and CV logic AND/OR).
+        for kind in ["min", "max"] {
+            let node = r
+                .graph_node(kind)
+                .unwrap_or_else(|| panic!("{kind} registered"));
+            assert_eq!(node.inputs.len(), 2);
+            assert_eq!(r.get(kind).unwrap().category(), "math");
+            assert!(r.get(kind).unwrap().params().is_empty());
+            assert!(r.processor(kind).is_some());
+        }
     }
 
     #[test]
