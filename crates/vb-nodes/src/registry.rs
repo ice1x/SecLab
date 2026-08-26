@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::ad_env::AdEnv;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
+use crate::comparator::Comparator;
 use crate::compressor::Compressor;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
@@ -31,6 +32,7 @@ use crate::phaser::Phaser;
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::pwm::Pwm;
+use crate::quantizer::Quantizer;
 use crate::reverb::Reverb;
 use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
@@ -956,6 +958,42 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Slew::new(arg(v, 0, 0.05), arg(v, 1, 0.05))),
         ),
         NodeDescriptor::new(
+            "quantizer",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "quantizer",
+                    vec![Port::input("in", SignalType::Control)],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Quantizer::new(440.0, 12.0)),
+            || {
+                vec![
+                    Parameter::new("ref_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("divisions", 1.0, 48.0, 12.0),
+                ]
+            },
+            |_, v| Box::new(Quantizer::new(arg(v, 0, 440.0), arg(v, 1, 12.0))),
+        ),
+        NodeDescriptor::new(
+            "comparator",
+            "modulation",
+            || {
+                GraphNode::new(
+                    "comparator",
+                    vec![
+                        Port::input("a", SignalType::Control),
+                        Port::input("b", SignalType::Control),
+                    ],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Comparator::new(0.0)),
+            || vec![Parameter::new("hysteresis", 0.0, 1.0, 0.0)],
+            |_, v| Box::new(Comparator::new(arg(v, 0, 0.0))),
+        ),
+        NodeDescriptor::new(
             "pitch-osc",
             "generator",
             || {
@@ -1245,6 +1283,46 @@ mod tests {
         let slew_params: Vec<&str> = slew_desc_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(slew_params, vec!["rise_s", "fall_s"]);
         assert!(r.processor("slew").is_some());
+    }
+
+    #[test]
+    fn quantizer_and_comparator_are_registered_as_modulation() {
+        let r = Registry::with_builtins();
+
+        // Quantizer: one control input → control output; ref/divisions params.
+        let q = r.get("quantizer").expect("quantizer is registered");
+        assert_eq!(q.category(), "modulation");
+        let node = r.graph_node("quantizer").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            q.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ref_hz", "divisions"]
+        );
+        assert!(r.processor("quantizer").is_some());
+
+        // Comparator: two control inputs → control gate; hysteresis param.
+        let c = r.get("comparator").expect("comparator is registered");
+        assert_eq!(c.category(), "modulation");
+        let node = r.graph_node("comparator").unwrap();
+        assert_eq!(node.inputs.len(), 2);
+        assert!(node
+            .inputs
+            .iter()
+            .all(|p| p.signal == vb_core::SignalType::Control));
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            c.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["hysteresis"]
+        );
+        assert!(r.processor("comparator").is_some());
     }
 
     #[test]
