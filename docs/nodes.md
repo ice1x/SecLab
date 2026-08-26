@@ -310,6 +310,13 @@ Auto-generated from the registry — do not edit by hand.
 
 ## modulation
 
+### comparator
+
+- **Inputs:** `a` (control), `b` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `hysteresis` — range 0..1, default 0
+
 ### env-follower
 
 - **Inputs:** `in` (audio)
@@ -335,6 +342,14 @@ Auto-generated from the registry — do not edit by hand.
   - `freq_hz` — range 0.01..50, default 2
   - `bpm` — range 20..300, default 120
   - `division` — range 0..4, default 2
+
+### quantizer
+
+- **Inputs:** `in` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `ref_hz` — range 20..20000, default 440
+  - `divisions` — range 1..48, default 12
 
 ### sample-hold
 
