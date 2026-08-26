@@ -17,6 +17,7 @@ use crate::clock::Clock;
 use crate::clock_divider::ClockDivider;
 use crate::comparator::Comparator;
 use crate::compressor::Compressor;
+use crate::dc_blocker::DcBlocker;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
@@ -46,6 +47,7 @@ use crate::step_sequencer::StepSequencer;
 use crate::sub_osc::SubOsc;
 use crate::supersaw::Supersaw;
 use crate::svf::Svf;
+use crate::tone::Tone;
 use crate::tremolo::Tremolo;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
@@ -310,6 +312,27 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Svf::new(arg(v, 0, 1_000.0), arg(v, 1, 0.707))),
+        ),
+        NodeDescriptor::new(
+            "dc-blocker",
+            "filter",
+            || GraphNode::new("dc-blocker", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(DcBlocker::new(0.995)),
+            || vec![Parameter::new("r", 0.9, 0.9999, 0.995)],
+            |_, v| Box::new(DcBlocker::new(arg(v, 0, 0.995))),
+        ),
+        NodeDescriptor::new(
+            "tone",
+            "filter",
+            || GraphNode::new("tone", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Tone::new(0.0, 700.0)),
+            || {
+                vec![
+                    Parameter::new("tilt", -1.0, 1.0, 0.0),
+                    Parameter::new("pivot_hz", 100.0, 8_000.0, 700.0),
+                ]
+            },
+            |_, v| Box::new(Tone::new(arg(v, 0, 0.0), arg(v, 1, 700.0))),
         ),
         NodeDescriptor::new(
             "gain",
@@ -1576,6 +1599,41 @@ mod tests {
             vec!["pulses", "steps"]
         );
         assert!(r.processor("euclid").is_some());
+    }
+
+    #[test]
+    fn dc_blocker_and_tone_are_registered_as_filters() {
+        let r = Registry::with_builtins();
+
+        // DC blocker: audio in → audio out; single pole-radius param.
+        let d = r.get("dc-blocker").expect("dc-blocker is registered");
+        assert_eq!(d.category(), "filter");
+        let node = r.graph_node("dc-blocker").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["r"]
+        );
+        assert!(r.processor("dc-blocker").is_some());
+
+        // Tone: audio in → audio out; tilt + pivot params.
+        let t = r.get("tone").expect("tone is registered");
+        assert_eq!(t.category(), "filter");
+        let node = r.graph_node("tone").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            t.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["tilt", "pivot_hz"]
+        );
+        assert!(r.processor("tone").is_some());
     }
 
     #[test]

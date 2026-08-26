@@ -126,6 +126,13 @@ Auto-generated from the registry — do not edit by hand.
   - `cutoff_hz` — range 20..20000, default 1000
   - `q` — range 0.1..10, default 0.707
 
+### dc-blocker
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `r` — range 0.9..0.9999, default 0.995
+
 ### ladder
 
 - **Inputs:** `in` (audio), `cutoff` (control)
@@ -142,6 +149,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `cutoff_hz` — range 20..20000, default 1000
   - `q` — range 0.1..20, default 0.707
+
+### tone
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `tilt` — range -1..1, default 0
+  - `pivot_hz` — range 100..8000, default 700
 
 ### vcf
 
