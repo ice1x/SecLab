@@ -440,3 +440,26 @@ Auto-generated from the registry — do not edit by hand.
 - **Outputs:** `out` (control)
 - **Parameters:**
   - `division` — range 1..16, default 2
+
+### euclid
+
+- **Inputs:** `clock` (control)
+- **Outputs:** `gate` (control)
+- **Parameters:**
+  - `pulses` — range 0..32, default 4
+  - `steps` — range 1..32, default 8
+
+### step-sequencer
+
+- **Inputs:** `clock` (control)
+- **Outputs:** `cv` (control)
+- **Parameters:**
+  - `steps` — range 1..8, default 8
+  - `step0` — range -1..1, default 0
+  - `step1` — range -1..1, default 0
+  - `step2` — range -1..1, default 0
+  - `step3` — range -1..1, default 0
+  - `step4` — range -1..1, default 0
+  - `step5` — range -1..1, default 0
+  - `step6` — range -1..1, default 0
+  - `step7` — range -1..1, default 0
