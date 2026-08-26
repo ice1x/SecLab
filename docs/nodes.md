@@ -394,3 +394,20 @@ Auto-generated from the registry — do not edit by hand.
 - **Inputs:** `in` (audio)
 - **Outputs:** `a` (audio), `b` (audio)
 - **Parameters:** _(none)_
+
+## sequencing
+
+### clock
+
+- **Inputs:** _(none)_
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `bpm` — range 20..300, default 120
+  - `pulse_width` — range 0.01..0.99, default 0.5
+
+### clock-divider
+
+- **Inputs:** `in` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `division` — range 1..16, default 2

@@ -12,6 +12,8 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::ad_env::AdEnv;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
+use crate::clock::Clock;
+use crate::clock_divider::ClockDivider;
 use crate::comparator::Comparator;
 use crate::compressor::Compressor;
 use crate::delay::{FbDelay, MAX_DELAY_S};
@@ -994,6 +996,39 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Comparator::new(arg(v, 0, 0.0))),
         ),
         NodeDescriptor::new(
+            "clock",
+            "sequencing",
+            || {
+                GraphNode::new(
+                    "clock",
+                    vec![],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(Clock::new(120.0, 0.5)),
+            || {
+                vec![
+                    Parameter::new("bpm", 20.0, 300.0, 120.0),
+                    Parameter::new("pulse_width", 0.01, 0.99, 0.5),
+                ]
+            },
+            |_, v| Box::new(Clock::new(arg(v, 0, 120.0), arg(v, 1, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "clock-divider",
+            "sequencing",
+            || {
+                GraphNode::new(
+                    "clock-divider",
+                    vec![Port::input("in", SignalType::Control)],
+                    vec![Port::output("out", SignalType::Control)],
+                )
+            },
+            || Box::new(ClockDivider::new(2)),
+            || vec![Parameter::new("division", 1.0, 16.0, 2.0)],
+            |_, v| Box::new(ClockDivider::new(arg(v, 0, 2.0).round().max(1.0) as u32)),
+        ),
+        NodeDescriptor::new(
             "pitch-osc",
             "generator",
             || {
@@ -1323,6 +1358,42 @@ mod tests {
             vec!["hysteresis"]
         );
         assert!(r.processor("comparator").is_some());
+    }
+
+    #[test]
+    fn clock_and_clock_divider_are_registered_as_sequencing() {
+        let r = Registry::with_builtins();
+
+        // Clock: no inputs → control gate output; bpm/pulse_width params.
+        let c = r.get("clock").expect("clock is registered");
+        assert_eq!(c.category(), "sequencing");
+        let node = r.graph_node("clock").unwrap();
+        assert!(node.inputs.is_empty());
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            c.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["bpm", "pulse_width"]
+        );
+        assert!(r.processor("clock").is_some());
+
+        // Clock divider: one control gate in → control gate out; division param.
+        let d = r.get("clock-divider").expect("clock-divider is registered");
+        assert_eq!(d.category(), "sequencing");
+        let node = r.graph_node("clock-divider").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["division"]
+        );
+        assert!(r.processor("clock-divider").is_some());
     }
 
     #[test]
