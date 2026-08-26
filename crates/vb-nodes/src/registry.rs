@@ -20,6 +20,7 @@ use crate::compressor::Compressor;
 use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
+use crate::euclid::Euclid;
 use crate::filter::{Biquad, FilterKind};
 use crate::fm_op::FmOp;
 use crate::glide::Glide;
@@ -41,6 +42,7 @@ use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::slew::Slew;
+use crate::step_sequencer::StepSequencer;
 use crate::sub_osc::SubOsc;
 use crate::supersaw::Supersaw;
 use crate::svf::Svf;
@@ -1059,6 +1061,59 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(ClockDivider::new(arg(v, 0, 2.0).round().max(1.0) as u32)),
         ),
         NodeDescriptor::new(
+            "step-sequencer",
+            "sequencing",
+            || {
+                GraphNode::new(
+                    "step-sequencer",
+                    vec![Port::input("clock", SignalType::Control)],
+                    vec![Port::output("cv", SignalType::Control)],
+                )
+            },
+            || Box::new(StepSequencer::new(8, [0.0; crate::step_sequencer::STEPS])),
+            || {
+                let mut params = vec![Parameter::new("steps", 1.0, 8.0, 8.0)];
+                for i in 0..crate::step_sequencer::STEPS {
+                    params.push(Parameter::new(format!("step{i}"), -1.0, 1.0, 0.0));
+                }
+                params
+            },
+            |_, v| {
+                let mut values = [0.0_f32; crate::step_sequencer::STEPS];
+                for (i, slot) in values.iter_mut().enumerate() {
+                    *slot = arg(v, i + 1, 0.0);
+                }
+                Box::new(StepSequencer::new(
+                    arg(v, 0, 8.0).round().max(1.0) as u32,
+                    values,
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "euclid",
+            "sequencing",
+            || {
+                GraphNode::new(
+                    "euclid",
+                    vec![Port::input("clock", SignalType::Control)],
+                    vec![Port::output("gate", SignalType::Control)],
+                )
+            },
+            || Box::new(Euclid::new(4, 8)),
+            || {
+                vec![
+                    Parameter::new("pulses", 0.0, 32.0, 4.0),
+                    Parameter::new("steps", 1.0, 32.0, 8.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Euclid::new(
+                    arg(v, 0, 4.0).round().max(0.0) as u32,
+                    arg(v, 1, 8.0).round().max(1.0) as u32,
+                ))
+            },
+        ),
+        NodeDescriptor::new(
             "pitch-osc",
             "generator",
             || {
@@ -1484,6 +1539,43 @@ mod tests {
             vec!["division"]
         );
         assert!(r.processor("clock-divider").is_some());
+    }
+
+    #[test]
+    fn step_sequencer_and_euclid_are_registered_as_sequencing() {
+        let r = Registry::with_builtins();
+
+        // Step sequencer: one control clock in → control cv out; steps + 8 step values.
+        let s = r
+            .get("step-sequencer")
+            .expect("step-sequencer is registered");
+        assert_eq!(s.category(), "sequencing");
+        let node = r.graph_node("step-sequencer").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        let params = s.params();
+        let names: Vec<_> = params.iter().map(|p| p.name.as_str()).collect();
+        assert_eq!(names[0], "steps");
+        assert_eq!(names.len(), 1 + crate::step_sequencer::STEPS);
+        assert_eq!(names[1], "step0");
+        assert!(r.processor("step-sequencer").is_some());
+
+        // Euclid: one control clock in → control gate out; pulses + steps params.
+        let e = r.get("euclid").expect("euclid is registered");
+        assert_eq!(e.category(), "sequencing");
+        let node = r.graph_node("euclid").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            e.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["pulses", "steps"]
+        );
+        assert!(r.processor("euclid").is_some());
     }
 
     #[test]
