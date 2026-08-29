@@ -132,6 +132,23 @@ Auto-generated from the registry — do not edit by hand.
   - `sustain` — range 0..1, default 0.7
   - `release_s` — range 0..5, default 0.2
 
+### ahr
+
+- **Inputs:** `gate` (control)
+- **Outputs:** `level` (control)
+- **Parameters:**
+  - `attack_s` — range 0..5, default 0.01
+  - `hold_s` — range 0..5, default 0.1
+  - `release_s` — range 0..5, default 0.1
+
+### ar
+
+- **Inputs:** `gate` (control)
+- **Outputs:** `level` (control)
+- **Parameters:**
+  - `attack_s` — range 0..5, default 0.01
+  - `release_s` — range 0..5, default 0.2
+
 ## filter
 
 ### biquad

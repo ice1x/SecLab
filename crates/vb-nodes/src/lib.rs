@@ -6,6 +6,8 @@
 
 pub mod ad_env;
 pub mod additive;
+pub mod ahr_env;
+pub mod ar_env;
 pub mod bitcrusher;
 pub mod cards;
 pub mod chorus;
@@ -57,6 +59,8 @@ pub mod waveshaper;
 
 pub use ad_env::AdEnv;
 pub use additive::Additive;
+pub use ahr_env::AhrEnv;
+pub use ar_env::ArEnv;
 pub use bitcrusher::Bitcrusher;
 pub use cards::{node_card, node_reference};
 pub use chorus::Chorus;
