@@ -57,6 +57,11 @@ const EXAMPLES: &[(&str, &str)] = &[
         "clock_poly",
         include_str!("../../../examples/clock_poly.ron"),
     ),
+    (
+        "euclid_pulse",
+        include_str!("../../../examples/euclid_pulse.ron"),
+    ),
+    ("step_lead", include_str!("../../../examples/step_lead.ron")),
 ];
 
 #[test]
@@ -595,7 +600,9 @@ fn the_example_set_is_the_expected_manifest() {
             "super_bass",
             "organ_phaser",
             "stair_glide",
-            "clock_poly"
+            "clock_poly",
+            "euclid_pulse",
+            "step_lead"
         ]
     );
     // No example is empty.
@@ -677,4 +684,34 @@ fn clock_poly_plays_itself_without_a_note() {
     let peak = showcase_peak(ron, &BuildContext::default(), 400);
     assert!(peak > 0.01, "clock_poly plays itself: peak {peak}");
     assert!(peak <= 4.0, "clock_poly output stays bounded: {peak}");
+}
+
+#[test]
+fn euclid_pulse_plays_itself_as_a_euclidean_groove() {
+    // clock → euclid → ahr gates a noise burst through gate → dc-blocker → limiter.
+    // Self-playing (the clock lives inside), so it is audible at rest, no note needed.
+    let ron = include_str!("../../../examples/euclid_pulse.ron");
+    let peak = showcase_peak(ron, &BuildContext::default(), 600);
+    assert!(peak > 0.01, "euclid_pulse plays itself: peak {peak}");
+    assert!(
+        peak <= 1.5,
+        "euclid_pulse stays under the limiter ceiling: {peak}"
+    );
+}
+
+#[test]
+fn step_lead_is_silent_at_rest_and_sounds_on_a_note() {
+    // clock → step-sequencer → vco → tone, note-gated by an AR envelope through a
+    // bias-0 VCA: silent until a note opens the envelope, then a stepped sequenced lead.
+    let ron = include_str!("../../../examples/step_lead.ron");
+    assert!(
+        showcase_peak(ron, &BuildContext::default(), 8) < 1e-6,
+        "step_lead must be silent at rest"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(60, 100); // gate only — pitch comes from the sequencer
+    assert!(
+        showcase_peak(ron, &ctx, 16) > 0.01,
+        "step_lead must sound on a note"
+    );
 }
