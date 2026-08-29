@@ -24,11 +24,13 @@ use crate::envelope::Adsr;
 use crate::euclid::Euclid;
 use crate::filter::{Biquad, FilterKind};
 use crate::fm_op::FmOp;
+use crate::gate::Gate;
 use crate::glide::Glide;
 use crate::hard_sync::HardSync;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
+use crate::limiter::Limiter;
 use crate::math::{Add, Attenuvert, Clamp, Gain, Max, Min, Mix, Mul, Rectify, Sub};
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
@@ -885,6 +887,33 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Vca::new(arg(v, 0, 1.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
+            "gate",
+            "dynamics",
+            || GraphNode::new("gate", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Gate::new(-40.0, 1.0, 50.0)),
+            || {
+                vec![
+                    Parameter::new("threshold_db", -80.0, 0.0, -40.0),
+                    Parameter::new("attack_ms", 0.1, 100.0, 1.0),
+                    Parameter::new("release_ms", 1.0, 1000.0, 50.0),
+                ]
+            },
+            |_, v| Box::new(Gate::new(arg(v, 0, -40.0), arg(v, 1, 1.0), arg(v, 2, 50.0))),
+        ),
+        NodeDescriptor::new(
+            "limiter",
+            "dynamics",
+            || GraphNode::new("limiter", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Limiter::new(0.0, 50.0)),
+            || {
+                vec![
+                    Parameter::new("ceiling_db", -24.0, 0.0, 0.0),
+                    Parameter::new("release_ms", 1.0, 1000.0, 50.0),
+                ]
+            },
+            |_, v| Box::new(Limiter::new(arg(v, 0, 0.0), arg(v, 1, 50.0))),
+        ),
+        NodeDescriptor::new(
             "vcf",
             "filter",
             || {
@@ -1634,6 +1663,41 @@ mod tests {
             vec!["tilt", "pivot_hz"]
         );
         assert!(r.processor("tone").is_some());
+    }
+
+    #[test]
+    fn gate_and_limiter_are_registered_as_dynamics() {
+        let r = Registry::with_builtins();
+
+        // Gate: audio in → audio out; threshold + attack/release params.
+        let g = r.get("gate").expect("gate is registered");
+        assert_eq!(g.category(), "dynamics");
+        let node = r.graph_node("gate").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            g.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["threshold_db", "attack_ms", "release_ms"]
+        );
+        assert!(r.processor("gate").is_some());
+
+        // Limiter: audio in → audio out; ceiling + release params.
+        let l = r.get("limiter").expect("limiter is registered");
+        assert_eq!(l.category(), "dynamics");
+        let node = r.graph_node("limiter").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            l.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["ceiling_db", "release_ms"]
+        );
+        assert!(r.processor("limiter").is_some());
     }
 
     #[test]
