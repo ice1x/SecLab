@@ -4,6 +4,23 @@ Auto-generated from the registry — do not edit by hand.
 
 ## dynamics
 
+### gate
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `threshold_db` — range -80..0, default -40
+  - `attack_ms` — range 0.1..100, default 1
+  - `release_ms` — range 1..1000, default 50
+
+### limiter
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `ceiling_db` — range -24..0, default 0
+  - `release_ms` — range 1..1000, default 50
+
 ### vca
 
 - **Inputs:** `in` (audio), `cv` (control)
