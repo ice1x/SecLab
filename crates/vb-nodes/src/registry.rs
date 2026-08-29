@@ -11,6 +11,8 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 
 use crate::ad_env::AdEnv;
 use crate::additive::Additive;
+use crate::ahr_env::AhrEnv;
+use crate::ar_env::ArEnv;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
 use crate::clock::Clock;
@@ -508,6 +510,45 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(AdEnv::new(arg(v, 0, 0.005), arg(v, 1, 0.15))),
+        ),
+        NodeDescriptor::new(
+            "ar",
+            "envelope",
+            || {
+                GraphNode::new(
+                    "ar",
+                    vec![Port::input("gate", SignalType::Control)],
+                    vec![Port::output("level", SignalType::Control)],
+                )
+            },
+            || Box::new(ArEnv::new(0.01, 0.2)),
+            || {
+                vec![
+                    Parameter::new("attack_s", 0.0, 5.0, 0.01),
+                    Parameter::new("release_s", 0.0, 5.0, 0.2),
+                ]
+            },
+            |_, v| Box::new(ArEnv::new(arg(v, 0, 0.01), arg(v, 1, 0.2))),
+        ),
+        NodeDescriptor::new(
+            "ahr",
+            "envelope",
+            || {
+                GraphNode::new(
+                    "ahr",
+                    vec![Port::input("gate", SignalType::Control)],
+                    vec![Port::output("level", SignalType::Control)],
+                )
+            },
+            || Box::new(AhrEnv::new(0.01, 0.1, 0.1)),
+            || {
+                vec![
+                    Parameter::new("attack_s", 0.0, 5.0, 0.01),
+                    Parameter::new("hold_s", 0.0, 5.0, 0.1),
+                    Parameter::new("release_s", 0.0, 5.0, 0.1),
+                ]
+            },
+            |_, v| Box::new(AhrEnv::new(arg(v, 0, 0.01), arg(v, 1, 0.1), arg(v, 2, 0.1))),
         ),
         NodeDescriptor::new(
             "env-follower",
@@ -1726,6 +1767,41 @@ mod tests {
         let ef_params: Vec<&str> = ef_desc_params.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(ef_params, vec!["attack_s", "release_s"]);
         assert!(r.processor("env-follower").is_some());
+    }
+
+    #[test]
+    fn ar_and_ahr_are_registered_as_envelopes() {
+        let r = Registry::with_builtins();
+
+        // AR: gate control in → level control out; attack/release params.
+        let ar = r.get("ar").expect("ar is registered");
+        assert_eq!(ar.category(), "envelope");
+        let node = r.graph_node("ar").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            ar.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["attack_s", "release_s"]
+        );
+        assert!(r.processor("ar").is_some());
+
+        // AHR: gate control in → level control out; attack/hold/release params.
+        let ahr = r.get("ahr").expect("ahr is registered");
+        assert_eq!(ahr.category(), "envelope");
+        let node = r.graph_node("ahr").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            ahr.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["attack_s", "hold_s", "release_s"]
+        );
+        assert!(r.processor("ahr").is_some());
     }
 
     #[test]
