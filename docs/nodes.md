@@ -78,6 +78,15 @@ Auto-generated from the registry — do not edit by hand.
   - `feedback` — range 0..0.95, default 0.3
   - `mix` — range 0..1, default 0.5
 
+### ping-pong
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `left` (audio), `right` (audio)
+- **Parameters:**
+  - `delay_s` — range 0.001..2, default 0.25
+  - `feedback` — range 0..0.95, default 0.4
+  - `mix` — range 0..1, default 0.5
+
 ### reverb
 
 - **Inputs:** `in` (audio)
@@ -120,6 +129,13 @@ Auto-generated from the registry — do not edit by hand.
   - `shape` — range 0..2, default 0
   - `drive` — range 0.1..20, default 2
   - `level` — range 0..1, default 0.8
+
+### width
+
+- **Inputs:** `left` (audio), `right` (audio)
+- **Outputs:** `left` (audio), `right` (audio)
+- **Parameters:**
+  - `width` — range 0..2, default 1
 
 ## envelope
 
