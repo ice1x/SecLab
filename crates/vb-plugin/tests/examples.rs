@@ -63,6 +63,11 @@ const EXAMPLES: &[(&str, &str)] = &[
     ),
     ("step_lead", include_str!("../../../examples/step_lead.ron")),
     ("auto_pan", include_str!("../../../examples/auto_pan.ron")),
+    (
+        "stereo_lead",
+        include_str!("../../../examples/stereo_lead.ron"),
+    ),
+    ("pan_perc", include_str!("../../../examples/pan_perc.ron")),
 ];
 
 #[test]
@@ -604,7 +609,9 @@ fn the_example_set_is_the_expected_manifest() {
             "clock_poly",
             "euclid_pulse",
             "step_lead",
-            "auto_pan"
+            "auto_pan",
+            "stereo_lead",
+            "pan_perc"
         ]
     );
     // No example is empty.
@@ -754,4 +761,66 @@ fn auto_pan_produces_a_moving_stereo_image() {
         max_diff > 0.1,
         "the stereo image moves (L differs from R): {max_diff}"
     );
+}
+
+/// `(peak over channel 0, sink channel count, max |L-R| seen)` for a showcase patch.
+fn stereo_stats(ron: &str, ctx: &BuildContext, blocks: usize) -> (f32, usize, f32) {
+    let registry = Registry::with_builtins();
+    let doc = vb_project::open_ron(ron).expect("showcase loads");
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let (mut peak, mut channels, mut max_diff) = (0.0_f32, 0usize, 0.0_f32);
+    for _ in 0..blocks {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let buf = engine.node_output(sink).expect("sink output");
+        channels = buf.channels();
+        let l = buf.channel(0).unwrap();
+        peak = peak.max(l.iter().fold(0.0, |m, s| m.max(s.abs())));
+        if let Some(r) = buf.channel(1) {
+            for (a, b) in l.iter().zip(r.iter()) {
+                max_diff = max_diff.max((a - b).abs());
+            }
+        }
+    }
+    (peak, channels, max_diff)
+}
+
+#[test]
+fn stereo_lead_is_silent_at_rest_and_plays_a_stereo_note() {
+    // midi → pitch-osc → adsr·vca → ping-pong → width: a note-gated lead that ends stereo.
+    let ron = include_str!("../../../examples/stereo_lead.ron");
+    let (at_rest, _, _) = stereo_stats(ron, &BuildContext::default(), 8);
+    assert!(
+        at_rest < 1e-6,
+        "stereo_lead must be silent at rest: {at_rest}"
+    );
+
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(57, 100); // ~220 Hz
+                                // Enough blocks (~0.5 s) for the short ping-pong echoes to populate both channels.
+    let (peak, channels, diff) = stereo_stats(ron, &ctx, 90);
+    assert!(peak > 0.01, "stereo_lead must sound on a note: {peak}");
+    assert_eq!(channels, 2, "the width node makes it a stereo sink");
+    assert!(
+        diff > 0.05,
+        "ping-pong + width give a real stereo image: {diff}"
+    );
+}
+
+#[test]
+fn pan_perc_plays_itself_in_stereo() {
+    // clock → euclid → ahr gates noise through a vca into an LFO-swept pan: a self-playing
+    // Euclidean percussion that auto-pans across a true two-channel sink.
+    let ron = include_str!("../../../examples/pan_perc.ron");
+    let (peak, channels, diff) = stereo_stats(ron, &BuildContext::default(), 600);
+    assert!(peak > 0.01, "pan_perc plays itself: {peak}");
+    assert_eq!(channels, 2, "the pan node makes it a stereo sink");
+    assert!(
+        diff > 0.1,
+        "the percussion moves across the stereo field: {diff}"
+    );
+    assert!(peak <= 1.5, "output stays bounded: {peak}");
 }
