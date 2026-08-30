@@ -37,6 +37,7 @@ use crate::math::{Add, Attenuvert, Clamp, Gain, Max, Min, Mix, Mul, Rectify, Sub
 use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
+use crate::pan::Pan;
 use crate::phaser::Phaser;
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
@@ -779,6 +780,20 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(Splitter),
             Vec::new,
             |_, _| Box::new(Splitter),
+        ),
+        NodeDescriptor::new(
+            "pan",
+            "routing",
+            || {
+                GraphNode::new(
+                    "pan",
+                    vec![audio_in("in"), Port::input("pan", SignalType::Control)],
+                    vec![audio_out("left"), audio_out("right")],
+                )
+            },
+            || Box::new(Pan::new(0.0)),
+            || vec![Parameter::new("pan", -1.0, 1.0, 0.0)],
+            |_, v| Box::new(Pan::new(arg(v, 0, 0.0))),
         ),
         NodeDescriptor::new(
             "merger",
@@ -1811,6 +1826,34 @@ mod tests {
         assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
         assert!(xf.params().is_empty(), "xfade has no params");
         assert!(r.processor("xfade").is_some());
+    }
+
+    #[test]
+    fn pan_is_registered_with_a_stereo_output() {
+        let r = Registry::with_builtins();
+        let p = r.get("pan").expect("pan is registered");
+        assert_eq!(p.category(), "routing");
+        let node = r.graph_node("pan").unwrap();
+        // Audio in + control pan in.
+        assert_eq!(node.inputs.len(), 2);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.inputs[1].signal, vb_core::SignalType::Control);
+        // Two audio outputs — the defining stereo (two-channel) node.
+        assert_eq!(node.outputs.len(), 2);
+        assert_eq!(node.outputs[0].name, "left");
+        assert_eq!(node.outputs[1].name, "right");
+        assert!(node
+            .outputs
+            .iter()
+            .all(|o| o.signal == vb_core::SignalType::Audio));
+        assert_eq!(
+            p.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["pan"]
+        );
+        assert!(r.processor("pan").is_some());
     }
 
     #[test]
