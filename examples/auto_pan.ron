@@ -1,0 +1,94 @@
+(
+    version: 1,
+    nodes: [
+        (
+            id: (0),
+            node: (
+                kind: "oscillator",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.0,
+                220.0,
+            ],
+        ),
+        (
+            id: (1),
+            node: (
+                kind: "lfo",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.0,
+                0.0,
+                2.0,
+                120.0,
+                2.0,
+            ],
+        ),
+        (
+            id: (2),
+            node: (
+                kind: "pan",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                    (
+                        name: "pan",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "left",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                    (
+                        name: "right",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.0,
+            ],
+        ),
+    ],
+    edges: [
+        (
+            from_node: (0),
+            from_port: (0),
+            to_node: (2),
+            to_port: (0),
+        ),
+        (
+            from_node: (1),
+            from_port: (0),
+            to_node: (2),
+            to_port: (1),
+        ),
+    ],
+)

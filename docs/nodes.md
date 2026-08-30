@@ -475,6 +475,13 @@ Auto-generated from the registry — do not edit by hand.
 - **Outputs:** `out` (audio)
 - **Parameters:** _(none)_
 
+### pan
+
+- **Inputs:** `in` (audio), `pan` (control)
+- **Outputs:** `left` (audio), `right` (audio)
+- **Parameters:**
+  - `pan` — range -1..1, default 0
+
 ### selector
 
 - **Inputs:** `a` (audio), `b` (audio), `c` (audio), `d` (audio)

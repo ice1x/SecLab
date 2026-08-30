@@ -62,6 +62,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/euclid_pulse.ron"),
     ),
     ("step_lead", include_str!("../../../examples/step_lead.ron")),
+    ("auto_pan", include_str!("../../../examples/auto_pan.ron")),
 ];
 
 #[test]
@@ -602,7 +603,8 @@ fn the_example_set_is_the_expected_manifest() {
             "stair_glide",
             "clock_poly",
             "euclid_pulse",
-            "step_lead"
+            "step_lead",
+            "auto_pan"
         ]
     );
     // No example is empty.
@@ -713,5 +715,43 @@ fn step_lead_is_silent_at_rest_and_sounds_on_a_note() {
     assert!(
         showcase_peak(ron, &ctx, 16) > 0.01,
         "step_lead must sound on a note"
+    );
+}
+
+#[test]
+fn auto_pan_produces_a_moving_stereo_image() {
+    // oscillator → pan ← lfo: the pan node is a two-channel (stereo) sink, and the LFO
+    // sweeps the image so the left and right channels diverge over time.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/auto_pan.ron");
+    let doc = vb_project::open_ron(ron).expect("auto_pan loads");
+    let (mut engine, sink) =
+        engine_from_doc(&doc, &registry, &BuildContext::default(), 256).expect("builds");
+    let sink = sink.expect("has a sink");
+
+    let mut max_diff = 0.0_f32;
+    let mut both_carry_signal = false;
+    // ~1 s of audio: enough for the 2 Hz LFO to sweep the field.
+    for _ in 0..200 {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let buf = engine.node_output(sink).expect("sink output");
+        assert_eq!(buf.channels(), 2, "the pan sink is stereo");
+        let l = buf.channel(0).unwrap();
+        let r = buf.channel(1).unwrap();
+        assert!(l.iter().chain(r.iter()).all(|s| s.is_finite()));
+        for (a, b) in l.iter().zip(r.iter()) {
+            max_diff = max_diff.max((a - b).abs());
+        }
+        if l.iter().any(|s| s.abs() > 0.05) && r.iter().any(|s| s.abs() > 0.05) {
+            both_carry_signal = true;
+        }
+    }
+    assert!(both_carry_signal, "both channels carry signal as it pans");
+    assert!(
+        max_diff > 0.1,
+        "the stereo image moves (L differs from R): {max_diff}"
     );
 }

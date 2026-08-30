@@ -446,18 +446,8 @@ impl Plugin for VstBomb {
         });
 
         let output = buffer.as_slice();
-        match self
-            .sink
-            .and_then(|sink| engine.node_output(sink))
-            .and_then(|buf| buf.channel(0))
-        {
-            Some(mono) => {
-                // Duplicate the mono sink across every host channel.
-                for channel in output.iter_mut() {
-                    let n = frames.min(mono.len()).min(channel.len());
-                    channel[..n].copy_from_slice(&mono[..n]);
-                }
-            }
+        match self.sink.and_then(|sink| engine.node_output(sink)) {
+            Some(buf) => deliver_to_host(buf, output, frames),
             None => {
                 for channel in output.iter_mut() {
                     channel[..frames].fill(0.0);
@@ -496,11 +486,105 @@ fn route_note(ctx: &BuildContext, note: u8, velocity: f32, on: bool) {
     }
 }
 
+/// Copies the sink node's output onto the host's output channels.
+///
+/// A mono sink (one channel) is duplicated across every host channel — the historical
+/// behavior, and what every patch ending in a single-output node still produces. A
+/// multi-channel sink (e.g. a `pan` node's `left`/`right`) maps channel-for-channel, so a
+/// patch that ends in a stereo node feeds the host true stereo. If the host has more
+/// channels than the sink, the sink's last channel is reused; a zero-channel sink is
+/// silence.
+fn deliver_to_host(sink: &vb_core::AudioBuffer, host: &mut [&mut [f32]], frames: usize) {
+    let nch = sink.channels();
+    for (h, channel) in host.iter_mut().enumerate() {
+        let src = if nch == 0 {
+            None
+        } else if nch == 1 {
+            sink.channel(0)
+        } else {
+            sink.channel(h.min(nch - 1))
+        };
+        match src {
+            Some(src) => {
+                let n = frames.min(src.len()).min(channel.len());
+                channel[..n].copy_from_slice(&src[..n]);
+            }
+            None => {
+                let n = frames.min(channel.len());
+                channel[..n].fill(0.0);
+            }
+        }
+    }
+}
+
 nih_export_clap!(VstBomb);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn deliver_to_host_duplicates_a_mono_sink() {
+        // One-channel sink → every host channel gets the same signal (legacy behavior).
+        let mut sink = vb_core::AudioBuffer::new(1, 4);
+        sink.channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[0.1, 0.2, 0.3, 0.4]);
+        let mut l = [0.0_f32; 4];
+        let mut r = [0.0_f32; 4];
+        {
+            let mut host: [&mut [f32]; 2] = [&mut l, &mut r];
+            deliver_to_host(&sink, &mut host, 4);
+        }
+        assert_eq!(l, [0.1, 0.2, 0.3, 0.4]);
+        assert_eq!(
+            r,
+            [0.1, 0.2, 0.3, 0.4],
+            "mono is duplicated to both channels"
+        );
+    }
+
+    #[test]
+    fn deliver_to_host_maps_a_stereo_sink_channel_for_channel() {
+        // Two-channel sink (e.g. a pan node) → host L←ch0, R←ch1: true stereo.
+        let mut sink = vb_core::AudioBuffer::new(2, 3);
+        sink.channel_mut(0)
+            .unwrap()
+            .copy_from_slice(&[1.0, 1.0, 1.0]);
+        sink.channel_mut(1)
+            .unwrap()
+            .copy_from_slice(&[-1.0, -1.0, -1.0]);
+        let mut l = [0.0_f32; 3];
+        let mut r = [0.0_f32; 3];
+        {
+            let mut host: [&mut [f32]; 2] = [&mut l, &mut r];
+            deliver_to_host(&sink, &mut host, 3);
+        }
+        assert_eq!(l, [1.0, 1.0, 1.0], "left ← sink channel 0");
+        assert_eq!(r, [-1.0, -1.0, -1.0], "right ← sink channel 1");
+    }
+
+    #[test]
+    fn deliver_to_host_reuses_the_last_channel_for_extra_host_channels() {
+        // A stereo sink into a 3-channel host: the third host channel reuses sink ch1.
+        let mut sink = vb_core::AudioBuffer::new(2, 2);
+        sink.channel_mut(0).unwrap().copy_from_slice(&[0.5, 0.5]);
+        sink.channel_mut(1).unwrap().copy_from_slice(&[0.9, 0.9]);
+        let mut a = [0.0_f32; 2];
+        let mut b = [0.0_f32; 2];
+        let mut c = [0.0_f32; 2];
+        {
+            let mut host: [&mut [f32]; 3] = [&mut a, &mut b, &mut c];
+            deliver_to_host(&sink, &mut host, 2);
+        }
+        assert_eq!(a, [0.5, 0.5]);
+        assert_eq!(b, [0.9, 0.9]);
+        assert_eq!(
+            c,
+            [0.9, 0.9],
+            "extra host channel reuses the last sink channel"
+        );
+    }
 
     #[test]
     fn the_plugin_constructs_with_the_default_patch() {
