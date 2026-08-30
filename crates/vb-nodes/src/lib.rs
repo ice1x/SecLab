@@ -55,7 +55,9 @@ pub mod tremolo;
 pub mod vca;
 pub mod vcf;
 pub mod vco;
+pub mod wavefolder;
 pub mod waveshaper;
+pub mod xfade;
 
 pub use ad_env::AdEnv;
 pub use additive::Additive;
@@ -108,4 +110,6 @@ pub use tremolo::Tremolo;
 pub use vca::Vca;
 pub use vcf::Vcf;
 pub use vco::Vco;
+pub use wavefolder::Wavefolder;
 pub use waveshaper::{Shape, Waveshaper};
+pub use xfade::Xfade;

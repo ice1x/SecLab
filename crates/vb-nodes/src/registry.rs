@@ -56,7 +56,9 @@ use crate::tremolo::Tremolo;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
 use crate::vco::Vco;
+use crate::wavefolder::Wavefolder;
 use crate::waveshaper::{Shape, Waveshaper};
+use crate::xfade::Xfade;
 
 /// Metadata and factories for one node kind.
 pub struct NodeDescriptor {
@@ -452,6 +454,24 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Mix::new(arg(v, 0, 0.5))),
         ),
         NodeDescriptor::new(
+            "xfade",
+            "math",
+            || {
+                GraphNode::new(
+                    "xfade",
+                    vec![
+                        audio_in("a"),
+                        audio_in("b"),
+                        Port::input("mix", SignalType::Control),
+                    ],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Xfade),
+            Vec::new,
+            |_, _| Box::new(Xfade),
+        ),
+        NodeDescriptor::new(
             "clamp",
             "math",
             || GraphNode::new("clamp", vec![audio_in("in")], vec![audio_out("out")]),
@@ -617,6 +637,26 @@ fn builtins() -> Vec<NodeDescriptor> {
                     shape_from(arg(v, 0, 0.0)),
                     arg(v, 1, 2.0),
                     arg(v, 2, 0.8),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "wavefolder",
+            "effect",
+            || GraphNode::new("wavefolder", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Wavefolder::new(1.0, 0.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("drive", 0.0, 10.0, 1.0),
+                    Parameter::new("symmetry", -1.0, 1.0, 0.0),
+                    Parameter::new("level", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Wavefolder::new(
+                    arg(v, 0, 1.0),
+                    arg(v, 1, 0.0),
+                    arg(v, 2, 1.0),
                 ))
             },
         ),
@@ -1739,6 +1779,38 @@ mod tests {
             vec!["ceiling_db", "release_ms"]
         );
         assert!(r.processor("limiter").is_some());
+    }
+
+    #[test]
+    fn wavefolder_and_xfade_are_registered() {
+        let r = Registry::with_builtins();
+
+        // Wavefolder: audio in → audio out; drive/symmetry/level params; effect category.
+        let wf = r.get("wavefolder").expect("wavefolder is registered");
+        assert_eq!(wf.category(), "effect");
+        let node = r.graph_node("wavefolder").unwrap();
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            wf.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["drive", "symmetry", "level"]
+        );
+        assert!(r.processor("wavefolder").is_some());
+
+        // Xfade: two audio inputs + a control mix input → audio out; math category.
+        let xf = r.get("xfade").expect("xfade is registered");
+        assert_eq!(xf.category(), "math");
+        let node = r.graph_node("xfade").unwrap();
+        assert_eq!(node.inputs.len(), 3);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.inputs[1].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.inputs[2].signal, vb_core::SignalType::Control);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert!(xf.params().is_empty(), "xfade has no params");
+        assert!(r.processor("xfade").is_some());
     }
 
     #[test]
