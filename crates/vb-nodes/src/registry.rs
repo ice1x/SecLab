@@ -39,6 +39,7 @@ use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
 use crate::pan::Pan;
 use crate::phaser::Phaser;
+use crate::ping_pong::PingPong;
 use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::pwm::Pwm;
@@ -59,6 +60,7 @@ use crate::vcf::Vcf;
 use crate::vco::Vco;
 use crate::wavefolder::Wavefolder;
 use crate::waveshaper::{Shape, Waveshaper};
+use crate::width::Width;
 use crate::xfade::Xfade;
 
 /// Metadata and factories for one node kind.
@@ -606,6 +608,46 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(FbDelay::new(arg(v, 0, 0.25), arg(v, 1, 0.4))),
+        ),
+        NodeDescriptor::new(
+            "ping-pong",
+            "effect",
+            || {
+                GraphNode::new(
+                    "ping-pong",
+                    vec![audio_in("in")],
+                    vec![audio_out("left"), audio_out("right")],
+                )
+            },
+            || Box::new(PingPong::new(0.25, 0.4, 0.5)),
+            || {
+                vec![
+                    Parameter::new("delay_s", 0.001, crate::ping_pong::MAX_DELAY_S, 0.25),
+                    Parameter::new("feedback", 0.0, 0.95, 0.4),
+                    Parameter::new("mix", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| {
+                Box::new(PingPong::new(
+                    arg(v, 0, 0.25),
+                    arg(v, 1, 0.4),
+                    arg(v, 2, 0.5),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "width",
+            "effect",
+            || {
+                GraphNode::new(
+                    "width",
+                    vec![audio_in("left"), audio_in("right")],
+                    vec![audio_out("left"), audio_out("right")],
+                )
+            },
+            || Box::new(Width::new(1.0)),
+            || vec![Parameter::new("width", 0.0, 2.0, 1.0)],
+            |_, v| Box::new(Width::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "reverb",
@@ -1854,6 +1896,53 @@ mod tests {
             vec!["pan"]
         );
         assert!(r.processor("pan").is_some());
+    }
+
+    #[test]
+    fn ping_pong_and_width_are_registered_as_stereo_effects() {
+        let r = Registry::with_builtins();
+
+        // Ping-pong: mono audio in → stereo left/right out; delay/feedback/mix params.
+        let pp = r.get("ping-pong").expect("ping-pong is registered");
+        assert_eq!(pp.category(), "effect");
+        let node = r.graph_node("ping-pong").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs.len(), 2);
+        assert_eq!(node.outputs[0].name, "left");
+        assert_eq!(node.outputs[1].name, "right");
+        assert!(node
+            .outputs
+            .iter()
+            .all(|o| o.signal == vb_core::SignalType::Audio));
+        assert_eq!(
+            pp.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["delay_s", "feedback", "mix"]
+        );
+        assert!(r.processor("ping-pong").is_some());
+
+        // Width: stereo left/right in → stereo left/right out; single width param.
+        let w = r.get("width").expect("width is registered");
+        assert_eq!(w.category(), "effect");
+        let node = r.graph_node("width").unwrap();
+        assert_eq!(node.inputs.len(), 2);
+        assert_eq!(node.outputs.len(), 2);
+        assert!(node
+            .inputs
+            .iter()
+            .chain(node.outputs.iter())
+            .all(|p| p.signal == vb_core::SignalType::Audio));
+        assert_eq!(
+            w.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["width"]
+        );
+        assert!(r.processor("width").is_some());
     }
 
     #[test]
