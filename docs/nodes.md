@@ -103,6 +103,15 @@ Auto-generated from the registry — do not edit by hand.
   - `rate_hz` — range 0.1..20, default 5
   - `depth` — range 0..1, default 0.5
 
+### wavefolder
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `drive` — range 0..10, default 1
+  - `symmetry` — range -1..1, default 0
+  - `level` — range 0..1, default 1
+
 ### waveshaper
 
 - **Inputs:** `in` (audio)
@@ -383,6 +392,12 @@ Auto-generated from the registry — do not edit by hand.
 ### sub
 
 - **Inputs:** `a` (audio), `b` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:** _(none)_
+
+### xfade
+
+- **Inputs:** `a` (audio), `b` (audio), `mix` (control)
 - **Outputs:** `out` (audio)
 - **Parameters:** _(none)_
 
