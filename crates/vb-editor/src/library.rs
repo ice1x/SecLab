@@ -4,9 +4,14 @@
 //! is the app's job. Keeping the interaction as a framework-free view-model means it is unit
 //! tested here without a display.
 //!
-//! The item source (the drevo-backed library) is deliberately abstracted away: a
-//! [`LibraryBrowser`] filters whatever [`LibraryItem`]s it is given, so the same logic serves
-//! an in-memory list today and the real library once that path is wired.
+//! The item source is deliberately abstracted away: a [`LibraryBrowser`] filters whatever
+//! [`LibraryItem`]s it is given, so the same logic serves an in-memory list, the local
+//! macro-module files on disk (via [`library_from_module_dir`]) today, and the drevo-backed
+//! library once that path is wired.
+
+use std::path::Path;
+
+use crate::module::{list_modules, MacroModule};
 
 /// One browsable library entry: a name plus its tags. `name` is the handle the app uses to
 /// insert the item (a macro-node / preset) onto the canvas.
@@ -27,10 +32,31 @@ impl LibraryItem {
         }
     }
 
+    /// Builds a browsable entry from a saved macro module, carrying its name and tags.
+    #[must_use]
+    pub fn from_module(module: &MacroModule) -> Self {
+        Self {
+            name: module.name.clone(),
+            tags: module.tags.clone(),
+        }
+    }
+
     /// Whether this item carries `tag` (case-insensitive).
     fn has_tag(&self, tag: &str) -> bool {
         self.tags.iter().any(|t| t.eq_ignore_ascii_case(tag))
     }
+}
+
+/// Builds a [`LibraryBrowser`] over the macro modules saved in `dir` (the `*.vbmod.ron`
+/// files). Unreadable or malformed files are skipped so one bad file never hides the rest.
+#[must_use]
+pub fn library_from_module_dir(dir: &Path) -> LibraryBrowser {
+    let items = list_modules(dir)
+        .iter()
+        .filter_map(|path| MacroModule::read_from_file(path).ok())
+        .map(|module| LibraryItem::from_module(&module))
+        .collect();
+    LibraryBrowser::new(items)
 }
 
 /// The library panel's state: the full item set, the search query, and the selected tag
@@ -244,6 +270,53 @@ mod tests {
         let mut lib = library();
         lib.set_query("nonexistent");
         assert!(lib.visible().is_empty());
+    }
+
+    fn tagged_module(name: &str, tags: &[&str]) -> MacroModule {
+        MacroModule {
+            version: crate::module::MODULE_VERSION,
+            name: name.to_owned(),
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            nodes: vec![],
+            edges: vec![],
+        }
+    }
+
+    #[test]
+    fn item_from_module_carries_its_name_and_tags() {
+        let m = tagged_module("Warm Bass", &["bass", "analog"]);
+        let item = LibraryItem::from_module(&m);
+        assert_eq!(item.name, "Warm Bass");
+        assert_eq!(item.tags, vec!["bass", "analog"]);
+    }
+
+    #[test]
+    fn browses_saved_macro_modules_from_a_directory() {
+        let dir = std::env::temp_dir().join(format!("vblib-test-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        tagged_module("Warm Bass", &["bass", "analog"])
+            .write_to_dir(&dir)
+            .unwrap();
+        tagged_module("Bright Lead", &["lead"])
+            .write_to_dir(&dir)
+            .unwrap();
+
+        let mut browser = library_from_module_dir(&dir);
+        assert_eq!(browser.visible().len(), 2, "both modules are listed");
+        assert_eq!(browser.all_tags(), vec!["analog", "bass", "lead"]);
+
+        browser.toggle_tag("bass");
+        assert_eq!(names(&browser.visible()), vec!["Warm Bass"]);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_empty_or_missing_dir_browses_nothing() {
+        let dir = std::env::temp_dir().join("vblib-test-does-not-exist-xyz");
+        let browser = library_from_module_dir(&dir);
+        assert!(browser.visible().is_empty());
+        assert!(browser.all_tags().is_empty());
     }
 
     #[test]

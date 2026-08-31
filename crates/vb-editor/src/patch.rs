@@ -401,6 +401,7 @@ impl PatchView {
         MacroModule {
             version: MODULE_VERSION,
             name: name.into(),
+            tags: Vec::new(),
             nodes,
             edges: self.graph.edges().to_vec(),
         }
@@ -1341,6 +1342,7 @@ mod tests {
         let module = MacroModule {
             version: MODULE_VERSION,
             name: "broken".to_owned(),
+            tags: Vec::new(),
             nodes: vec![],
             edges: vec![Edge {
                 from_node: NodeId(0),

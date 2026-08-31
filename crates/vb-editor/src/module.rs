@@ -51,6 +51,10 @@ pub struct MacroModule {
     pub version: u32,
     /// Human-readable module name (also the default file stem).
     pub name: String,
+    /// Tags for library filtering (e.g. `["bass", "analog"]`). Optional in the file:
+    /// modules written before tags existed load with an empty list.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// Nodes, in draw order.
     pub nodes: Vec<ModuleNode>,
     /// Edges wiring the nodes' ports.
@@ -192,6 +196,7 @@ mod tests {
         MacroModule {
             version: MODULE_VERSION,
             name: "my synth voice".to_owned(),
+            tags: vec!["bass".to_owned(), "analog".to_owned()],
             nodes: vec![ModuleNode {
                 id: NodeId(0),
                 node: gain,
@@ -214,9 +219,32 @@ mod tests {
     #[test]
     fn ron_round_trip_preserves_everything() {
         let module = sample_module();
+        assert_eq!(
+            module.tags,
+            vec!["bass", "analog"],
+            "tags are part of the module"
+        );
         let ron = module.to_ron().expect("serialize");
         let back = MacroModule::from_ron(&ron).expect("parse");
-        assert_eq!(back, module, "positions, params, widgets and edges survive");
+        assert_eq!(
+            back, module,
+            "name, tags, positions, params, widgets and edges survive"
+        );
+    }
+
+    #[test]
+    fn a_module_written_before_tags_existed_loads_with_no_tags() {
+        // A pre-tags file has no `tags:` field; #[serde(default)] must fill an empty list
+        // rather than fail to parse, so old modules keep loading.
+        let legacy = r#"(
+            version: 1,
+            name: "old module",
+            nodes: [],
+            edges: [],
+        )"#;
+        let module = MacroModule::from_ron(legacy).expect("legacy module still parses");
+        assert_eq!(module.name, "old module");
+        assert!(module.tags.is_empty(), "missing tags default to empty");
     }
 
     #[test]
