@@ -23,7 +23,7 @@ pub use app::run;
 pub use app::EditorApp;
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
-pub use library::{LibraryBrowser, LibraryItem};
+pub use library::{library_from_module_dir, LibraryBrowser, LibraryItem};
 pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
