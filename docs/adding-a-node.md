@@ -4,7 +4,12 @@ VST_bomb's DSP library is open: a node is just a type that implements one trait 
 small descriptor telling the registry how to build it. This guide walks through adding a
 custom node end to end. The complete, compile-tested version of everything below lives in
 [`crates/vb-nodes/tests/custom_node.rs`](../crates/vb-nodes/tests/custom_node.rs) — the
-guide and that test are kept in step, so the code here is known to compile and run.
+guide and that test are kept in step, so the code here is known to compile and run. A
+companion test,
+[`crates/vb-plugin/tests/custom_node_engine.rs`](../crates/vb-plugin/tests/custom_node_engine.rs),
+proves the same custom node also survives the project-document build path the plugin and
+editor use (`ProjectDoc` → `engine_from_doc`), and that an *unregistered* kind is a build
+error rather than a silent drop.
 
 Our example is a soft-clip **drive**: `out = tanh(amount * in)` — one audio input, one
 audio output, one `amount` parameter.
