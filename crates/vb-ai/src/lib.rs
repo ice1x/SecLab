@@ -17,6 +17,7 @@ pub mod converge;
 pub mod critic;
 pub mod design;
 pub mod diff;
+pub mod edit_session;
 pub mod explain;
 pub mod generate;
 pub mod http;
@@ -39,6 +40,7 @@ pub use converge::{converge, ConvergeError, Converged, Verdict};
 pub use critic::{critique_patch, CritiqueError};
 pub use design::{DesignError, DesignSession, DesignStep};
 pub use diff::{PatchDiff, Retype};
+pub use edit_session::{EditSession, EditState, Turn, TurnStatus};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
 #[cfg(feature = "net")]
