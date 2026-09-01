@@ -96,6 +96,23 @@ jobs:
       - name: build the plugin with the editor
         run: cargo build -p vb-plugin --features gui
 
+  # Native-only AI assistant panel (000108, `assistant` feature). The panel renders the
+  # vb-ai EditSession view-model, so it pulls in the provider/HTTP stack and is OFF by
+  # default — the required clippy/test gate above builds vb-editor WITHOUT it, and the wasm
+  # job proves it never leaks into the browser build. This job compiles and tests the panel
+  # under the feature so the code cannot rot. NON-blocking: an optional native feature, like
+  # `gui` and `library`, is a signal rather than a required gate.
+  assistant:
+    name: assistant panel (macos-self-hosted)
+    runs-on: [self-hosted, macOS, ARM64]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: clippy the assistant panel (deny warnings)
+        run: cargo clippy -p vb-editor --features assistant --all-targets -- -D warnings
+      - name: test the assistant panel
+        run: cargo test -p vb-editor --features assistant
+
   # WASM proof of concept (backlog 000081): the editor compiles to the browser target and
   # the platform-agnostic core (engine/nodes/project format) is portable. NON-blocking —
   # the wasm32 toolchain is not a required gate — this only proves the web path still builds.
