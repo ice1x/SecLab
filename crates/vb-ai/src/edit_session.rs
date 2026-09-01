@@ -122,6 +122,35 @@ impl EditSession {
         instruction: &str,
         max_attempts: u32,
     ) -> Result<(), GenerateError> {
+        let result = edit_patch(
+            provider,
+            registry,
+            config,
+            &self.doc,
+            instruction,
+            max_attempts,
+        );
+        self.record(instruction, result)
+    }
+
+    /// Records a proposal that was computed **elsewhere** — e.g. by a background worker that
+    /// ran [`edit_patch`] against a snapshot of [`doc`](Self::doc) — into the session's state
+    /// machine, so a UI host can keep the blocking provider call off the render thread and
+    /// hand the result back on the main thread without the session ever crossing threads.
+    ///
+    /// Behaves exactly like the tail of [`submit`](Self::submit): a new request supersedes
+    /// any still-undecided proposal, then on `Ok` a pending turn is pushed and the outcome
+    /// stored ([`EditState::Proposed`]); on `Err` a failed turn is recorded
+    /// ([`EditState::Failed`]) and the live patch is left untouched. `result` should be the
+    /// outcome of `edit_patch` run against this session's document.
+    ///
+    /// # Errors
+    /// Forwards the `Err` passed in, after recording it on the transcript.
+    pub fn record(
+        &mut self,
+        instruction: &str,
+        result: Result<EditOutcome, GenerateError>,
+    ) -> Result<(), GenerateError> {
         // A new request supersedes an undecided proposal.
         if self.pending.take().is_some() {
             if let Some(last) = self.transcript.last_mut() {
@@ -131,14 +160,7 @@ impl EditSession {
             }
         }
 
-        match edit_patch(
-            provider,
-            registry,
-            config,
-            &self.doc,
-            instruction,
-            max_attempts,
-        ) {
+        match result {
             Ok(outcome) => {
                 self.transcript.push(Turn {
                     request: instruction.to_owned(),
@@ -340,5 +362,73 @@ mod tests {
         assert_eq!(session.state(), EditState::Proposed);
         assert!(session.apply().is_some());
         assert_eq!(session.state(), EditState::Idle);
+    }
+
+    /// Computes an outcome the way a background worker would (via `edit_patch`), then hands it
+    /// to `record` on a session that never saw the provider — the threaded-host path.
+    fn worker_outcome(instruction: &str) -> (ProjectDoc, Result<EditOutcome, GenerateError>) {
+        let (registry, config, doc) = setup();
+        let provider = ScriptedProvider::replies(&[&reply_with(EXAMPLE_PATCH_RON)]);
+        let outcome = edit_patch(&provider, &registry, &config, &doc, instruction, 3);
+        (doc, outcome)
+    }
+
+    #[test]
+    fn record_stores_an_outcome_computed_off_thread_as_a_proposal() {
+        let (doc, outcome) = worker_outcome("build it");
+        let proposed = outcome.as_ref().expect("valid outcome").doc.clone();
+        let mut session = EditSession::new(doc.clone());
+
+        session
+            .record("build it", outcome)
+            .expect("records the proposal");
+
+        assert_eq!(session.state(), EditState::Proposed);
+        assert_eq!(session.pending().unwrap().doc, proposed);
+        assert_eq!(
+            session.doc(),
+            &doc,
+            "recording a proposal does not touch the canvas"
+        );
+        assert_eq!(session.transcript().len(), 1);
+        assert_eq!(session.transcript()[0].request, "build it");
+        assert_eq!(session.transcript()[0].status, TurnStatus::Pending);
+        // Applying it swaps the proposal in, same as a submit would.
+        assert_eq!(session.apply().cloned(), Some(proposed));
+    }
+
+    #[test]
+    fn record_of_an_error_marks_the_turn_failed_and_keeps_the_patch() {
+        let (_, _, doc) = setup();
+        let mut session = EditSession::new(doc.clone());
+
+        let err = session.record(
+            "do it",
+            Err(GenerateError::NotConverged {
+                issues: vec!["no code block".to_owned()],
+                attempts: 2,
+            }),
+        );
+        assert!(err.is_err());
+        assert_eq!(session.state(), EditState::Failed);
+        assert_eq!(session.doc(), &doc);
+        assert!(matches!(
+            session.transcript()[0].status,
+            TurnStatus::Failed(_)
+        ));
+    }
+
+    #[test]
+    fn record_supersedes_an_undecided_proposal_like_submit() {
+        let (doc, first) = worker_outcome("first");
+        let mut session = EditSession::new(doc);
+        session.record("first", first).unwrap();
+        let (_, second) = worker_outcome("second");
+        session.record("second", second).unwrap();
+
+        assert_eq!(session.transcript().len(), 2);
+        assert_eq!(session.transcript()[0].status, TurnStatus::Superseded);
+        assert_eq!(session.transcript()[1].status, TurnStatus::Pending);
+        assert_eq!(session.state(), EditState::Proposed);
     }
 }
