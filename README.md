@@ -389,7 +389,7 @@ the definition of done.
 - [x] 000105 — Apply assistant edits as undoable commands (shared stack with manual editing) 🧪
 - [x] 000106 — Suggestions: next node, auto-fix incompatible/dangling connections 🧪
 - [x] 000107 — Explain a patch/node in natural language (chat panel / tooltips)
-- [x] 000108 — UI: assistant chat panel in the editor (request → proposal → apply/reject) — `assistant_panel_ui` over the `EditSession` view-model, behind the native-only `assistant` feature (keeps the provider stack out of wasm/plugin) 🧪
+- [x] 000108 — UI: assistant chat panel in the editor (request → proposal → apply/reject) — `assistant_panel_ui` over the `EditSession` view-model, behind the native-only `assistant` feature (keeps the provider stack out of wasm/plugin); **wired into `EditorApp`** (palette "assistant" section): a live `EditSession` seeded from the patch, a provider slot (`set_assistant_provider`), Submit → propose → diff, and Apply pushing the result onto the canvas. The default build ships no backend (synchronous `submit` + blocking transport would freeze the frame); a threaded `net` host with the real Anthropic/local providers is the follow-up 🧪
 - [x] 000109 — RAG over the drevo library: example patches/presets as context (ties into Epic 11) — `Library::retrieve_patches` / `retrieve_context` (FTS-ranked patches rendered as a compact prompt block) 🧪
 - [x] 000110 — Privacy/security: API key handling, explicit consent before sending the project, offline mode 🧪
 - [x] 000111 — 🧩 Offline/local models (optional) via the same `AiProvider` abstraction

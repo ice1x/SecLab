@@ -29,6 +29,52 @@ use crate::widgets::{
     self, switch_index, switch_step, switch_values, xy_norm_to_pad, xy_pad_to_norm, WidgetKind,
 };
 
+#[cfg(feature = "assistant")]
+use crate::assistant_panel::{assistant_panel_ui, AssistantAction};
+#[cfg(feature = "assistant")]
+use vb_ai::{AiProvider, EditSession, EditState, ProviderConfig};
+
+/// The native AI assistant, wired into [`EditorApp`] behind the `assistant` feature
+/// (backlog 000108 app-wiring — the "B" step). It owns a live [`EditSession`] working copy
+/// seeded from the editor's patch, the input draft, and a **provider slot**.
+///
+/// The slot is deliberately empty in this build: the panel renders and the whole
+/// submit → propose → diff → apply/reject cycle is wired and tested, but the LLM call is
+/// synchronous and [`vb_ai::ReqwestTransport`] is blocking, so running a real network
+/// provider straight off the UI thread would freeze the frame. A threaded host and the
+/// concrete Anthropic/local providers land in the follow-up "A" step behind the `net`
+/// feature; until one is injected via [`EditorApp::set_assistant_provider`], Submit reports
+/// that no backend is configured.
+#[cfg(feature = "assistant")]
+#[derive(Default)]
+struct AssistantHost {
+    /// Working copy the assistant edits. Seeded from the editor's patch the first time the
+    /// panel is shown, and re-seeded from the live patch whenever a fresh request starts
+    /// with no proposal pending, so direct canvas edits are picked up. `None` until shown.
+    session: Option<EditSession>,
+    /// The LLM backend, or `None` in the default offline build (see the type docs).
+    provider: Option<Box<dyn AiProvider>>,
+    /// Provider selection and sampling knobs (no key — that lives in the OS keychain).
+    config: ProviderConfig,
+    /// The in-progress instruction text.
+    draft: String,
+    /// Repair attempts the session may spend converging a valid patch per request.
+    max_attempts: u32,
+    /// Last submit/apply/reject outcome, shown under the panel.
+    status: Option<String>,
+}
+
+#[cfg(feature = "assistant")]
+impl AssistantHost {
+    /// A fresh host with no backend and a sensible repair budget.
+    fn new() -> Self {
+        Self {
+            max_attempts: 3,
+            ..Self::default()
+        }
+    }
+}
+
 /// Root application state for the node editor window.
 pub struct EditorApp {
     camera: Camera,
@@ -70,6 +116,10 @@ pub struct EditorApp {
     project_ron: String,
     /// Last whole-project import/export outcome, shown next to the buffer.
     project_status: Option<String>,
+    /// The native AI assistant panel and its live edit session (backlog 000108). Behind the
+    /// `assistant` feature so the provider/HTTP stack never reaches the wasm or plugin builds.
+    #[cfg(feature = "assistant")]
+    assistant: AssistantHost,
 }
 
 impl Default for EditorApp {
@@ -95,6 +145,8 @@ impl Default for EditorApp {
             module_status: None,
             project_ron: String::new(),
             project_status: None,
+            #[cfg(feature = "assistant")]
+            assistant: AssistantHost::new(),
         }
     }
 }
@@ -858,6 +910,8 @@ impl EditorApp {
         }
         self.modules_ui(ui);
         self.library_ui(ui);
+        #[cfg(feature = "assistant")]
+        self.assistant_ui(ui);
         ui.separator();
         self.project_io_ui(ui);
         ui.separator();
@@ -1016,6 +1070,101 @@ impl EditorApp {
                 });
             }
         });
+    }
+
+    /// Injects the assistant's LLM backend and resets its working copy so the next request
+    /// starts from the live patch. The standalone (and, later, the `net` threaded host) call
+    /// this to wire a real provider; tests inject a scripted one. See [`AssistantHost`].
+    #[cfg(feature = "assistant")]
+    pub fn set_assistant_provider(&mut self, provider: Box<dyn AiProvider>) {
+        self.assistant.provider = Some(provider);
+        self.assistant.session = None;
+        self.assistant.status = None;
+    }
+
+    /// Renders the assistant section: the chat transcript, a proposed-edit diff preview with
+    /// apply/reject, and the instruction input. Seeds the working copy from the live patch on
+    /// first display; dispatches the panel's action to [`Self::handle_assistant_action`].
+    #[cfg(feature = "assistant")]
+    fn assistant_ui(&mut self, ui: &mut Ui) {
+        ui.collapsing("assistant", |ui| {
+            if self.assistant.session.is_none() {
+                self.assistant.session = Some(EditSession::new(self.patch.to_doc()));
+            }
+            if self.assistant.provider.is_none() {
+                ui.colored_label(
+                    Color32::from_rgb(0xd0, 0x90, 0x40),
+                    "no AI backend configured — a provider arrives with the net build",
+                );
+            }
+            let session = self.assistant.session.as_ref().expect("seeded above");
+            let action = assistant_panel_ui(ui, session, &mut self.assistant.draft);
+            if let Some(status) = &self.assistant.status {
+                ui.separator();
+                ui.weak(status);
+            }
+            if let Some(action) = action {
+                self.handle_assistant_action(action);
+            }
+        });
+    }
+
+    /// Drives the edit session from a panel action: `Submit` proposes an edit against the
+    /// working copy (re-seeded from the live patch when idle), `Apply` swaps the proposal in
+    /// and pushes the result onto the canvas, `Reject` discards it.
+    #[cfg(feature = "assistant")]
+    fn handle_assistant_action(&mut self, action: AssistantAction) {
+        match action {
+            AssistantAction::Submit(instruction) => {
+                // Re-seed from the live patch when starting fresh (no proposal pending), so a
+                // new request reflects any direct canvas edits since the last turn. Mid-
+                // proposal, keep the working copy so a follow-up refines the same edit.
+                if self.assistant.session.as_ref().map(EditSession::state)
+                    != Some(EditState::Proposed)
+                {
+                    self.assistant.session = Some(EditSession::new(self.patch.to_doc()));
+                }
+                let Some(provider) = self.assistant.provider.as_deref() else {
+                    self.assistant.status =
+                        Some("no AI backend configured (net build only)".to_owned());
+                    return;
+                };
+                let session = self.assistant.session.as_mut().expect("seeded above");
+                let outcome = session.submit(
+                    provider,
+                    &self.registry,
+                    &self.assistant.config,
+                    &instruction,
+                    self.assistant.max_attempts,
+                );
+                self.assistant.status = Some(match outcome {
+                    Ok(()) => match session.pending().map(|o| o.diff.summary()) {
+                        Some(summary) if !summary.trim().is_empty() => {
+                            format!("proposed:\n{summary}")
+                        }
+                        _ => "proposed (no changes)".to_owned(),
+                    },
+                    Err(e) => format!("assistant failed: {e}"),
+                });
+            }
+            AssistantAction::Apply => {
+                let applied = self
+                    .assistant
+                    .session
+                    .as_mut()
+                    .and_then(|s| s.apply().cloned());
+                if let Some(doc) = applied {
+                    self.load_doc(&doc);
+                    self.assistant.status = Some("applied the proposed edit".to_owned());
+                }
+            }
+            AssistantAction::Reject => {
+                if let Some(session) = self.assistant.session.as_mut() {
+                    session.reject();
+                    self.assistant.status = Some("rejected the proposed edit".to_owned());
+                }
+            }
+        }
     }
 
     /// The active colour theme.
@@ -1669,5 +1818,98 @@ mod tests {
         // Far away is empty canvas: selection clears.
         app.click(app.camera().canvas_to_screen(Pos2::new(-2_000.0, -2_000.0)));
         assert_eq!(app.patch().selected(), None);
+    }
+
+    // --- Assistant app-wiring (backlog 000108, "B" step) ---------------------------------
+
+    #[cfg(feature = "assistant")]
+    fn reply_with(ron: &str) -> String {
+        format!("Here is the edited patch.\n\n```ron\n{ron}\n```\n")
+    }
+
+    /// Submitting drives the session to a proposal; applying it replaces the canvas with the
+    /// provider's document. The scripted provider returns the example patch, so the demo
+    /// oscillator→filter→gain graph becomes that example after apply.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn assistant_submit_then_apply_updates_the_canvas() {
+        let mut app = EditorApp::new();
+        let before = app.patch().to_doc().nodes.len();
+        let expected = vb_project::from_ron(vb_ai::EXAMPLE_PATCH_RON)
+            .expect("example doc parses")
+            .nodes
+            .len();
+        assert_ne!(
+            before, expected,
+            "the example must differ from the demo patch"
+        );
+
+        app.set_assistant_provider(Box::new(vb_ai::ScriptedProvider::replies(&[&reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        )])));
+
+        app.handle_assistant_action(AssistantAction::Submit("rebuild it".to_owned()));
+        assert_eq!(
+            app.assistant.session.as_ref().map(EditSession::state),
+            Some(EditState::Proposed),
+            "a valid reply must produce a proposal"
+        );
+        // Nothing is on the canvas yet — a proposal is a preview, not an edit.
+        assert_eq!(app.patch().to_doc().nodes.len(), before);
+
+        app.handle_assistant_action(AssistantAction::Apply);
+        assert_eq!(
+            app.patch().to_doc().nodes.len(),
+            expected,
+            "apply must push the proposed document onto the canvas"
+        );
+    }
+
+    /// Rejecting a proposal leaves the canvas untouched and clears the pending edit.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn assistant_reject_leaves_the_canvas_untouched() {
+        let mut app = EditorApp::new();
+        let before = app.patch().to_doc().nodes.len();
+        app.set_assistant_provider(Box::new(vb_ai::ScriptedProvider::replies(&[&reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        )])));
+
+        app.handle_assistant_action(AssistantAction::Submit("change it".to_owned()));
+        app.handle_assistant_action(AssistantAction::Reject);
+
+        assert_eq!(
+            app.assistant.session.as_ref().map(EditSession::state),
+            Some(EditState::Idle)
+        );
+        assert_eq!(app.patch().to_doc().nodes.len(), before);
+    }
+
+    /// With no provider injected (the default offline build), Submit reports that no backend
+    /// is configured and never mutates the canvas.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn assistant_submit_without_a_provider_reports_no_backend() {
+        let mut app = EditorApp::new();
+        let before = app.patch().to_doc().nodes.len();
+
+        app.handle_assistant_action(AssistantAction::Submit("do a thing".to_owned()));
+
+        assert_eq!(app.patch().to_doc().nodes.len(), before);
+        let status = app.assistant.status.as_deref().unwrap_or_default();
+        assert!(
+            status.contains("no AI backend"),
+            "unexpected status: {status:?}"
+        );
+    }
+
+    /// The editor renders a full frame — toolbar, palette (with the assistant section),
+    /// inspector, canvas — without panicking under the `assistant` feature.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn the_editor_renders_with_the_assistant_section_without_panicking() {
+        let mut app = EditorApp::new();
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
     }
 }
