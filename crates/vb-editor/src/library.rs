@@ -47,16 +47,24 @@ impl LibraryItem {
     }
 }
 
+/// The [`LibraryItem`]s for every macro module saved in `dir` (the `*.vbmod.ron` files).
+/// Unreadable or malformed files are skipped so one bad file never hides the rest. This is
+/// the reloadable item source: the app calls it to refresh a live [`LibraryBrowser`]'s items
+/// (via [`LibraryBrowser::set_items`]) while keeping the current query and tag filters.
+#[must_use]
+pub fn library_items_from_module_dir(dir: &Path) -> Vec<LibraryItem> {
+    list_modules(dir)
+        .iter()
+        .filter_map(|path| MacroModule::read_from_file(path).ok())
+        .map(|module| LibraryItem::from_module(&module))
+        .collect()
+}
+
 /// Builds a [`LibraryBrowser`] over the macro modules saved in `dir` (the `*.vbmod.ron`
 /// files). Unreadable or malformed files are skipped so one bad file never hides the rest.
 #[must_use]
 pub fn library_from_module_dir(dir: &Path) -> LibraryBrowser {
-    let items = list_modules(dir)
-        .iter()
-        .filter_map(|path| MacroModule::read_from_file(path).ok())
-        .map(|module| LibraryItem::from_module(&module))
-        .collect();
-    LibraryBrowser::new(items)
+    LibraryBrowser::new(library_items_from_module_dir(dir))
 }
 
 /// The library panel's state: the full item set, the search query, and the selected tag
