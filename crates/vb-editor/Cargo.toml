@@ -37,11 +37,20 @@ ron.workspace = true
 default = ["app"]
 app = ["dep:eframe"]
 
-# `assistant` = the native-only AI assistant chat panel (`assistant_panel`, backlog 000108).
-# OFF by default: it pulls in `vb-ai` (and thus reqwest/HTTP), so the wasm and plugin builds
-# stay free of the provider stack. The standalone can opt in; the CI `assistant` job builds
+# `assistant` = the native-only AI assistant chat panel (`assistant_panel`, backlog 000108),
+# wired into `EditorApp` with a background worker thread that runs the (blocking) provider
+# call off the egui frame. OFF by default: it pulls in `vb-ai`, so the wasm and plugin builds
+# stay free of the provider stack. Note this level needs NO network — the threaded host runs
+# any `AiProvider`, exercised in tests by an in-process double. The CI `assistant` job builds
 # and tests it so the code cannot rot.
 assistant = ["dep:vb-ai"]
+
+# `assistant-net` = `assistant` plus the real network providers: it turns on `vb-ai`'s `net`
+# (reqwest) and `keychain` (OS key store) so `set_assistant_anthropic` / `set_assistant_local`
+# can construct `AnthropicProvider`/`LocalProvider`. Kept separate from `assistant` so the
+# deterministic panel wiring (and its tests) never pull the HTTP/keychain stack; a host that
+# wants live inference opts into this one.
+assistant-net = ["assistant", "vb-ai/net", "vb-ai/keychain"]
 
 # WASM (browser) entry point only — see src/web.rs (backlog 000081). These compile solely
 # for the wasm32 target, so the native build is untouched. eframe brings the web renderer

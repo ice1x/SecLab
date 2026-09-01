@@ -32,28 +32,45 @@ use crate::widgets::{
 #[cfg(feature = "assistant")]
 use crate::assistant_panel::{assistant_panel_ui, AssistantAction};
 #[cfg(feature = "assistant")]
-use vb_ai::{AiProvider, EditSession, EditState, ProviderConfig};
+use std::sync::{mpsc, Arc};
+#[cfg(feature = "assistant")]
+use std::thread::JoinHandle;
+#[cfg(feature = "assistant")]
+use vb_ai::{AiProvider, EditOutcome, EditSession, EditState, GenerateError, ProviderConfig};
+
+/// A background provider slot: any `AiProvider` that can cross a thread boundary. The
+/// concrete network providers ([`vb_ai::AnthropicProvider`], [`vb_ai::LocalProvider`]) are
+/// `Send + Sync`; a host injects one via [`EditorApp::set_assistant_provider`].
+#[cfg(feature = "assistant")]
+type SharedProvider = Arc<dyn AiProvider + Send + Sync>;
+
+/// The message a worker thread sends back: the request it ran and the outcome of
+/// `edit_patch` against the snapshot it was given.
+#[cfg(feature = "assistant")]
+type ProposalMsg = (String, Result<EditOutcome, GenerateError>);
 
 /// The native AI assistant, wired into [`EditorApp`] behind the `assistant` feature
-/// (backlog 000108 app-wiring — the "B" step). It owns a live [`EditSession`] working copy
-/// seeded from the editor's patch, the input draft, and a **provider slot**.
+/// (backlog 000108). It owns a live [`EditSession`] working copy seeded from the editor's
+/// patch, the input draft, and a **provider slot**.
 ///
-/// The slot is deliberately empty in this build: the panel renders and the whole
-/// submit → propose → diff → apply/reject cycle is wired and tested, but the LLM call is
-/// synchronous and [`vb_ai::ReqwestTransport`] is blocking, so running a real network
-/// provider straight off the UI thread would freeze the frame. A threaded host and the
-/// concrete Anthropic/local providers land in the follow-up "A" step behind the `net`
-/// feature; until one is injected via [`EditorApp::set_assistant_provider`], Submit reports
-/// that no backend is configured.
+/// `EditSession::submit` is synchronous and [`vb_ai::ReqwestTransport`] is blocking, so the
+/// provider call runs on a **worker thread**: Submit snapshots the working-copy document and
+/// spawns `edit_patch` on it; each frame polls the worker's channel and, when the proposal
+/// arrives, records it on the main thread via [`EditSession::record`] — the session never
+/// crosses a thread. The slot is empty until a provider is injected; with the `assistant-net`
+/// feature, [`EditorApp::set_assistant_anthropic`] / [`EditorApp::set_assistant_local`]
+/// construct real ones from the OS keychain.
 #[cfg(feature = "assistant")]
-#[derive(Default)]
 struct AssistantHost {
     /// Working copy the assistant edits. Seeded from the editor's patch the first time the
     /// panel is shown, and re-seeded from the live patch whenever a fresh request starts
     /// with no proposal pending, so direct canvas edits are picked up. `None` until shown.
     session: Option<EditSession>,
-    /// The LLM backend, or `None` in the default offline build (see the type docs).
-    provider: Option<Box<dyn AiProvider>>,
+    /// The LLM backend, or `None` when none is configured (the panel then reports so).
+    provider: Option<SharedProvider>,
+    /// Node kinds the worker validates proposals against — the builtins registry, shared into
+    /// each worker thread (an `Arc` because [`vb_nodes::Registry`] is not `Clone`).
+    registry: Arc<Registry>,
     /// Provider selection and sampling knobs (no key — that lives in the OS keychain).
     config: ProviderConfig,
     /// The in-progress instruction text.
@@ -62,16 +79,33 @@ struct AssistantHost {
     max_attempts: u32,
     /// Last submit/apply/reject outcome, shown under the panel.
     status: Option<String>,
+    /// The channel a request-in-flight worker reports back on; `Some` iff a request is
+    /// currently running on a worker thread.
+    rx: Option<mpsc::Receiver<ProposalMsg>>,
+    /// The in-flight worker's handle, joined when its message is consumed.
+    worker: Option<JoinHandle<()>>,
 }
 
 #[cfg(feature = "assistant")]
 impl AssistantHost {
-    /// A fresh host with no backend and a sensible repair budget.
+    /// A fresh host with no backend, the builtins registry, and a sensible repair budget.
     fn new() -> Self {
         Self {
+            session: None,
+            provider: None,
+            registry: Arc::new(Registry::with_builtins()),
+            config: ProviderConfig::default(),
+            draft: String::new(),
             max_attempts: 3,
-            ..Self::default()
+            status: None,
+            rx: None,
+            worker: None,
         }
+    }
+
+    /// Whether a request is currently running on a worker thread.
+    fn in_flight(&self) -> bool {
+        self.rx.is_some()
     }
 }
 
@@ -1073,18 +1107,93 @@ impl EditorApp {
     }
 
     /// Injects the assistant's LLM backend and resets its working copy so the next request
-    /// starts from the live patch. The standalone (and, later, the `net` threaded host) call
-    /// this to wire a real provider; tests inject a scripted one. See [`AssistantHost`].
+    /// starts from the live patch. `assistant-net` builds call this via
+    /// [`Self::set_assistant_anthropic`] / [`Self::set_assistant_local`]; tests inject an
+    /// in-process double. The provider must be `Send + Sync` — it runs on a worker thread.
     #[cfg(feature = "assistant")]
-    pub fn set_assistant_provider(&mut self, provider: Box<dyn AiProvider>) {
+    pub fn set_assistant_provider(&mut self, provider: SharedProvider) {
         self.assistant.provider = Some(provider);
         self.assistant.session = None;
         self.assistant.status = None;
     }
 
+    /// Wires the Anthropic (Claude) provider, reading the BYOK key from the OS keychain under
+    /// `keychain_service` at call time. `assistant-net` only.
+    ///
+    /// # Errors
+    /// [`vb_ai::AiError`] if the HTTP client cannot be built.
+    #[cfg(feature = "assistant-net")]
+    pub fn set_assistant_anthropic(
+        &mut self,
+        keychain_service: impl Into<String>,
+        timeout: std::time::Duration,
+    ) -> Result<(), vb_ai::AiError> {
+        let transport = vb_ai::ReqwestTransport::new(timeout)?;
+        let keys = vb_ai::keystore::KeychainStore::new(keychain_service);
+        self.set_assistant_provider(Arc::new(vb_ai::AnthropicProvider::new(transport, keys)));
+        Ok(())
+    }
+
+    /// Wires a local, OpenAI-compatible backend (e.g. Ollama) over HTTP. `assistant-net` only.
+    ///
+    /// # Errors
+    /// [`vb_ai::AiError`] if the HTTP client cannot be built.
+    #[cfg(feature = "assistant-net")]
+    pub fn set_assistant_local(
+        &mut self,
+        backend: vb_ai::LocalBackend,
+        timeout: std::time::Duration,
+    ) -> Result<(), vb_ai::AiError> {
+        let transport = vb_ai::ReqwestTransport::new(timeout)?;
+        self.set_assistant_provider(Arc::new(vb_ai::LocalProvider::new(transport, backend)));
+        Ok(())
+    }
+
+    /// Consumes a worker's proposal if one has arrived, recording it on the main thread via
+    /// [`EditSession::record`]. Returns `true` if a message was consumed. Called every frame
+    /// and, in tests, after joining the worker. No-op when no request is in flight.
+    #[cfg(feature = "assistant")]
+    fn poll_assistant(&mut self) -> bool {
+        let msg = match self.assistant.rx.as_ref() {
+            Some(rx) => rx.try_recv(),
+            None => return false,
+        };
+        match msg {
+            Ok((instruction, result)) => {
+                self.assistant.rx = None;
+                if let Some(worker) = self.assistant.worker.take() {
+                    let _ = worker.join();
+                }
+                if let Some(session) = self.assistant.session.as_mut() {
+                    self.assistant.status = Some(match session.record(&instruction, result) {
+                        Ok(()) => match session.pending().map(|o| o.diff.summary()) {
+                            Some(summary) if !summary.trim().is_empty() => {
+                                format!("proposed:\n{summary}")
+                            }
+                            _ => "proposed (no changes)".to_owned(),
+                        },
+                        Err(e) => format!("assistant failed: {e}"),
+                    });
+                }
+                true
+            }
+            Err(mpsc::TryRecvError::Empty) => false,
+            Err(mpsc::TryRecvError::Disconnected) => {
+                // The worker dropped its sender without a message — treat as a stopped request.
+                self.assistant.rx = None;
+                if let Some(worker) = self.assistant.worker.take() {
+                    let _ = worker.join();
+                }
+                self.assistant.status = Some("assistant worker stopped unexpectedly".to_owned());
+                true
+            }
+        }
+    }
+
     /// Renders the assistant section: the chat transcript, a proposed-edit diff preview with
     /// apply/reject, and the instruction input. Seeds the working copy from the live patch on
-    /// first display; dispatches the panel's action to [`Self::handle_assistant_action`].
+    /// first display; shows a "thinking…" line while a worker runs; dispatches the panel's
+    /// action to [`Self::handle_assistant_action`].
     #[cfg(feature = "assistant")]
     fn assistant_ui(&mut self, ui: &mut Ui) {
         ui.collapsing("assistant", |ui| {
@@ -1094,8 +1203,14 @@ impl EditorApp {
             if self.assistant.provider.is_none() {
                 ui.colored_label(
                     Color32::from_rgb(0xd0, 0x90, 0x40),
-                    "no AI backend configured — a provider arrives with the net build",
+                    "no AI backend configured — build with the `assistant-net` feature",
                 );
+            }
+            if self.assistant.in_flight() {
+                ui.horizontal(|ui| {
+                    ui.spinner();
+                    ui.weak("thinking…");
+                });
             }
             let session = self.assistant.session.as_ref().expect("seeded above");
             let action = assistant_panel_ui(ui, session, &mut self.assistant.draft);
@@ -1109,13 +1224,19 @@ impl EditorApp {
         });
     }
 
-    /// Drives the edit session from a panel action: `Submit` proposes an edit against the
-    /// working copy (re-seeded from the live patch when idle), `Apply` swaps the proposal in
-    /// and pushes the result onto the canvas, `Reject` discards it.
+    /// Drives the edit session from a panel action: `Submit` spawns a worker that proposes an
+    /// edit against a snapshot of the working copy (re-seeded from the live patch when idle),
+    /// `Apply` swaps the pending proposal in and pushes the result onto the canvas, `Reject`
+    /// discards it.
     #[cfg(feature = "assistant")]
     fn handle_assistant_action(&mut self, action: AssistantAction) {
         match action {
             AssistantAction::Submit(instruction) => {
+                // Ignore a new request while one is already running — the panel's send button
+                // stays live, but one worker at a time keeps the flow legible.
+                if self.assistant.in_flight() {
+                    return;
+                }
                 // Re-seed from the live patch when starting fresh (no proposal pending), so a
                 // new request reflects any direct canvas edits since the last turn. Mid-
                 // proposal, keep the working copy so a follow-up refines the same edit.
@@ -1124,28 +1245,37 @@ impl EditorApp {
                 {
                     self.assistant.session = Some(EditSession::new(self.patch.to_doc()));
                 }
-                let Some(provider) = self.assistant.provider.as_deref() else {
+                let Some(provider) = self.assistant.provider.clone() else {
                     self.assistant.status =
-                        Some("no AI backend configured (net build only)".to_owned());
+                        Some("no AI backend configured (assistant-net only)".to_owned());
                     return;
                 };
-                let session = self.assistant.session.as_mut().expect("seeded above");
-                let outcome = session.submit(
-                    provider,
-                    &self.registry,
-                    &self.assistant.config,
-                    &instruction,
-                    self.assistant.max_attempts,
-                );
-                self.assistant.status = Some(match outcome {
-                    Ok(()) => match session.pending().map(|o| o.diff.summary()) {
-                        Some(summary) if !summary.trim().is_empty() => {
-                            format!("proposed:\n{summary}")
-                        }
-                        _ => "proposed (no changes)".to_owned(),
-                    },
-                    Err(e) => format!("assistant failed: {e}"),
+                // Snapshot everything the blocking call needs and run it off the UI thread.
+                let doc = self
+                    .assistant
+                    .session
+                    .as_ref()
+                    .expect("seeded above")
+                    .doc()
+                    .clone();
+                let registry = self.assistant.registry.clone();
+                let config = self.assistant.config.clone();
+                let max_attempts = self.assistant.max_attempts;
+                let (tx, rx) = mpsc::channel();
+                let worker = std::thread::spawn(move || {
+                    let out = vb_ai::edit_patch(
+                        provider.as_ref(),
+                        &registry,
+                        &config,
+                        &doc,
+                        &instruction,
+                        max_attempts,
+                    );
+                    let _ = tx.send((instruction, out));
                 });
+                self.assistant.rx = Some(rx);
+                self.assistant.worker = Some(worker);
+                self.assistant.status = Some("thinking…".to_owned());
             }
             AssistantAction::Apply => {
                 let applied = self
@@ -1275,6 +1405,15 @@ impl EditorApp {
     /// directly inside its own egui context — one editor, drawn the same everywhere, no
     /// `eframe::Frame` required.
     pub fn render(&mut self, ctx: &egui::Context) {
+        // Consume any assistant proposal a worker finished since the last frame, and keep the
+        // UI ticking while one is still running so the poll actually fires.
+        #[cfg(feature = "assistant")]
+        {
+            self.poll_assistant();
+            if self.assistant.in_flight() {
+                ctx.request_repaint();
+            }
+        }
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
         if self.visuals_dirty {
@@ -1820,16 +1959,47 @@ mod tests {
         assert_eq!(app.patch().selected(), None);
     }
 
-    // --- Assistant app-wiring (backlog 000108, "B" step) ---------------------------------
+    // --- Assistant app-wiring (backlog 000108, threaded "A" step) ------------------------
 
     #[cfg(feature = "assistant")]
     fn reply_with(ron: &str) -> String {
         format!("Here is the edited patch.\n\n```ron\n{ron}\n```\n")
     }
 
-    /// Submitting drives the session to a proposal; applying it replaces the canvas with the
-    /// provider's document. The scripted provider returns the example patch, so the demo
-    /// oscillator→filter→gain graph becomes that example after apply.
+    /// A `Send + Sync` provider double that returns a fixed reply on every call — the shape a
+    /// worker thread needs (the crate's `ScriptedProvider` uses `RefCell`, so it is not
+    /// `Sync`). One valid reply converges the repair loop on the first attempt.
+    #[cfg(feature = "assistant")]
+    struct FixedProvider(String);
+
+    #[cfg(feature = "assistant")]
+    impl vb_ai::AiProvider for FixedProvider {
+        fn kind(&self) -> vb_ai::ProviderKind {
+            vb_ai::ProviderKind::Anthropic
+        }
+        fn complete(
+            &self,
+            _request: &vb_ai::ChatRequest,
+        ) -> Result<vb_ai::ChatResponse, vb_ai::AiError> {
+            Ok(vb_ai::ChatResponse::text(self.0.clone()))
+        }
+    }
+
+    /// Blocks until the in-flight worker delivers its proposal, then consumes it — the worker
+    /// sends its single message before exiting, so joining makes the poll deterministic (no
+    /// sleeps, no spin).
+    #[cfg(feature = "assistant")]
+    fn await_assistant(app: &mut EditorApp) {
+        let worker = app.assistant.worker.take().expect("a request is in flight");
+        worker.join().expect("assistant worker");
+        assert!(
+            app.poll_assistant(),
+            "a joined worker's proposal must be consumed"
+        );
+    }
+
+    /// Submitting spawns a worker; once it lands the session is Proposed and applying replaces
+    /// the canvas with the provider's document (the example patch, distinct from the demo).
     #[cfg(feature = "assistant")]
     #[test]
     fn assistant_submit_then_apply_updates_the_canvas() {
@@ -1844,11 +2014,14 @@ mod tests {
             "the example must differ from the demo patch"
         );
 
-        app.set_assistant_provider(Box::new(vb_ai::ScriptedProvider::replies(&[&reply_with(
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
-        )])));
+        ))));
 
         app.handle_assistant_action(AssistantAction::Submit("rebuild it".to_owned()));
+        assert!(app.assistant.in_flight(), "the request runs on a worker");
+        await_assistant(&mut app);
+
         assert_eq!(
             app.assistant.session.as_ref().map(EditSession::state),
             Some(EditState::Proposed),
@@ -1865,17 +2038,45 @@ mod tests {
         );
     }
 
+    /// A worker's proposal is also consumed by the render loop's poll, not only the test hook.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn a_worker_proposal_is_consumed_by_render() {
+        let mut app = EditorApp::new();
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        ))));
+
+        app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
+        // Join the worker so its message is queued, then let render() do the polling.
+        app.assistant
+            .worker
+            .take()
+            .expect("in flight")
+            .join()
+            .expect("worker");
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
+
+        assert!(!app.assistant.in_flight(), "render consumed the proposal");
+        assert_eq!(
+            app.assistant.session.as_ref().map(EditSession::state),
+            Some(EditState::Proposed)
+        );
+    }
+
     /// Rejecting a proposal leaves the canvas untouched and clears the pending edit.
     #[cfg(feature = "assistant")]
     #[test]
     fn assistant_reject_leaves_the_canvas_untouched() {
         let mut app = EditorApp::new();
         let before = app.patch().to_doc().nodes.len();
-        app.set_assistant_provider(Box::new(vb_ai::ScriptedProvider::replies(&[&reply_with(
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
-        )])));
+        ))));
 
         app.handle_assistant_action(AssistantAction::Submit("change it".to_owned()));
+        await_assistant(&mut app);
         app.handle_assistant_action(AssistantAction::Reject);
 
         assert_eq!(
@@ -1885,8 +2086,8 @@ mod tests {
         assert_eq!(app.patch().to_doc().nodes.len(), before);
     }
 
-    /// With no provider injected (the default offline build), Submit reports that no backend
-    /// is configured and never mutates the canvas.
+    /// With no provider injected, Submit reports that no backend is configured, spawns no
+    /// worker, and never mutates the canvas.
     #[cfg(feature = "assistant")]
     #[test]
     fn assistant_submit_without_a_provider_reports_no_backend() {
@@ -1895,6 +2096,7 @@ mod tests {
 
         app.handle_assistant_action(AssistantAction::Submit("do a thing".to_owned()));
 
+        assert!(!app.assistant.in_flight(), "no worker without a provider");
         assert_eq!(app.patch().to_doc().nodes.len(), before);
         let status = app.assistant.status.as_deref().unwrap_or_default();
         assert!(

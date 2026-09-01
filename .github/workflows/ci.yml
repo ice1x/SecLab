@@ -112,6 +112,11 @@ jobs:
         run: cargo clippy -p vb-editor --features assistant --all-targets -- -D warnings
       - name: test the assistant panel
         run: cargo test -p vb-editor --features assistant
+      # The `assistant-net` layer adds the real network providers (reqwest + OS keychain). We
+      # only COMPILE it here — it opens no socket and touches no keychain — so the threaded
+      # host's Anthropic/local constructors cannot rot. clippy (deny warnings) covers them.
+      - name: clippy the assistant-net providers (deny warnings)
+        run: cargo clippy -p vb-editor --features assistant-net --all-targets -- -D warnings
 
   # WASM proof of concept (backlog 000081): the editor compiles to the browser target and
   # the platform-agnostic core (engine/nodes/project format) is portable. NON-blocking —
