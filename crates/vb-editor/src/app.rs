@@ -19,6 +19,8 @@ use std::path::{Path, PathBuf};
 
 use crate::camera::{grid_step, Camera};
 use crate::layout::{layout_node, NodeLayout, NodeStyle};
+use crate::library::{library_items_from_module_dir, LibraryBrowser};
+use crate::library_panel::library_browser_ui;
 use crate::module::{list_modules, MacroModule, ModuleError};
 use crate::palette::palette_entries;
 use crate::patch::PatchView;
@@ -52,6 +54,14 @@ pub struct EditorApp {
     visuals_dirty: bool,
     /// Directory reusable macro modules are exported to and imported from.
     modules_dir: PathBuf,
+    /// Searchable, tag-filterable browser over the macro modules in [`Self::modules_dir`]
+    /// (backlog 000097). Its items are reloaded from disk by [`Self::refresh_library`]; the
+    /// query and tag facets it holds persist across frames.
+    library: LibraryBrowser,
+    /// Whether the library has been loaded from disk yet. The first render of the library
+    /// section loads it once (keeping construction filesystem-free); the refresh button and
+    /// a successful macro export reload it thereafter.
+    library_loaded: bool,
     /// Last export/import outcome, shown in the toolbar until the next one.
     module_status: Option<String>,
     /// Shared RON text buffer for whole-project import/export (000082). Export writes the
@@ -78,6 +88,10 @@ impl Default for EditorApp {
             theme: Theme::default(),
             visuals_dirty: true,
             modules_dir: PathBuf::from("modules"),
+            // Populated from the modules dir on the first frame (empty when it does not exist
+            // yet); the user reloads it with the library section's refresh button.
+            library: LibraryBrowser::default(),
+            library_loaded: false,
             module_status: None,
             project_ron: String::new(),
             project_status: None,
@@ -843,6 +857,7 @@ impl EditorApp {
             self.patch.add_macro(self.spawn_at - half);
         }
         self.modules_ui(ui);
+        self.library_ui(ui);
         ui.separator();
         self.project_io_ui(ui);
         ui.separator();
@@ -919,7 +934,11 @@ impl EditorApp {
             if let Some(id) = sel_macro {
                 let dir = self.modules_dir.clone();
                 self.module_status = Some(match self.export_macro_to_dir(id, &dir) {
-                    Ok(path) => format!("exported → {}", path.display()),
+                    Ok(path) => {
+                        // The new module should show up in the library immediately.
+                        self.refresh_library();
+                        format!("exported → {}", path.display())
+                    }
                     Err(e) => format!("export failed: {e}"),
                 });
             }
@@ -948,6 +967,55 @@ impl EditorApp {
         if let Some(status) = &self.module_status {
             ui.weak(status);
         }
+    }
+
+    /// Reloads the library's items from [`Self::modules_dir`], keeping the current search
+    /// query and tag facets. Called on the first library render, by the refresh button, and
+    /// after a macro is exported (so the new module appears).
+    pub fn refresh_library(&mut self) {
+        self.library
+            .set_items(library_items_from_module_dir(&self.modules_dir));
+        self.library_loaded = true;
+    }
+
+    /// Imports the saved module whose name is `name` as a new macro node, resolving the name
+    /// to its file by scanning [`Self::modules_dir`]. The library lists modules by name, but
+    /// the file stem is sanitized (and so not reversible), so the name is matched against
+    /// each module's stored `name`; the first match wins.
+    ///
+    /// # Errors
+    /// [`ModuleError::Io`] if no saved module carries `name`, or any [`ModuleError`] from
+    /// reading/rebuilding the matched module.
+    pub fn import_module_by_name(&mut self, name: &str) -> Result<vb_core::NodeId, ModuleError> {
+        let path = list_modules(&self.modules_dir)
+            .into_iter()
+            .find(|path| MacroModule::read_from_file(path).is_ok_and(|module| module.name == name));
+        match path {
+            Some(path) => self.import_macro_from_file(&path),
+            None => Err(ModuleError::Io(format!(
+                "no module named {name:?} in the library"
+            ))),
+        }
+    }
+
+    /// Renders the library section: a searchable, tag-filtered list of saved macro modules
+    /// (backlog 000097). Clicking an entry imports it onto the canvas. Loads the library on
+    /// first display and offers a refresh button to reload it from disk.
+    fn library_ui(&mut self, ui: &mut Ui) {
+        if !self.library_loaded {
+            self.refresh_library();
+        }
+        ui.collapsing("library", |ui| {
+            if ui.button("⟳ refresh").clicked() {
+                self.refresh_library();
+            }
+            if let Some(name) = library_browser_ui(ui, &mut self.library) {
+                self.module_status = Some(match self.import_module_by_name(&name) {
+                    Ok(id) => format!("imported {name} → macro#{}", id.0),
+                    Err(e) => format!("import failed: {e}"),
+                });
+            }
+        });
     }
 
     /// The active colour theme.
@@ -1489,6 +1557,99 @@ mod tests {
         assert_eq!(edges.len(), edges_before + 1);
         let new = edges.last().unwrap();
         assert_eq!((new.from_node, new.to_node), (gain, sink));
+    }
+
+    /// Builds a saved macro module named `name` (a gain inside a macro) under `dir`.
+    fn save_named_module(dir: &Path, name: &str) {
+        let mut app = EditorApp::new();
+        let mac = app.patch_mut().add_macro(Pos2::new(500.0, 200.0));
+        app.enter_macro(mac);
+        app.spawn_node("gain").expect("gain inside the macro");
+        app.leave_macro();
+        let module = app.patch().subpatch(mac).unwrap().to_module(name);
+        module.write_to_dir(dir).expect("write module");
+    }
+
+    #[test]
+    fn refresh_library_loads_modules_from_the_dir() {
+        let dir = std::env::temp_dir().join(format!("vblib-app-load-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        save_named_module(&dir, "Warm Bass");
+        save_named_module(&dir, "Bright Lead");
+
+        let mut app = EditorApp::new();
+        app.modules_dir = dir.clone();
+        // Before a load the library is empty; refresh pulls both modules in.
+        assert!(app.library.visible().is_empty());
+        app.refresh_library();
+        assert_eq!(app.library.visible().len(), 2, "both saved modules appear");
+
+        // A live filter survives the (re)load: set_items keeps the query/tags.
+        app.library.set_query("warm");
+        app.refresh_library();
+        let visible: Vec<_> = app
+            .library
+            .visible()
+            .iter()
+            .map(|i| i.name.clone())
+            .collect();
+        assert_eq!(
+            visible,
+            vec!["Warm Bass"],
+            "the query still applies after reload"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn import_module_by_name_resolves_a_sanitized_stem_and_rejects_unknowns() {
+        let dir = std::env::temp_dir().join(format!("vblib-app-import-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // The name has an unsafe char, so the file stem ("Acid-Bass") differs from the name;
+        // resolution must go by the module's stored name, not the file stem.
+        save_named_module(&dir, "Acid/Bass");
+
+        let mut app = EditorApp::new();
+        app.modules_dir = dir.clone();
+        let before = app.patch().graph().node_count();
+
+        let id = app
+            .import_module_by_name("Acid/Bass")
+            .expect("the module resolves by its stored name");
+        assert_eq!(
+            app.patch().graph().node_count(),
+            before + 1,
+            "one new macro"
+        );
+        assert!(app.patch().is_macro(id), "the import is a macro");
+        assert_eq!(app.patch().selected(), Some(id), "and is selected");
+
+        // An unknown name is a clean error that leaves the canvas untouched.
+        let err = app.import_module_by_name("No Such Module").unwrap_err();
+        assert!(matches!(err, ModuleError::Io(_)));
+        assert_eq!(app.patch().graph().node_count(), before + 1);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_editor_renders_with_the_library_section_without_panicking() {
+        // Drive a full headless frame (toolbar + palette incl. the library section +
+        // inspector + canvas). A smoke test: the frame must build without panicking.
+        let dir = std::env::temp_dir().join(format!("vblib-app-render-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        save_named_module(&dir, "Warm Bass");
+
+        let mut app = EditorApp::new();
+        app.modules_dir = dir.clone();
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
+        // The first render lazily loaded the library from disk.
+        assert!(app.library_loaded, "the library loads on first render");
+        assert_eq!(app.library.visible().len(), 1, "the saved module is listed");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

@@ -31,7 +31,9 @@ pub use app::EditorApp;
 pub use assistant_panel::{assistant_panel_ui, AssistantAction};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
-pub use library::{library_from_module_dir, LibraryBrowser, LibraryItem};
+pub use library::{
+    library_from_module_dir, library_items_from_module_dir, LibraryBrowser, LibraryItem,
+};
 pub use library_panel::library_browser_ui;
 pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
