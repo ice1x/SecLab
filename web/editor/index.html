@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>VST_bomb — editor (WASM)</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0e0f13; }
+    /* eframe paints the whole editor into this one canvas; fill the viewport. */
+    #vb-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #loading {
+      position: absolute; inset: 0; display: grid; place-content: center; gap: .4rem;
+      color: #c9ccd4; font: 15px/1.5 system-ui, sans-serif; text-align: center;
+    }
+    #loading small { color: #6b7080; }
+    #loading.error { color: #e08a8a; }
+  </style>
+</head>
+<body>
+  <div id="loading">Loading the VST_bomb editor…<br><small>compiling WebGL + WASM</small></div>
+  <canvas id="vb-canvas"></canvas>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
