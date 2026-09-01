@@ -6,6 +6,11 @@
 //! [`EditorApp`]; `cargo run -p vb-editor` opens it as its own window.
 
 pub mod app;
+// The assistant chat panel needs the `vb-ai` provider stack, so it lives behind the
+// off-by-default, native-only `assistant` feature (see Cargo.toml). Gating the module keeps
+// the wasm and plugin builds free of the HTTP/provider dependencies.
+#[cfg(feature = "assistant")]
+pub mod assistant_panel;
 pub mod camera;
 pub mod layout;
 pub mod library;
@@ -22,6 +27,8 @@ pub mod widgets;
 #[cfg(all(not(target_arch = "wasm32"), feature = "app"))]
 pub use app::run;
 pub use app::EditorApp;
+#[cfg(feature = "assistant")]
+pub use assistant_panel::{assistant_panel_ui, AssistantAction};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use library::{library_from_module_dir, LibraryBrowser, LibraryItem};

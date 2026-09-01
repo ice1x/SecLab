@@ -17,6 +17,10 @@ egui.workspace = true
 # a window — the plugin's nih_plug_egui host — can depend on `vb-editor` with
 # `default-features = false` and get `EditorApp` + `render(ctx)` without pulling winit.
 eframe = { workspace = true, optional = true }
+# The assistant chat panel (behind the `assistant` feature) renders the `vb-ai` EditSession
+# view-model. Optional so the provider/HTTP stack is pulled in ONLY for that native panel and
+# never reaches the wasm or plugin builds. vb-ai does not depend on vb-editor → no cycle.
+vb-ai = { workspace = true, optional = true }
 serde.workspace = true
 ron.workspace = true
 
@@ -26,6 +30,12 @@ ron.workspace = true
 # which drives `EditorApp::render` inside its own egui context.
 default = ["app"]
 app = ["dep:eframe"]
+
+# `assistant` = the native-only AI assistant chat panel (`assistant_panel`, backlog 000108).
+# OFF by default: it pulls in `vb-ai` (and thus reqwest/HTTP), so the wasm and plugin builds
+# stay free of the provider stack. The standalone can opt in; the CI `assistant` job builds
+# and tests it so the code cannot rot.
+assistant = ["dep:vb-ai"]
 
 # WASM (browser) entry point only — see src/web.rs (backlog 000081). These compile solely
 # for the wasm32 target, so the native build is untouched. eframe brings the web renderer
