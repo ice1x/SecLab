@@ -29,36 +29,30 @@ rustup target add wasm32-unknown-unknown
 cargo build -p vb-editor --target wasm32-unknown-unknown
 ```
 
-To produce something a browser can load, run the JS-binding step with
-[`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) or, more simply,
-[`trunk`](https://trunkrs.org):
+## Run it in a browser
+
+A ready-to-serve host page lives in [`web/editor/`](../web/editor). Build the browser bundle
+with [`wasm-pack`](https://rustwasm.github.io/wasm-pack/) and serve the directory:
 
 ```bash
-cargo install wasm-bindgen-cli    # or: cargo install trunk
+cargo install wasm-pack   # once
 
-# with wasm-bindgen directly:
-cargo build -p vb-editor --target wasm32-unknown-unknown --release
-wasm-bindgen target/wasm32-unknown-unknown/release/vb_editor.wasm \
-  --out-dir web/pkg --target web
-```
+# From the repo root — compiles vb-editor to a browser-loadable package next to the page:
+wasm-pack build crates/vb-editor --target web \
+  --out-dir ../../web/editor/pkg --out-name vb_editor
 
-Then a minimal page imports the module and hands it a canvas:
-
-```html
-<canvas id="vb"></canvas>
-<script type="module">
-  import init, { start } from './pkg/vb_editor.js';
-  await init();
-  await start(document.getElementById('vb'));
-</script>
-```
-
-Serve the directory over HTTP (WebGL needs a real origin, not `file://`):
-
-```bash
-python3 -m http.server --directory web 8080
+# WebGL needs a real HTTP origin (not file://):
+python3 -m http.server --directory web/editor 8080
 # open http://localhost:8080
 ```
+
+`vb-editor` is built as a `cdylib` (see its `Cargo.toml`) so wasm-pack can emit a loadable
+`.wasm`. The page's [`app.js`](../web/editor/app.js) imports the module, `await init()`s it,
+then calls the exported [`start(canvas)`](../crates/vb-editor/src/web.rs), which hands the
+canvas to eframe's `WebRunner`. The compiled `pkg/` is git-ignored; the page source is
+committed. The CI `wasm build` job builds this bundle on every push (non-blocking), so the
+browser path cannot silently break. See [`web/editor/README.md`](../web/editor/README.md) for
+details.
 
 ## Editing and serialization in the browser
 

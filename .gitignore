@@ -86,3 +86,7 @@ Testing/
 /web/audio/pkg-node/
 /web/audio/pkg-nomod/
 /web/audio/pkg/
+
+# Generated wasm-pack output for the browser editor host (see web/editor/README.md). The
+# source (html/js) is committed; the compiled wasm package is not.
+/web/editor/pkg/

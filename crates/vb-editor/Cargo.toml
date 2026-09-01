@@ -7,6 +7,12 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[lib]
+# `cdylib` so the wasm32 build links to a loadable `.wasm` module the browser page can
+# import (wasm-pack `--target web`, see web/editor/); `lib` so the native workspace
+# (vb-standalone, and the plugin via default-features=false) links it as a normal crate.
+crate-type = ["cdylib", "lib"]
+
 [dependencies]
 vb-core.workspace = true
 vb-nodes.workspace = true
