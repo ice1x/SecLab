@@ -32,11 +32,15 @@ use crate::widgets::{
 #[cfg(feature = "assistant")]
 use crate::assistant_panel::{assistant_panel_ui, AssistantAction};
 #[cfg(feature = "assistant")]
+use crate::settings_panel::{settings_panel_ui, SettingsAction};
+#[cfg(feature = "assistant")]
 use std::sync::{mpsc, Arc};
 #[cfg(feature = "assistant")]
 use std::thread::JoinHandle;
 #[cfg(feature = "assistant")]
-use vb_ai::{AiProvider, EditOutcome, EditSession, EditState, GenerateError, ProviderConfig};
+use vb_ai::{
+    AiProvider, AssistantSettings, EditOutcome, EditSession, EditState, GenerateError, KeyStore,
+};
 
 /// A background provider slot: any `AiProvider` that can cross a thread boundary. The
 /// concrete network providers ([`vb_ai::AnthropicProvider`], [`vb_ai::LocalProvider`]) are
@@ -71,8 +75,14 @@ struct AssistantHost {
     /// Node kinds the worker validates proposals against — the builtins registry, shared into
     /// each worker thread (an `Arc` because [`vb_nodes::Registry`] is not `Clone`).
     registry: Arc<Registry>,
-    /// Provider selection and sampling knobs (no key — that lives in the OS keychain).
-    config: ProviderConfig,
+    /// The Settings view-model the panel edits — provider/model/sampling + privacy. Its
+    /// [`AssistantSettings::config`] is the single source the worker snapshots per request.
+    settings: AssistantSettings,
+    /// BYOK key storage: the OS keychain (service `"VST_bomb"`) under `assistant-net`, else an
+    /// in-session in-memory store. Read/written only through the Settings panel.
+    keys: Box<dyn KeyStore>,
+    /// Scratch buffer for the masked key field in the Settings panel.
+    key_draft: String,
     /// The in-progress instruction text.
     draft: String,
     /// Repair attempts the session may spend converging a valid patch per request.
@@ -90,11 +100,20 @@ struct AssistantHost {
 impl AssistantHost {
     /// A fresh host with no backend, the builtins registry, and a sensible repair budget.
     fn new() -> Self {
+        // Persist keys in the OS keychain when the network providers are compiled in;
+        // otherwise a key lives only for the session (still enough to drive an injected
+        // provider in the base build/tests).
+        #[cfg(feature = "assistant-net")]
+        let keys: Box<dyn KeyStore> = Box::new(vb_ai::keystore::KeychainStore::new("VST_bomb"));
+        #[cfg(not(feature = "assistant-net"))]
+        let keys: Box<dyn KeyStore> = Box::new(vb_ai::MemoryKeyStore::new());
         Self {
             session: None,
             provider: None,
             registry: Arc::new(Registry::with_builtins()),
-            config: ProviderConfig::default(),
+            settings: AssistantSettings::new(),
+            keys,
+            key_draft: String::new(),
             draft: String::new(),
             max_attempts: 3,
             status: None,
@@ -1149,6 +1168,52 @@ impl EditorApp {
         Ok(())
     }
 
+    /// Wires an OpenAI-compatible provider (default OpenAI endpoint), reading the BYOK key
+    /// from the OS keychain under `keychain_service`. `assistant-net` only.
+    ///
+    /// # Errors
+    /// [`vb_ai::AiError`] if the HTTP client cannot be built.
+    #[cfg(feature = "assistant-net")]
+    pub fn set_assistant_openai(
+        &mut self,
+        keychain_service: impl Into<String>,
+        timeout: std::time::Duration,
+    ) -> Result<(), vb_ai::AiError> {
+        let transport = vb_ai::ReqwestTransport::new(timeout)?;
+        let keys = vb_ai::keystore::KeychainStore::new(keychain_service);
+        self.set_assistant_provider(Arc::new(vb_ai::OpenAiProvider::new(transport, keys)));
+        Ok(())
+    }
+
+    /// Applies the Settings panel: the worker already snapshots `settings.config()` each
+    /// request, so this only (re)connects the live provider. Under `assistant-net` it builds
+    /// the provider the panel selected, reading the key from the keychain; without it there is
+    /// no network provider to connect, so it just notes that.
+    #[cfg(feature = "assistant")]
+    fn apply_assistant_settings(&mut self) {
+        #[cfg(feature = "assistant-net")]
+        {
+            let timeout = std::time::Duration::from_secs(60);
+            let provider = self.assistant.settings.provider();
+            let result = match provider {
+                vb_ai::ProviderKind::Anthropic => self.set_assistant_anthropic("VST_bomb", timeout),
+                vb_ai::ProviderKind::OpenAiCompatible => {
+                    self.set_assistant_openai("VST_bomb", timeout)
+                }
+            };
+            self.assistant.status = Some(match result {
+                Ok(()) => format!("connected {}", provider.label()),
+                Err(e) => format!("connect failed: {e}"),
+            });
+        }
+        #[cfg(not(feature = "assistant-net"))]
+        {
+            self.assistant.status = Some(
+                "settings applied (build with `assistant-net` to connect a provider)".to_owned(),
+            );
+        }
+    }
+
     /// Consumes a worker's proposal if one has arrived, recording it on the main thread via
     /// [`EditSession::record`]. Returns `true` if a message was consumed. Called every frame
     /// and, in tests, after joining the worker. No-op when no request is in flight.
@@ -1221,6 +1286,19 @@ impl EditorApp {
             if let Some(action) = action {
                 self.handle_assistant_action(action);
             }
+
+            // The provider/model/privacy/BYOK-key Settings, collapsed by default.
+            ui.collapsing("settings", |ui| {
+                let settings_action = settings_panel_ui(
+                    ui,
+                    &mut self.assistant.settings,
+                    &mut *self.assistant.keys,
+                    &mut self.assistant.key_draft,
+                );
+                if settings_action == Some(SettingsAction::Apply) {
+                    self.apply_assistant_settings();
+                }
+            });
         });
     }
 
@@ -1259,7 +1337,7 @@ impl EditorApp {
                     .doc()
                     .clone();
                 let registry = self.assistant.registry.clone();
-                let config = self.assistant.config.clone();
+                let config = self.assistant.settings.config().clone();
                 let max_attempts = self.assistant.max_attempts;
                 let (tx, rx) = mpsc::channel();
                 let worker = std::thread::spawn(move || {
@@ -2113,5 +2191,90 @@ mod tests {
         let mut app = EditorApp::new();
         let ctx = egui::Context::default();
         let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
+    }
+
+    /// A `Send + Sync` provider that records the model of each request it sees — proof that the
+    /// worker's request carries the config the Settings view-model holds.
+    #[cfg(feature = "assistant")]
+    struct RecordingProvider {
+        reply: String,
+        seen_model: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    }
+
+    #[cfg(feature = "assistant")]
+    impl vb_ai::AiProvider for RecordingProvider {
+        fn kind(&self) -> vb_ai::ProviderKind {
+            vb_ai::ProviderKind::Anthropic
+        }
+        fn complete(
+            &self,
+            request: &vb_ai::ChatRequest,
+        ) -> Result<vb_ai::ChatResponse, vb_ai::AiError> {
+            *self.seen_model.lock().unwrap() = Some(request.model.clone());
+            Ok(vb_ai::ChatResponse::text(self.reply.clone()))
+        }
+    }
+
+    /// The worker snapshots `settings.config()`, so a model chosen in the Settings view-model
+    /// reaches the provider request.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn the_worker_request_uses_the_settings_model() {
+        let mut app = EditorApp::new();
+        app.assistant.settings.set_model("claude-custom-xyz");
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
+        app.set_assistant_provider(std::sync::Arc::new(RecordingProvider {
+            reply: reply_with(vb_ai::EXAMPLE_PATCH_RON),
+            seen_model: seen.clone(),
+        }));
+
+        app.handle_assistant_action(AssistantAction::Submit("go".to_owned()));
+        await_assistant(&mut app);
+
+        assert_eq!(
+            seen.lock().unwrap().as_deref(),
+            Some("claude-custom-xyz"),
+            "the request carries the model the Settings panel selected"
+        );
+    }
+
+    /// The Settings key store round-trips through the host, and the readiness reflects it.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn assistant_settings_key_and_readiness_round_trip_through_the_host() {
+        let mut app = EditorApp::new();
+        // Reach the host's own view-model and key store the panel would drive.
+        assert!(!app
+            .assistant
+            .settings
+            .key_present(app.assistant.keys.as_ref()));
+        assert_eq!(
+            app.assistant
+                .settings
+                .send_blocker(app.assistant.keys.as_ref()),
+            Some(vb_ai::SendBlocker::NoConsent)
+        );
+
+        app.assistant.settings.set_consent(true);
+        app.assistant
+            .settings
+            .store_key(app.assistant.keys.as_mut(), "sk-live")
+            .expect("stores through the host key store");
+
+        assert!(app.assistant.settings.is_ready(app.assistant.keys.as_ref()));
+    }
+
+    /// Without the `assistant-net` feature, applying the settings has no provider to connect,
+    /// so it reports that rather than pretending to have connected.
+    #[cfg(all(feature = "assistant", not(feature = "assistant-net")))]
+    #[test]
+    fn apply_settings_without_a_net_build_reports_no_connection() {
+        let mut app = EditorApp::new();
+        app.apply_assistant_settings();
+        let status = app.assistant.status.as_deref().unwrap_or_default();
+        assert!(
+            status.contains("settings applied"),
+            "unexpected status: {status:?}"
+        );
     }
 }
