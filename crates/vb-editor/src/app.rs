@@ -1328,6 +1328,13 @@ impl EditorApp {
                         Some("no AI backend configured (assistant-net only)".to_owned());
                     return;
                 };
+                // Enforce the privacy policy before anything leaves the machine: offline mode
+                // and missing consent both block the send (000110). A provider is already
+                // configured here, so the key precondition is met — only the policy remains.
+                if let Some(reason) = self.assistant.settings.privacy().blocked_reason() {
+                    self.assistant.status = Some(format!("cannot send: {reason}"));
+                    return;
+                }
                 // Snapshot everything the blocking call needs and run it off the UI thread.
                 let doc = self
                     .assistant
@@ -2082,6 +2089,7 @@ mod tests {
     #[test]
     fn assistant_submit_then_apply_updates_the_canvas() {
         let mut app = EditorApp::new();
+        app.assistant.settings.set_consent(true); // privacy gate: allow the send
         let before = app.patch().to_doc().nodes.len();
         let expected = vb_project::from_ron(vb_ai::EXAMPLE_PATCH_RON)
             .expect("example doc parses")
@@ -2121,6 +2129,7 @@ mod tests {
     #[test]
     fn a_worker_proposal_is_consumed_by_render() {
         let mut app = EditorApp::new();
+        app.assistant.settings.set_consent(true); // privacy gate: allow the send
         app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
         ))));
@@ -2148,6 +2157,7 @@ mod tests {
     #[test]
     fn assistant_reject_leaves_the_canvas_untouched() {
         let mut app = EditorApp::new();
+        app.assistant.settings.set_consent(true); // privacy gate: allow the send
         let before = app.patch().to_doc().nodes.len();
         app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
@@ -2180,6 +2190,43 @@ mod tests {
         assert!(
             status.contains("no AI backend"),
             "unexpected status: {status:?}"
+        );
+    }
+
+    /// Even with a provider configured, the privacy policy blocks a send: no consent, and
+    /// offline mode, each refuse the request without spawning a worker (000110).
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn the_privacy_policy_blocks_a_send_before_it_leaves() {
+        let mut app = EditorApp::new();
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        ))));
+
+        // Consent is off by default → refused.
+        app.handle_assistant_action(AssistantAction::Submit("go".to_owned()));
+        assert!(!app.assistant.in_flight(), "no worker without consent");
+        assert!(app
+            .assistant
+            .status
+            .as_deref()
+            .unwrap_or_default()
+            .contains("cannot send"));
+
+        // Consent given but offline → still refused.
+        app.assistant.settings.set_consent(true);
+        app.assistant.settings.set_offline(true);
+        app.handle_assistant_action(AssistantAction::Submit("go".to_owned()));
+        assert!(!app.assistant.in_flight(), "no worker while offline");
+
+        // Consent + online → the send proceeds.
+        app.assistant.settings.set_offline(false);
+        app.handle_assistant_action(AssistantAction::Submit("go".to_owned()));
+        assert!(app.assistant.in_flight(), "now the request runs");
+        await_assistant(&mut app);
+        assert_eq!(
+            app.assistant.session.as_ref().map(EditSession::state),
+            Some(EditState::Proposed)
         );
     }
 
@@ -2221,6 +2268,7 @@ mod tests {
     #[test]
     fn the_worker_request_uses_the_settings_model() {
         let mut app = EditorApp::new();
+        app.assistant.settings.set_consent(true); // privacy gate: allow the send
         app.assistant.settings.set_model("claude-custom-xyz");
         let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
         app.set_assistant_provider(std::sync::Arc::new(RecordingProvider {
