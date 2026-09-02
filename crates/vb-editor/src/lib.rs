@@ -19,6 +19,8 @@ pub mod module;
 pub mod palette;
 pub mod patch;
 pub mod preset;
+#[cfg(feature = "assistant")]
+pub mod settings_panel;
 pub mod theme;
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
 pub mod web;
@@ -39,5 +41,7 @@ pub use module::{list_modules, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
 pub use preset::{Preset, PresetBank, PresetError, PresetValue, PRESET_VERSION};
+#[cfg(feature = "assistant")]
+pub use settings_panel::{settings_panel_ui, SettingsAction};
 pub use theme::{Theme, ThemeKind};
 pub use widgets::WidgetKind;
