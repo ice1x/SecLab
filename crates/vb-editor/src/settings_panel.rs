@@ -69,6 +69,25 @@ pub fn settings_panel_ui(
         }
     });
 
+    // Endpoint override — only meaningful for the OpenAI-compatible provider (a local or
+    // third-party server); blank means the default OpenAI endpoint.
+    if settings.provider() == ProviderKind::OpenAiCompatible {
+        let mut endpoint = settings.endpoint().unwrap_or_default().to_owned();
+        ui.horizontal(|ui| {
+            ui.label("endpoint");
+            if ui
+                .add(
+                    egui::TextEdit::singleline(&mut endpoint)
+                        .hint_text("default: api.openai.com")
+                        .desired_width(240.0),
+                )
+                .changed()
+            {
+                settings.set_endpoint(endpoint);
+            }
+        });
+    }
+
     // Sampling.
     let mut max_tokens = settings.max_tokens();
     if ui
@@ -214,6 +233,21 @@ mod tests {
         // The ready branch (green "ready ✓") and the "stored ✓" key line must render cleanly.
         let mut draft = String::new();
         assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+    }
+
+    #[test]
+    fn the_openai_endpoint_field_renders_for_a_compatible_provider() {
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::OpenAiCompatible);
+        settings.set_endpoint("http://localhost:11434/v1/chat/completions");
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+        // The endpoint row only appears for OpenAI-compatible; the frame must build with it.
+        assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+        assert_eq!(
+            settings.endpoint(),
+            Some("http://localhost:11434/v1/chat/completions")
+        );
     }
 
     #[test]

@@ -1178,10 +1178,15 @@ impl EditorApp {
         &mut self,
         keychain_service: impl Into<String>,
         timeout: std::time::Duration,
+        endpoint: Option<&str>,
     ) -> Result<(), vb_ai::AiError> {
         let transport = vb_ai::ReqwestTransport::new(timeout)?;
         let keys = vb_ai::keystore::KeychainStore::new(keychain_service);
-        self.set_assistant_provider(Arc::new(vb_ai::OpenAiProvider::new(transport, keys)));
+        let mut provider = vb_ai::OpenAiProvider::new(transport, keys);
+        if let Some(url) = endpoint {
+            provider = provider.with_url(url);
+        }
+        self.set_assistant_provider(Arc::new(provider));
         Ok(())
     }
 
@@ -1198,7 +1203,8 @@ impl EditorApp {
             let result = match provider {
                 vb_ai::ProviderKind::Anthropic => self.set_assistant_anthropic("VST_bomb", timeout),
                 vb_ai::ProviderKind::OpenAiCompatible => {
-                    self.set_assistant_openai("VST_bomb", timeout)
+                    let endpoint = self.assistant.settings.endpoint().map(str::to_owned);
+                    self.set_assistant_openai("VST_bomb", timeout, endpoint.as_deref())
                 }
             };
             self.assistant.status = Some(match result {
