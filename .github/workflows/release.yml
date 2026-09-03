@@ -1,0 +1,80 @@
+name: Release
+
+# Builds the macOS plugin bundles (CLAP, VST3, AU) and the wrapped standalone, packages
+# them into one zip, and uploads it as a workflow artifact. Runs on a version tag (`v*`)
+# or on manual dispatch.
+#
+# Signing and notarization are OPTIONAL: they run only when the `DEVELOPER_ID` /
+# `NOTARY_PROFILE` secrets are set on the repo, so the workflow produces (unsigned) bundles
+# out of the box and starts signing them the moment those credentials exist. See
+# docs/releasing.md.
+#
+# macOS-only for now: the self-hosted macOS/ARM64 runner is the only one available (the
+# account's GitHub-hosted runner billing is broken — see cross-platform.yml). Linux/Windows
+# release legs join here once that is restored.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  macos:
+    name: macOS bundles
+    runs-on: [self-hosted, macOS, ARM64]
+    # Job-level env so the optional signing steps can gate on whether the secret is set.
+    env:
+      DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
+      NOTARY_PROFILE: ${{ secrets.NOTARY_PROFILE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Each command reuses the clap-wrapper checkout cached under target/ (see xtask), so
+      # only the first run on a fresh machine clones/builds it.
+      - name: build the CLAP bundle
+        run: cargo xtask bundle vb-plugin --release
+      - name: build the VST3 (clap-wrapper)
+        run: cargo xtask bundle-vst3
+      - name: build the AUv2 component (clap-wrapper)
+        run: cargo xtask bundle-auv2
+      - name: build the wrapped standalone app
+        run: cargo xtask bundle-standalone
+
+      # Code-sign every bundle in target/bundled with the Developer ID identity — only when
+      # one is configured. Unsigned bundles are still produced and uploaded otherwise.
+      - name: code-sign (Developer ID)
+        if: ${{ env.DEVELOPER_ID != '' }}
+        run: cargo xtask sign
+
+      # Notarize + staple — only when a notary keychain profile is configured.
+      - name: notarize and staple
+        if: ${{ env.NOTARY_PROFILE != '' }}
+        run: cargo xtask notarize
+
+      # Package the four bundles into one versioned archive. GITHUB_REF_NAME is the tag on a
+      # tag push (e.g. v0.1.0) and the branch on manual dispatch.
+      - name: package the bundles
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME:-dev}"
+          dist="target/dist"
+          mkdir -p "$dist"
+          archive="$PWD/$dist/VST_bomb-${version}-macos.zip"
+          rm -f "$archive"
+          cd target/bundled
+          zip -r -q "$archive" \
+            vb-plugin.clap \
+            vb-plugin.vst3 \
+            vb-plugin.component \
+            vb-plugin.app
+          echo "packaged $archive"
+
+      - name: upload the macOS bundles artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: VST_bomb-macos-bundles
+          path: target/dist/*.zip
+          if-no-files-found: error

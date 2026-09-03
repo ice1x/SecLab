@@ -340,9 +340,9 @@ the definition of done.
 - [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo, LFO filter sweep) 🧪
 - [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/vb-nodes/tests/custom_node.rs` 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
-- [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI
+- [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI — **macOS leg wired**: [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the CLAP/VST3/AU/standalone bundles on a `v*` tag (or manual dispatch) via the existing `cargo xtask` commands, zips them, and uploads a `VST_bomb-macos-bundles` artifact; code-signing/notarization run only when the `DEVELOPER_ID`/`NOTARY_PROFILE` secrets are set (see [docs/releasing.md](docs/releasing.md)). Linux/Windows legs await the runner-billing fix (blocking `cross-platform.yml` too)
 - [x] 000091 — Versioning and CHANGELOG — [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog; documents the crate SemVer vs. the separate project format version), guarded by a test tying it to `vb_project::FORMAT_VERSION` 🧪
-- [ ] 000092 — MVP release: working export of a minimal synth to VST3 + AU
+- [x] 000092 — MVP release: working export of a minimal synth to VST3 + AU — `cargo xtask bundle-vst3` / `bundle-auv2` wrap the CLAP into loadable VST3/AU bundles carrying the default synth patch; the AU passes Apple's `auval` in CI (`au validate` job) and the VST3/CLAP pass `clap-validator`; the release workflow packages both (see [docs/releasing.md](docs/releasing.md)) 🧪
 
 ### Epic 11 — Patch/preset library on drevo (optional)
 
