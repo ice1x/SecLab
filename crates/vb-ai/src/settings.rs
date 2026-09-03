@@ -47,6 +47,11 @@ impl SendBlocker {
 pub struct AssistantSettings {
     config: ProviderConfig,
     privacy: PrivacySettings,
+    /// Base URL override for the OpenAI-compatible provider (`None` = the default OpenAI
+    /// endpoint). This is what makes "OpenAI-compatible" actually cover third-party and local
+    /// servers (Ollama's OpenAI shim, Together, Groq, a self-hosted gateway…). Ignored for
+    /// the Anthropic provider, which has a fixed endpoint.
+    endpoint: Option<String>,
 }
 
 impl AssistantSettings {
@@ -57,10 +62,32 @@ impl AssistantSettings {
     }
 
     /// Settings from an existing config and privacy policy (e.g. restored from disk — note
-    /// neither carries a key).
+    /// neither carries a key). The endpoint override starts unset.
     #[must_use]
     pub fn with(config: ProviderConfig, privacy: PrivacySettings) -> Self {
-        Self { config, privacy }
+        Self {
+            config,
+            privacy,
+            endpoint: None,
+        }
+    }
+
+    /// The custom OpenAI-compatible base URL, or `None` for the default OpenAI endpoint.
+    #[must_use]
+    pub fn endpoint(&self) -> Option<&str> {
+        self.endpoint.as_deref()
+    }
+
+    /// Sets (or with a blank value, clears) the OpenAI-compatible base URL override. The URL
+    /// is trimmed; an empty or whitespace-only value resets to the default endpoint.
+    pub fn set_endpoint(&mut self, url: impl Into<String>) {
+        let url = url.into();
+        let trimmed = url.trim();
+        self.endpoint = if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        };
     }
 
     /// The provider/model/sampling config, ready to hand to the generation loop.
@@ -310,6 +337,23 @@ mod tests {
         // The config handed to the generation loop reflects the edits.
         assert_eq!(s.config().model, "claude-opus-5");
         assert_eq!(s.config().max_tokens, 8192);
+    }
+
+    #[test]
+    fn endpoint_override_sets_trims_and_clears() {
+        let mut s = AssistantSettings::new();
+        assert_eq!(s.endpoint(), None, "default is the OpenAI endpoint");
+
+        s.set_endpoint("  http://localhost:11434/v1/chat/completions  ");
+        assert_eq!(
+            s.endpoint(),
+            Some("http://localhost:11434/v1/chat/completions"),
+            "the URL is trimmed and stored"
+        );
+
+        // A blank value resets to the default endpoint.
+        s.set_endpoint("   ");
+        assert_eq!(s.endpoint(), None);
     }
 
     #[test]
