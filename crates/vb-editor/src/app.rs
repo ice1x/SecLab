@@ -231,6 +231,23 @@ fn demo_patch(registry: &Registry) -> PatchView {
         params_of("biquad"),
         Pos2::new(180.0, 10.0),
     );
+    // A VCA gates the voice: the audio passes through it, and it is shut at rest, so the
+    // synth is SILENT the instant it loads instead of droning a held tone. An envelope
+    // driven by note events opens it (see below). This mirrors the plugin's gated
+    // `vb_engine::default_patch`; keeping the two in sync is what kept the standalone
+    // humming after the plugin was fixed.
+    let vca = patch.add_node_with_params(
+        GraphNode::new(
+            "vca",
+            vec![
+                Port::input("in", SignalType::Audio),
+                Port::input("cv", SignalType::Control),
+            ],
+            vec![Port::output("out", SignalType::Audio)],
+        ),
+        params_of("vca"),
+        Pos2::new(360.0, 10.0),
+    );
     let amp = patch.add_node_with_params(
         GraphNode::new(
             "gain",
@@ -238,14 +255,57 @@ fn demo_patch(registry: &Registry) -> PatchView {
             vec![Port::output("out", SignalType::Audio)],
         ),
         params_of("gain"),
-        Pos2::new(360.0, 20.0),
+        Pos2::new(540.0, 20.0),
     );
+    // Note gate → envelope → VCA control: a held note fades the voice in, release fades out.
+    let midi = patch.add_node_with_params(
+        GraphNode::new(
+            "midi-in",
+            vec![],
+            vec![
+                Port::output("gate", SignalType::Control),
+                Port::output("pitch_hz", SignalType::Control),
+                Port::output("velocity", SignalType::Control),
+            ],
+        ),
+        params_of("midi-in"),
+        Pos2::new(60.0, 200.0),
+    );
+    let env = patch.add_node_with_params(
+        GraphNode::new(
+            "adsr",
+            vec![Port::input("gate", SignalType::Control)],
+            vec![Port::output("level", SignalType::Control)],
+        ),
+        params_of("adsr"),
+        Pos2::new(260.0, 200.0),
+    );
+    // Audio path: oscillator → filter → VCA → gain.
     patch
         .connect(osc, PortId(0), flt, PortId(0))
         .expect("demo osc→filter");
     patch
-        .connect(flt, PortId(0), amp, PortId(0))
-        .expect("demo filter→gain");
+        .connect(flt, PortId(0), vca, PortId(0))
+        .expect("demo filter→vca");
+    patch
+        .connect(vca, PortId(0), amp, PortId(0))
+        .expect("demo vca→gain");
+    // Control path: note gate → envelope → VCA cv.
+    patch
+        .connect(midi, PortId(0), env, PortId(0))
+        .expect("demo midi→adsr");
+    patch
+        .connect(env, PortId(0), vca, PortId(1))
+        .expect("demo adsr→vca.cv");
+    // Shut the VCA at rest: the registry default bias (1.0) is always-open, which would
+    // drone; 0.0 means "closed unless the envelope's cv opens it".
+    if let Some(i) = patch
+        .params(vca)
+        .iter()
+        .position(|s| s.param.name == "bias")
+    {
+        patch.set_param(vca, i, 0.0);
+    }
     // Ears-friendly starting level: the registry default (1.0) is full scale.
     let gain_index = patch
         .params(amp)
@@ -1653,8 +1713,14 @@ mod tests {
     #[test]
     fn the_demo_patch_is_on_the_canvas_and_wired() {
         let app = EditorApp::new();
-        assert_eq!(app.patch().graph().node_count(), 3);
-        assert_eq!(app.patch().graph().edges().len(), 2, "osc→filter→gain");
+        // osc, filter, vca, gain + midi-in, adsr (the note-gate chain that keeps it silent
+        // until a note plays).
+        assert_eq!(app.patch().graph().node_count(), 6);
+        assert_eq!(
+            app.patch().graph().edges().len(),
+            5,
+            "osc→filter→vca→gain, and midi→adsr→vca.cv"
+        );
         assert_eq!(app.patch().selected(), None);
     }
 
@@ -1903,9 +1969,11 @@ mod tests {
 
         // The demo gain node's output is free; wire it back is impossible (cycle), so
         // add a fresh sink node and wire gain.out → sink.in.
+        // Clear of the demo nodes (gain now sits at x≈540) so the drag can't grab a
+        // neighbouring frame.
         let sink = app.patch_mut().add_node(
             GraphNode::new("sink", vec![Port::input("in", SignalType::Audio)], vec![]),
-            Pos2::new(560.0, 30.0),
+            Pos2::new(780.0, 120.0),
         );
         let edges_before = app.patch().graph().edges().len();
 

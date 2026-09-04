@@ -275,4 +275,39 @@ mod tests {
             .expect("still compiles");
         assert_eq!(sink, None);
     }
+
+    #[test]
+    fn the_starting_editor_patch_is_silent_until_a_note() {
+        // Regression: the standalone plays the editor's *starting* patch live, so that patch
+        // must be gated (silent at rest), not a bare oscillator that drones the instant the
+        // window opens. This is the bug where the plugin's default patch was fixed but the
+        // editor/standalone demo was not — the two are now both note-gated.
+        let app = vb_editor::EditorApp::new();
+        let registry = Registry::with_builtins();
+        let ctx = BuildContext::default();
+        let (mut engine, sink) =
+            build_live_engine(app.patch(), &registry, &ctx, 256).expect("the demo patch compiles");
+        let sink = sink.expect("the demo patch has an audio sink");
+
+        // No note held → the VCA is shut → silence.
+        let mut rest = 0.0_f32;
+        for _ in 0..8 {
+            rest = rest.max(peak(&mut engine, sink));
+        }
+        assert!(
+            rest < 1e-4,
+            "the default patch must be silent at rest, not drone (peak was {rest})"
+        );
+
+        // Hold a note → the envelope opens the VCA → audible.
+        ctx.notes.note_on(69, 127);
+        let mut on = 0.0_f32;
+        for _ in 0..32 {
+            on = on.max(peak(&mut engine, sink));
+        }
+        assert!(
+            on > 1e-3,
+            "a held note must make the default patch audible (peak was {on})"
+        );
+    }
 }
