@@ -275,10 +275,22 @@ impl Default for VstBomb {
             tx: Some(tx),
             built_values,
             #[cfg(feature = "gui")]
-            editor_state: nih_plug_egui::EguiState::from_size(560, 380),
+            editor_state: nih_plug_egui::EguiState::from_size(EDITOR_SIZE.0, EDITOR_SIZE.1),
         }
     }
 }
+
+/// The editor window's initial logical size (before DPI scaling). The node editor packs a
+/// toolbar, two side panels (palette + inspector), and the canvas, so the old 560×380 was
+/// cramped to the point of being unusable; this gives every panel real room. (Live
+/// drag-resize is not wired: `nih_plug_egui`'s only resize entry point, `ResizableWindow`,
+/// owns the whole `CentralPanel`, which conflicts with `EditorApp::render`'s multi-panel
+/// layout — see the note in the PR. Enlarging the default is the safe, testable win.)
+///
+/// Gated on `gui` or `test` so the headless (no-editor) build neither carries nor warns on
+/// it: under `gui` it feeds `from_size`, under `test` the roominess check reads it.
+#[cfg(any(feature = "gui", test))]
+const EDITOR_SIZE: (u32, u32) = (1120, 720);
 
 impl Plugin for VstBomb {
     const NAME: &'static str = "VST_bomb";
@@ -522,6 +534,19 @@ nih_export_clap!(VstBomb);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_editor_window_is_roomy_enough_for_the_node_editor() {
+        // The embedded editor packs a toolbar, a palette and an inspector side panel, and the
+        // canvas. The old 560×380 default crammed all of that into a few inches; guard against
+        // ever regressing to a window too small to actually use.
+        let (w, h) = EDITOR_SIZE;
+        assert!(
+            w >= 1000,
+            "editor window is only {w} px wide — too narrow for two side panels + a canvas"
+        );
+        assert!(h >= 640, "editor window is only {h} px tall — too short");
+    }
 
     #[test]
     fn deliver_to_host_duplicates_a_mono_sink() {
