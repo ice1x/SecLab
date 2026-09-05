@@ -46,9 +46,6 @@
                 ],
                 feedback: false,
             ),
-            values: [
-                40.0,
-            ],
         ),
         (
             id: (2),
@@ -72,7 +69,7 @@
             ),
             values: [
                 1.0,
-                110.0,
+                55.0,
                 0.0,
             ],
         ),
@@ -98,8 +95,8 @@
             ),
             values: [
                 1.0,
-                110.0,
-                0.05,
+                55.0,
+                0.12,
             ],
         ),
         (
@@ -124,22 +121,17 @@
             ),
             values: [
                 2.0,
-                110.0,
+                55.0,
                 -12.0,
             ],
         ),
         (
             id: (5),
             node: (
-                kind: "add",
+                kind: "attenuvert",
                 inputs: [
                     (
-                        name: "a",
-                        direction: Input,
-                        signal: Audio,
-                    ),
-                    (
-                        name: "b",
+                        name: "in",
                         direction: Input,
                         signal: Audio,
                     ),
@@ -153,9 +145,63 @@
                 ],
                 feedback: false,
             ),
+            values: [
+                1.0,
+                0.0,
+            ],
         ),
         (
             id: (6),
+            node: (
+                kind: "attenuvert",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.8,
+                0.0,
+            ],
+        ),
+        (
+            id: (7),
+            node: (
+                kind: "attenuvert",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.7,
+                0.0,
+            ],
+        ),
+        (
+            id: (8),
             node: (
                 kind: "add",
                 inputs: [
@@ -181,7 +227,33 @@
             ),
         ),
         (
-            id: (7),
+            id: (9),
+            node: (
+                kind: "add",
+                inputs: [
+                    (
+                        name: "a",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                    (
+                        name: "b",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+        (
+            id: (10),
             node: (
                 kind: "ladder",
                 inputs: [
@@ -207,12 +279,12 @@
             ),
             values: [
                 200.0,
-                0.7,
-                4000.0,
+                0.6,
+                3000.0,
             ],
         ),
         (
-            id: (8),
+            id: (11),
             node: (
                 kind: "adsr",
                 inputs: [
@@ -232,14 +304,41 @@
                 feedback: false,
             ),
             values: [
-                0.003,
-                0.12,
-                0.5,
-                0.18,
+                0.005,
+                0.15,
+                0.3,
+                0.2,
             ],
         ),
         (
-            id: (9),
+            id: (12),
+            node: (
+                kind: "adsr",
+                inputs: [
+                    (
+                        name: "gate",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "level",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.005,
+                0.1,
+                0.8,
+                0.2,
+            ],
+        ),
+        (
+            id: (13),
             node: (
                 kind: "vca",
                 inputs: [
@@ -265,7 +364,7 @@
             ),
             values: [
                 0.0,
-                0.34,
+                1.0,
             ],
         ),
     ],
@@ -303,49 +402,73 @@
         (
             from_node: (3),
             from_port: (0),
-            to_node: (5),
-            to_port: (1),
-        ),
-        (
-            from_node: (5),
-            from_port: (0),
             to_node: (6),
             to_port: (0),
         ),
         (
             from_node: (4),
             from_port: (0),
-            to_node: (6),
-            to_port: (1),
+            to_node: (7),
+            to_port: (0),
+        ),
+        (
+            from_node: (5),
+            from_port: (0),
+            to_node: (8),
+            to_port: (0),
         ),
         (
             from_node: (6),
             from_port: (0),
-            to_node: (7),
+            to_node: (8),
+            to_port: (1),
+        ),
+        (
+            from_node: (8),
+            from_port: (0),
+            to_node: (9),
             to_port: (0),
         ),
         (
             from_node: (7),
             from_port: (0),
             to_node: (9),
+            to_port: (1),
+        ),
+        (
+            from_node: (9),
+            from_port: (0),
+            to_node: (10),
+            to_port: (0),
+        ),
+        (
+            from_node: (10),
+            from_port: (0),
+            to_node: (13),
             to_port: (0),
         ),
         (
             from_node: (0),
             from_port: (0),
-            to_node: (8),
+            to_node: (11),
             to_port: (0),
         ),
         (
-            from_node: (8),
+            from_node: (11),
             from_port: (0),
-            to_node: (7),
+            to_node: (10),
             to_port: (1),
         ),
         (
-            from_node: (8),
+            from_node: (0),
             from_port: (0),
-            to_node: (9),
+            to_node: (12),
+            to_port: (0),
+        ),
+        (
+            from_node: (12),
+            from_port: (0),
+            to_node: (13),
             to_port: (1),
         ),
     ],
