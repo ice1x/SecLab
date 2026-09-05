@@ -154,6 +154,109 @@ pub fn default_patch(registry: &Registry) -> ProjectDoc {
     doc
 }
 
+/// A faithful Moog Minitaur mono-bass voice (Epic 14 / 000163): two saw oscillators plus a
+/// square sub through a **leveled** mixer (per-oscillator `attenuvert`) into a Moog **ladder**
+/// low-pass, with **separate filter and amp envelopes**. Glide on the pitch; **silent until a
+/// note** (VCA biased shut). See `docs/synths/minitaur.md`. This is the voice slated to become
+/// the default patch (000164).
+///
+/// (The LFO the hardware routes to cutoff is deferred — it needs a control-rate mixer to sum
+/// with the filter envelope, since `add`/`attenuvert` are audio-typed; tracked separately.)
+#[must_use]
+pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
+    use vb_core::PortId;
+    let mut g = vb_core::Graph::new();
+    // The closure borrows `g` mutably; the block scopes that borrow so `g.connect` is free
+    // afterwards (no `drop` needed).
+    let (
+        midi,
+        glide,
+        osc1,
+        osc2,
+        sub,
+        lvl1,
+        lvl2,
+        lvls,
+        mix_a,
+        mix_b,
+        ladder,
+        filt_eg,
+        amp_eg,
+        vca,
+    ) = {
+        let mut add = |kind: &str| g.add_node(registry.graph_node(kind).expect("builtin"));
+        (
+            add("midi-in"),
+            add("glide"),
+            add("pitch-osc"),
+            add("pitch-osc"),
+            add("pitch-osc"),
+            add("attenuvert"),
+            add("attenuvert"),
+            add("attenuvert"),
+            add("add"),
+            add("add"),
+            add("ladder"),
+            add("adsr"),
+            add("adsr"),
+            add("vca"),
+        )
+    };
+
+    // Pitch: note → glide → each oscillator's pitch input.
+    g.connect(midi, PortId(1), glide, PortId(0))
+        .expect("midi.pitch → glide");
+    for osc in [osc1, osc2, sub] {
+        g.connect(glide, PortId(0), osc, PortId(0))
+            .expect("glide → osc.pitch");
+    }
+    // Oscillator mix with per-source levels: each osc · level → summed.
+    g.connect(osc1, PortId(0), lvl1, PortId(0))
+        .expect("osc1 → lvl1");
+    g.connect(osc2, PortId(0), lvl2, PortId(0))
+        .expect("osc2 → lvl2");
+    g.connect(sub, PortId(0), lvls, PortId(0))
+        .expect("sub → lvlsub");
+    g.connect(lvl1, PortId(0), mix_a, PortId(0))
+        .expect("lvl1 → mixA.a");
+    g.connect(lvl2, PortId(0), mix_a, PortId(1))
+        .expect("lvl2 → mixA.b");
+    g.connect(mix_a, PortId(0), mix_b, PortId(0))
+        .expect("mixA → mixB.a");
+    g.connect(lvls, PortId(0), mix_b, PortId(1))
+        .expect("lvlsub → mixB.b");
+    // Audio path: mix → ladder low-pass → VCA.
+    g.connect(mix_b, PortId(0), ladder, PortId(0))
+        .expect("mix → ladder.in");
+    g.connect(ladder, PortId(0), vca, PortId(0))
+        .expect("ladder → vca.in");
+    // Filter path: gate → filter envelope → ladder cutoff CV (a SEPARATE contour from the
+    // amp — the Minitaur has two envelopes; the ladder's `amount_hz` scales this sweep).
+    g.connect(midi, PortId(0), filt_eg, PortId(0))
+        .expect("gate → filtEG");
+    g.connect(filt_eg, PortId(0), ladder, PortId(1))
+        .expect("filtEG → ladder.cutoff");
+    // Amp path: gate → amp envelope → VCA cv.
+    g.connect(midi, PortId(0), amp_eg, PortId(0))
+        .expect("gate → ampEG");
+    g.connect(amp_eg, PortId(0), vca, PortId(1))
+        .expect("ampEG → vca.cv");
+
+    let mut doc = ProjectDoc::from_graph(&g);
+    // Pinned voice (000134): a punchy mono bass, silent at rest.
+    doc.set_node_values(osc1, vec![1.0, 55.0, 0.0]); // saw
+    doc.set_node_values(osc2, vec![1.0, 55.0, 0.12]); // saw, slight detune for width
+    doc.set_node_values(sub, vec![2.0, 55.0, -12.0]); // square, one octave down
+    doc.set_node_values(lvl1, vec![1.0, 0.0]);
+    doc.set_node_values(lvl2, vec![0.8, 0.0]);
+    doc.set_node_values(lvls, vec![0.7, 0.0]); // sub a touch under the mains
+    doc.set_node_values(ladder, vec![200.0, 0.6, 3000.0]); // low, resonant, EG-swept
+    doc.set_node_values(filt_eg, vec![0.005, 0.15, 0.3, 0.2]); // a "ping" that decays
+    doc.set_node_values(amp_eg, vec![0.005, 0.10, 0.8, 0.2]); // sustained while held
+    doc.set_node_values(vca, vec![0.0, 1.0]); // bias 0 → silent at rest
+    doc
+}
+
 #[cfg(test)]
 mod tests {
     use vb_core::{Graph, GraphNode, Port, ProcessContext};
@@ -218,6 +321,79 @@ mod tests {
         assert!(
             out.iter().any(|&s| s.abs() > 0.001),
             "a held note must make the default patch audible"
+        );
+    }
+
+    #[test]
+    fn minitaur_patch_is_silent_at_rest() {
+        let registry = Registry::with_builtins();
+        let doc = minitaur_patch(&registry);
+        let (mut engine, sink) =
+            engine_from_doc(&doc, &registry, &BuildContext::default(), 256).expect("compiles");
+        let sink = sink.expect("terminal vca is the sink");
+        let mut peak = 0.0_f32;
+        for _ in 0..8 {
+            let out = process_once(&mut engine, sink);
+            assert!(out.iter().all(|s| s.is_finite()));
+            peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        assert!(
+            peak < 1e-6,
+            "minitaur must be silent until a note plays: {peak}"
+        );
+    }
+
+    #[test]
+    fn minitaur_patch_opens_on_a_note_as_a_bass() {
+        let registry = Registry::with_builtins();
+        let doc = minitaur_patch(&registry);
+        let ctx = BuildContext::default();
+        ctx.notes.note_on(40, 110); // ~82 Hz, a low bass note
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("compiles");
+        let sink = sink.expect("terminal vca is the sink");
+        // Let both envelopes open across a few blocks.
+        let mut peak = 0.0_f32;
+        for _ in 0..8 {
+            let out = process_once(&mut engine, sink);
+            assert!(out.iter().all(|s| s.is_finite()));
+            peak = peak.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        assert!(
+            peak > 0.01,
+            "a held note must make the minitaur audible: {peak}"
+        );
+    }
+
+    #[test]
+    fn minitaur_patch_tracks_the_played_note_pitch() {
+        // The whole voice is pitch-tracking: a higher note produces a higher output
+        // frequency (more zero crossings over a settled tail).
+        let registry = Registry::with_builtins();
+        let doc = minitaur_patch(&registry);
+        let crossings_for = |note: u8| {
+            let ctx = BuildContext::default();
+            ctx.notes.note_on(note, 110);
+            let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("compiles");
+            let sink = sink.expect("sink");
+            let mut last = Vec::new();
+            for _ in 0..6 {
+                last = engine
+                    .node_output(sink)
+                    .and_then(|b| b.channel(0))
+                    .map(<[f32]>::to_vec)
+                    .unwrap_or_default();
+                engine.process(&ProcessContext {
+                    sample_rate: 48_000.0,
+                    frames: 512,
+                });
+            }
+            last.windows(2)
+                .filter(|w| (w[0] <= 0.0) != (w[1] <= 0.0))
+                .count()
+        };
+        assert!(
+            crossings_for(64) > crossings_for(40),
+            "a higher note must ring at a higher pitch"
         );
     }
 
@@ -305,6 +481,25 @@ mod tests {
         assert!(
             out.iter().all(|&s| s.abs() < 1e-6),
             "a preset's stored gain=0 must stay silent across a RON round trip"
+        );
+    }
+}
+
+#[cfg(test)]
+mod minitaur_example {
+    /// `examples/minitaur.ron` is generated from `minitaur_patch()`; this keeps the committed
+    /// file in lock-step with the builder (regenerate the file if this fails).
+    #[test]
+    fn the_committed_ron_matches_the_builder() {
+        let reg = vb_nodes::Registry::with_builtins();
+        let expected = vb_project::to_ron(&super::minitaur_patch(&reg)).expect("serialises");
+        let committed = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../examples/minitaur.ron"
+        ));
+        assert_eq!(
+            committed, expected,
+            "examples/minitaur.ron is out of sync with minitaur_patch() — regenerate it"
         );
     }
 }

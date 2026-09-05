@@ -549,10 +549,17 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   LFO, bare `add` mixer) with the gap list and the target graph. No new DSP nodes needed —
   `attenuvert` already covers the filter-EG amount, LFO depth, and per-osc level. Baseline
   locked by a `minitaur_is_silent_at_rest_and_sings_on_a_note` test ([#204](https://github.com/ice1x/VST_bomb/issues/204)) 🧪
-- [ ] 000163 — **Faithful Minitaur voice** — filter envelope with amount (via `attenuvert`)
-  into the ladder cutoff, a separate amp envelope, LFO → cutoff/pitch with depth, a leveled
-  oscillator mix, glide, all with pinned parameter values (000134); tests: silent at rest,
-  audible on a note, bass-weighted, glide slews pitch ([#205](https://github.com/ice1x/VST_bomb/issues/205))
+- [x] 000163 — **Faithful Minitaur voice** — `vb_engine::minitaur_patch()` (from which
+  `examples/minitaur.ron` is generated, kept in sync by an anti-drift test): **separate filter
+  and amp envelopes**, a **leveled oscillator mix** (per-osc `attenuvert`), glide, pinned
+  values; tests assert silent at rest, audible + bass on a note, and pitch tracking. The LFO is
+  split out to 000167 — routing it to cutoff needs a control-rate mixer (`add`/`attenuvert` are
+  audio-typed, and `Audio` is not compatible with `Control`) ([#205](https://github.com/ice1x/VST_bomb/issues/205)) 🧪
+- [ ] 000167 — 🧩 **Control-rate mixer node** (CV `add`) + wire the **Minitaur LFO** — a
+  `Control`-typed summer so two CV sources (filter envelope + LFO·depth) can drive the ladder
+  cutoff; then add the `lfo → attenuvert(depth) → cv-mix ← filter-EG` route to
+  `minitaur_patch()`. Enables gap 2 from [docs/synths/minitaur.md](docs/synths/minitaur.md)
+  ([#211](https://github.com/ice1x/VST_bomb/issues/211))
 - [ ] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` and the
   editor's starting patch become the Minitaur voice, still silent-until-note; update the
   affected engine/standalone/editor tests ([#206](https://github.com/ice1x/VST_bomb/issues/206))
@@ -562,7 +569,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   ([#207](https://github.com/ice1x/VST_bomb/issues/207))
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000167, …); split a large task into 🧩 subtasks with
+the end with a new global number (000168, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

@@ -15,7 +15,9 @@
 mod builder;
 mod headless;
 
-pub use builder::{default_patch, engine_from_doc, engine_from_doc_with_values, BuildError};
+pub use builder::{
+    default_patch, engine_from_doc, engine_from_doc_with_values, minitaur_patch, BuildError,
+};
 pub use headless::HeadlessSynth;
 
 // The browser audio binding compiles only for wasm32; the native build never sees it.

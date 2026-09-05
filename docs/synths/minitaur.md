@@ -60,14 +60,27 @@ test.
 3. **Bare mixer.** `add` sums the oscillators equally. Give each osc a **level** so the
    osc/sub balance is tunable.
 
-## No new DSP nodes required
+## What 000163 delivers, and one constraint found
 
-Every building block already exists: `pitch-osc`, `glide`, `ladder`, `sub`-style square via a
-`pitch-osc`, `adsr`, `vca`, `lfo`, `add`, and crucially **`attenuvert`** (`out = in·scale +
-offset`) — the CV utility that provides the **filter-EG amount**, the **LFO depth**, and the
-**per-oscillator level** (scale each osc before the sum). So 000163 is assembly + tuning, not
-new nodes; 000164 then points `vb_engine::default_patch` (and the editor's starting patch) at
-this voice.
+The faithful voice — `vb_engine::minitaur_patch()`, from which `examples/minitaur.ron` is
+generated — closes gaps 1 and 3:
+
+- **Two envelopes:** a filter `adsr` → `ladder.cutoff` (scaled by the ladder's `amount_hz`)
+  and a separate amp `adsr` → `vca.cv`. No more shared contour.
+- **Leveled oscillator mix:** each oscillator through its own `attenuvert` (osc1 = 1.0,
+  osc2 = 0.8, sub = 0.7) before the `add` sum.
+- Glide, silent-until-note (VCA `bias = 0`) preserved.
+
+**Constraint (gap 2 deferred):** the LFO → cutoff route needs to *sum* the LFO with the filter
+envelope into the single cutoff CV input, but the summing/scaling utilities (`add`,
+`attenuvert`) are **audio-typed** (`SignalType::Audio`), and `Audio` is not `compatible_with`
+`Control`, so a control-rate signal cannot pass through them. There is no control-rate mixer
+node yet. The LFO is therefore **deferred** to its own subtask (add a control-rate mixer /
+CV `add`, then route `lfo → attenuvert(depth) → cv-mix ← filter-EG → ladder.cutoff`). The
+delivered voice is a complete two-envelope Minitaur bass without it.
+
+000164 then points `vb_engine::default_patch` (and the editor's starting patch) at
+`minitaur_patch()`.
 
 ## Target graph (for 000163)
 
