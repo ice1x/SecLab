@@ -560,9 +560,13 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   cutoff; then add the `lfo → attenuvert(depth) → cv-mix ← filter-EG` route to
   `minitaur_patch()`. Enables gap 2 from [docs/synths/minitaur.md](docs/synths/minitaur.md)
   ([#211](https://github.com/ice1x/VST_bomb/issues/211))
-- [ ] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` and the
-  editor's starting patch become the Minitaur voice, still silent-until-note; update the
-  affected engine/standalone/editor tests ([#206](https://github.com/ice1x/VST_bomb/issues/206))
+- [x] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` delegates to
+  `minitaur_patch`, so the plugin/DAW ships the Minitaur bass; the editor's starting patch
+  loads the same voice from the committed `examples/minitaur.ron` (auto-laid-out), so the
+  standalone opens on it too — both silent-until-note. Fixed a real bug found here:
+  `PatchView::apply_doc` was resetting every knob to its registry default on load (a preset's
+  VCA `bias 0` sprang open and droned) — it now carries stored per-node values. Engine/
+  standalone/editor tests updated ([#206](https://github.com/ice1x/VST_bomb/issues/206)) 🧪
 - [ ] 000165 — **UI polish for factory patches** — inspector parameter labels/ranges/units
   for the voice's nodes, palette node-category grouping, and a "load factory patch"
   affordance to recall the Minitaur (and future clones); scope firmed during 000163/000164

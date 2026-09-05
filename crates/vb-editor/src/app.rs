@@ -11,7 +11,11 @@
 //! `vb-standalone` embeds it and keeps a live audio engine in sync with the patch.
 
 use egui::{Align2, Color32, CornerRadius, FontId, Pos2, Rect, Sense, Stroke, Ui, Vec2};
-use vb_core::{GraphNode, Parameter, Port, PortDirection, PortId, SignalType};
+use vb_core::{Parameter, PortDirection, PortId};
+// Only the test-only `sample_wiring_patch` and the wiring tests hand-build nodes now that the
+// demo patch is loaded from RON.
+#[cfg(test)]
+use vb_core::{GraphNode, Port, SignalType};
 
 use vb_nodes::Registry;
 
@@ -204,10 +208,26 @@ impl Default for EditorApp {
     }
 }
 
-/// Starter content so the canvas isn't empty: the same oscillator → filter → gain
-/// shape the standalone plays. Parameters come from the registry so the inspector has
-/// something real to edit; the filter keeps an extra control input for wiring demos.
+/// Starter content so the canvas isn't empty: the **Moog Minitaur** voice the plugin also
+/// ships as its default (000164), loaded from the committed `examples/minitaur.ron` (generated
+/// from `vb_engine::minitaur_patch`) and auto-laid-out by [`PatchView::apply_doc`]. Keeping the
+/// editor's starting patch and the plugin default the *same* voice is what the user asked for;
+/// it is note-gated, so the standalone is silent until a note plays.
 fn demo_patch(registry: &Registry) -> PatchView {
+    const MINITAUR_RON: &str = include_str!("../../../examples/minitaur.ron");
+    let mut patch = PatchView::new();
+    if let Ok(doc) = vb_project::from_ron(MINITAUR_RON) {
+        patch.apply_doc(&doc, registry);
+    }
+    // Seeding is not a user edit: undo must not walk back into an empty canvas.
+    patch.clear_history();
+    patch
+}
+
+/// The old hand-built demo, kept only for the wiring/param tests that need a small,
+/// known-shape patch (osc → filter → gain) independent of the shipped Minitaur voice.
+#[cfg(test)]
+fn sample_wiring_patch(registry: &Registry) -> PatchView {
     let params_of = |kind: &str| registry.get(kind).map(|d| d.params()).unwrap_or_default();
     let mut patch = PatchView::new();
     let osc = patch.add_node_with_params(
@@ -1713,14 +1733,10 @@ mod tests {
     #[test]
     fn the_demo_patch_is_on_the_canvas_and_wired() {
         let app = EditorApp::new();
-        // osc, filter, vca, gain + midi-in, adsr (the note-gate chain that keeps it silent
-        // until a note plays).
-        assert_eq!(app.patch().graph().node_count(), 6);
-        assert_eq!(
-            app.patch().graph().edges().len(),
-            5,
-            "osc→filter→vca→gain, and midi→adsr→vca.cv"
-        );
+        // The starting patch is the Minitaur voice (the plugin default): midi-in, glide,
+        // 3 pitch-osc, 3 attenuvert levels, 2 add mixers, ladder, 2 adsr, vca = 14 nodes.
+        assert_eq!(app.patch().graph().node_count(), 14);
+        assert_eq!(app.patch().graph().edges().len(), 17);
         assert_eq!(app.patch().selected(), None);
     }
 
@@ -1898,10 +1914,11 @@ mod tests {
     #[test]
     fn the_demo_patch_params_come_from_the_registry() {
         let app = EditorApp::new();
+        // The Minitaur voice's oscillators are pitch-tracking (`pitch-osc`).
         let osc = app
             .patch()
             .draw_order()
-            .find(|(_, n, _)| n.kind == "oscillator")
+            .find(|(_, n, _)| n.kind == "pitch-osc")
             .map(|(id, _, _)| id)
             .unwrap();
         let names: Vec<_> = app
@@ -1910,12 +1927,15 @@ mod tests {
             .iter()
             .map(|s| s.param.name.clone())
             .collect();
-        assert_eq!(names, vec!["waveform", "freq_hz"]);
+        assert_eq!(names, vec!["waveform", "base_hz", "detune_semitones"]);
     }
 
     #[test]
     fn dragging_a_wire_reports_drop_target_validity_through_the_camera() {
         let mut app = EditorApp::new();
+        // Use the small known-shape wiring patch (osc → filter → gain), not the shipped
+        // Minitaur voice, so this test targets stable node kinds/positions.
+        app.patch = sample_wiring_patch(&app.registry);
         app.pan(Vec2::new(-15.0, 30.0));
         app.zoom(Pos2::new(80.0, 40.0), 1.4);
         let s = NodeStyle::default();
@@ -1964,6 +1984,8 @@ mod tests {
     #[test]
     fn a_wire_can_be_dragged_between_ports_through_the_camera() {
         let mut app = EditorApp::new();
+        // Small known-shape wiring patch (has a `gain` with a free output to drag from).
+        app.patch = sample_wiring_patch(&app.registry);
         app.pan(Vec2::new(25.0, 40.0));
         app.zoom(Pos2::new(10.0, 10.0), 1.3);
 
@@ -2102,6 +2124,8 @@ mod tests {
     #[test]
     fn clicking_a_node_selects_it_through_the_camera() {
         let mut app = EditorApp::new();
+        // Known-shape patch: the oscillator sits at canvas (0, 0) so the click math is stable.
+        app.patch = sample_wiring_patch(&app.registry);
         // Pan and zoom first so the screen→canvas mapping is non-trivial.
         app.pan(Vec2::new(37.0, -12.0));
         app.zoom(Pos2::new(64.0, 64.0), 1.5);
