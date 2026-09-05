@@ -346,10 +346,15 @@ impl PatchView {
                 .get(&entry.node.kind)
                 .map(vb_nodes::NodeDescriptor::params)
                 .unwrap_or_default();
+            // Carry the document's STORED per-node values (a preset pins its sound); fall
+            // back to the registry default only where the document has no value for a slot.
+            // Without this, loading/importing any patch would reset every knob to default —
+            // e.g. a VCA stored biased shut (bias 0) would spring open and drone.
             let slots = params
                 .into_iter()
-                .map(|param| ParamSlot {
-                    value: param.default,
+                .enumerate()
+                .map(|(i, param)| ParamSlot {
+                    value: entry.values.get(i).copied().unwrap_or(param.default),
                     widget: default_widget(&param),
                     param,
                 })
@@ -1186,6 +1191,33 @@ mod tests {
         let amp = g.add_node(gain());
         g.connect(osc, PortId(0), amp, PortId(0)).unwrap();
         ProjectDoc::from_graph(&g)
+    }
+
+    #[test]
+    fn apply_doc_preserves_stored_parameter_values() {
+        // Regression: a preset pins its sound with stored per-node values. apply_doc used to
+        // reset every slot to the registry default, so a VCA stored biased shut (bias 0)
+        // would spring open and drone once loaded. It must carry the stored values through.
+        let registry = Registry::with_builtins();
+        let mut g = Graph::new();
+        let vca = g.add_node(registry.graph_node("vca").expect("builtin"));
+        let mut doc = ProjectDoc::from_graph(&g);
+        doc.set_node_values(vca, vec![0.0, 1.0]); // bias 0 (registry default is 1.0), amount 1
+
+        let mut patch = PatchView::new();
+        assert!(patch.apply_doc(&doc, &registry));
+
+        let id = patch.graph().node_ids().next().expect("the vca");
+        let bias = patch
+            .params(id)
+            .iter()
+            .find(|s| s.param.name == "bias")
+            .expect("vca has a bias param")
+            .value;
+        assert_eq!(
+            bias, 0.0,
+            "apply_doc must carry stored values, not reset knobs to defaults"
+        );
     }
 
     #[test]
