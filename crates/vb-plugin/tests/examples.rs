@@ -142,6 +142,40 @@ fn ladder_bass_is_silent_at_rest_and_sings_on_a_note() {
 }
 
 #[test]
+fn minitaur_is_silent_at_rest_and_sings_on_a_note() {
+    // The Minitaur factory patch — the voice slated to become the default synth (Epic 14).
+    // Baseline behaviour the faithful rebuild (000163) must preserve: a note-gated mono bass
+    // that is silent until played (stored VCA bias = 0) and audible once a note opens the
+    // envelope. See docs/synths/minitaur.md.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/minitaur.ron");
+    let doc = vb_project::open_ron(ron).expect("minitaur loads");
+
+    let peak = |ctx: &BuildContext| {
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, ctx, 256).expect("builds");
+        let sink = sink.expect("has a sink");
+        let mut p = 0.0_f32;
+        for _ in 0..8 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 256,
+            });
+            let out = engine.node_output(sink).and_then(|b| b.channel(0)).unwrap();
+            p = p.max(out.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        p
+    };
+
+    let at_rest = peak(&BuildContext::default());
+    assert!(at_rest < 1e-6, "minitaur must be silent at rest: {at_rest}");
+
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(40, 100); // ~82 Hz — a low bass note
+    let on_note = peak(&ctx);
+    assert!(on_note > 0.01, "minitaur must sound on a note: {on_note}");
+}
+
+#[test]
 fn mono_lead_tracks_the_played_note_pitch() {
     // The mono-lead factory patch is playable: its pitch-tracking oscillator follows
     // midi-in.pitch_hz, so different notes come out at different pitches. Assert the

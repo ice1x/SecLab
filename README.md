@@ -544,9 +544,11 @@ shake-out. Most building blocks exist (incl. `attenuvert` for CV amount), so thi
 assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
 [#203](https://github.com/ice1x/VST_bomb/issues/203).
 
-- [ ] 000162 — **Minitaur voice spec & fidelity audit** — document the target voice vs. the
-  current `examples/minitaur.ron` (single envelope, no LFO, bare `add` mixer) and produce the
-  gap list; spawn a node subtask only if something is genuinely missing ([#204](https://github.com/ice1x/VST_bomb/issues/204))
+- [x] 000162 — **Minitaur voice spec & fidelity audit** — [docs/synths/minitaur.md](docs/synths/minitaur.md):
+  target voice vs. the current `examples/minitaur.ron` (one shared envelope for filter+amp, no
+  LFO, bare `add` mixer) with the gap list and the target graph. No new DSP nodes needed —
+  `attenuvert` already covers the filter-EG amount, LFO depth, and per-osc level. Baseline
+  locked by a `minitaur_is_silent_at_rest_and_sings_on_a_note` test ([#204](https://github.com/ice1x/VST_bomb/issues/204)) 🧪
 - [ ] 000163 — **Faithful Minitaur voice** — filter envelope with amount (via `attenuvert`)
   into the ladder cutoff, a separate amp envelope, LFO → cutoff/pitch with depth, a leveled
   oscillator mix, glide, all with pinned parameter values (000134); tests: silent at rest,
