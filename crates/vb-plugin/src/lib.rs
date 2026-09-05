@@ -649,10 +649,31 @@ mod tests {
         assert_eq!(vel, 127);
     }
 
+    /// A small, fixed voice (oscillator → svf → vca, note-gated) with a KNOWN parameter
+    /// shape — 10 knobs across 4 param-bearing nodes — so the parameter-mapping tests assert
+    /// the mechanism independently of whatever `default_patch` currently is (it became the
+    /// larger Minitaur voice in 000164).
+    fn sample_voice_doc(registry: &Registry) -> vb_project::ProjectDoc {
+        use vb_core::PortId;
+        let mut g = vb_core::Graph::new();
+        let osc = g.add_node(registry.graph_node("oscillator").expect("builtin"));
+        let svf = g.add_node(registry.graph_node("svf").expect("builtin"));
+        let midi = g.add_node(registry.graph_node("midi-in").expect("builtin"));
+        let env = g.add_node(registry.graph_node("adsr").expect("builtin"));
+        let vca = g.add_node(registry.graph_node("vca").expect("builtin"));
+        g.connect(osc, PortId(0), svf, PortId(0)).unwrap();
+        g.connect(svf, PortId(0), vca, PortId(0)).unwrap();
+        g.connect(midi, PortId(0), env, PortId(0)).unwrap();
+        g.connect(env, PortId(0), vca, PortId(1)).unwrap();
+        let mut doc = vb_project::ProjectDoc::from_graph(&g);
+        doc.set_node_values(vca, vec![0.0, 1.0]);
+        doc
+    }
+
     #[test]
     fn params_mirror_the_patch_and_have_stable_unique_ids() {
         let registry = Registry::with_builtins();
-        let doc = default_patch(&registry);
+        let doc = sample_voice_doc(&registry);
         let params = VstBombParams::for_doc(&doc, &registry);
 
         // osc (waveform, freq_hz) + svf (cutoff_hz, q) + adsr (a, d, s, r) +
@@ -670,7 +691,7 @@ mod tests {
     #[test]
     fn value_snapshot_groups_by_node_in_registry_order() {
         let registry = Registry::with_builtins();
-        let doc = default_patch(&registry);
+        let doc = sample_voice_doc(&registry);
         let params = VstBombParams::for_doc(&doc, &registry);
         let values = params.values_by_node();
 
