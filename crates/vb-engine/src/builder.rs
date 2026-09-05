@@ -109,49 +109,13 @@ pub fn engine_from_doc_with_values(
     Ok((engine, sink))
 }
 
-/// The patch the plugin ships with: a note-gated voice, built entirely from the
-/// registry so it always matches the current node set.
-///
-/// Audio path `oscillator → svf → vca.in`; control path `midi-in.gate → adsr → vca.cv`.
-/// The VCA is stored biased shut (`bias = 0`, so `out = in · cv`), so the envelope is
-/// the only thing that opens it — the instrument is **silent until a note plays**
-/// instead of droning the instant the plugin loads.
+/// The patch the plugin ships with — **the Moog Minitaur mono-bass** (Epic 14 / 000164): a
+/// recognisable, musical default so the instrument makes a real sound the moment it loads,
+/// not a generic test tone. It is note-gated and silent until a note plays. See
+/// [`minitaur_patch`] for the voice and `docs/synths/minitaur.md` for the design.
 #[must_use]
 pub fn default_patch(registry: &Registry) -> ProjectDoc {
-    use vb_core::PortId;
-
-    let mut graph = vb_core::Graph::new();
-    let osc = graph.add_node(registry.graph_node("oscillator").expect("builtin"));
-    let svf = graph.add_node(registry.graph_node("svf").expect("builtin"));
-    let midi = graph.add_node(registry.graph_node("midi-in").expect("builtin"));
-    let env = graph.add_node(registry.graph_node("adsr").expect("builtin"));
-    let vca = graph.add_node(registry.graph_node("vca").expect("builtin"));
-
-    // Audio path: oscillator → filter → VCA audio input (port 0).
-    graph
-        .connect(osc, PortId(0), svf, PortId(0))
-        .expect("osc → svf");
-    graph
-        .connect(svf, PortId(0), vca, PortId(0))
-        .expect("svf → vca.in");
-    // Control path: note gate → envelope → VCA control input (port 1).
-    graph
-        .connect(midi, PortId(0), env, PortId(0))
-        .expect("midi.gate → adsr.gate");
-    graph
-        .connect(env, PortId(0), vca, PortId(1))
-        .expect("adsr.level → vca.cv");
-
-    let mut doc = ProjectDoc::from_graph(&graph);
-    // Store the VCA biased shut (registry default is bias = 1, i.e. always open).
-    let vca_id = doc
-        .nodes
-        .iter()
-        .find(|e| e.node.kind == "vca")
-        .expect("vca in default patch")
-        .id;
-    doc.set_node_values(vca_id, vec![0.0, 1.0]); // bias = 0, amount = 1
-    doc
+    minitaur_patch(registry)
 }
 
 /// A faithful Moog Minitaur mono-bass voice (Epic 14 / 000163): two saw oscillators plus a
