@@ -528,9 +528,39 @@ values), so a preset can pin exact knob settings, not just a graph.
   `.component`'s codes and runs Apple's `auval` (authoritative AU check: format negotiation,
   render at all sample rates, params, MIDI); a non-blocking CI `au validate` job builds the
   AUv2 and runs it, so the VST3/AU export is proven, not just the CLAP (`auval_args` unit-tested) 🧪
+- [ ] 000166 — **Behringer Edge** clone (analog percussion): a mono percussion voice
+  (2 oscillators + noise → resonant filter → fast AR/AHR envelope → VCA), the second
+  Behringer requested alongside Neutron (000139). Different family from Neutron — kick/tom/
+  zap percussion, not bass/lead. Building blocks present (`noise`, `ahr`, `ladder`/`svf`,
+  `vca`). Issue [#208](https://github.com/ice1x/VST_bomb/issues/208)
+
+### Epic 14 — Minitaur as the default synth
+
+Make the plugin/standalone load a recognisable **Moog Minitaur mono-bass** as its default
+sound (instead of the generic gated osc→filter→vca voice), using the clone as the vehicle to
+finish the DSP modules and UI it exercises. Minitaur is the **simplest** Epic-13 clone (mono,
+2 osc + sub, one ladder filter, envelopes, LFO, glide), so it is the right default and a good
+shake-out. Most building blocks exist (incl. `attenuvert` for CV amount), so this is largely
+assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
+[#203](https://github.com/ice1x/VST_bomb/issues/203).
+
+- [ ] 000162 — **Minitaur voice spec & fidelity audit** — document the target voice vs. the
+  current `examples/minitaur.ron` (single envelope, no LFO, bare `add` mixer) and produce the
+  gap list; spawn a node subtask only if something is genuinely missing ([#204](https://github.com/ice1x/VST_bomb/issues/204))
+- [ ] 000163 — **Faithful Minitaur voice** — filter envelope with amount (via `attenuvert`)
+  into the ladder cutoff, a separate amp envelope, LFO → cutoff/pitch with depth, a leveled
+  oscillator mix, glide, all with pinned parameter values (000134); tests: silent at rest,
+  audible on a note, bass-weighted, glide slews pitch ([#205](https://github.com/ice1x/VST_bomb/issues/205))
+- [ ] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` and the
+  editor's starting patch become the Minitaur voice, still silent-until-note; update the
+  affected engine/standalone/editor tests ([#206](https://github.com/ice1x/VST_bomb/issues/206))
+- [ ] 000165 — **UI polish for factory patches** — inspector parameter labels/ranges/units
+  for the voice's nodes, palette node-category grouping, and a "load factory patch"
+  affordance to recall the Minitaur (and future clones); scope firmed during 000163/000164
+  ([#207](https://github.com/ice1x/VST_bomb/issues/207))
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000162, …); split a large task into 🧩 subtasks with
+the end with a new global number (000167, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
