@@ -132,6 +132,28 @@ impl AssistantHost {
     }
 }
 
+/// The physical unit a parameter is measured in, inferred from its name suffix (the registry
+/// encodes units by convention: `cutoff_hz`, `attack_s`, `glide_ms`, `threshold_db`,
+/// `detune_semitones`). Returns `""` for unitless parameters (mix, resonance, bias, …). The
+/// inspector shows it next to the parameter name so a knob reads in real terms.
+fn param_unit(name: &str) -> &'static str {
+    if name.ends_with("_hz") {
+        "Hz"
+    } else if name.ends_with("_ms") {
+        "ms"
+    } else if name.ends_with("_db") {
+        "dB"
+    } else if name.ends_with("_semitones") {
+        "st"
+    } else if name.ends_with("_s") {
+        "s"
+    } else if name == "bpm" {
+        "BPM"
+    } else {
+        ""
+    }
+}
+
 /// Root application state for the node editor window.
 pub struct EditorApp {
     camera: Camera,
@@ -952,10 +974,17 @@ impl EditorApp {
         let slot = &slots[i];
         let theme = self.theme; // Copy — frees `self` for the set_param calls below.
 
-        // Header: parameter name + the widget-type picker.
+        // Header: parameter name (+ unit) + its range + the widget-type picker, so a knob
+        // reads as "what it controls, in what unit, over what range" rather than a bare dial.
         let mut widget = slot.widget;
         ui.horizontal(|ui| {
-            ui.strong(&slot.param.name);
+            let unit = param_unit(&slot.param.name);
+            if unit.is_empty() {
+                ui.strong(&slot.param.name);
+            } else {
+                ui.strong(format!("{} ({unit})", slot.param.name));
+            }
+            ui.weak(format!("[{}–{}]", slot.param.min, slot.param.max));
             egui::ComboBox::from_id_salt((id, i, "widget"))
                 .width(72.0)
                 .selected_text(widget.label())
@@ -1763,6 +1792,21 @@ mod tests {
         // Toggling back returns the exact dark palette.
         app.set_theme(app.theme().kind.toggled());
         assert_eq!(app.theme(), Theme::dark());
+    }
+
+    #[test]
+    fn param_unit_reads_the_name_suffix() {
+        assert_eq!(param_unit("cutoff_hz"), "Hz");
+        assert_eq!(param_unit("freq_hz"), "Hz");
+        assert_eq!(param_unit("attack_s"), "s");
+        assert_eq!(param_unit("glide_ms"), "ms");
+        assert_eq!(param_unit("threshold_db"), "dB");
+        assert_eq!(param_unit("detune_semitones"), "st");
+        assert_eq!(param_unit("bpm"), "BPM");
+        // Unitless parameters get no unit.
+        assert_eq!(param_unit("resonance"), "");
+        assert_eq!(param_unit("mix"), "");
+        assert_eq!(param_unit("bias"), "");
     }
 
     #[test]
