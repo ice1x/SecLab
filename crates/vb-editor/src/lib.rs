@@ -12,6 +12,7 @@ pub mod app;
 #[cfg(feature = "assistant")]
 pub mod assistant_panel;
 pub mod camera;
+pub mod factory;
 pub mod layout;
 pub mod library;
 pub mod library_panel;
@@ -32,6 +33,7 @@ pub use app::EditorApp;
 #[cfg(feature = "assistant")]
 pub use assistant_panel::{assistant_panel_ui, AssistantAction};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
+pub use factory::{factory_patch, FactoryPatch, FACTORY_PATCHES};
 pub use layout::{hit_test, layout_node, NodeHit, NodeLayout, NodeStyle};
 pub use library::{
     library_from_module_dir, library_items_from_module_dir, LibraryBrowser, LibraryItem,

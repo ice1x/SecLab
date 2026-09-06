@@ -1041,6 +1041,7 @@ impl EditorApp {
             let half = Vec2::new(self.style.width * 0.5, self.style.title_height);
             self.patch.add_macro(self.spawn_at - half);
         }
+        self.factory_ui(ui);
         self.modules_ui(ui);
         self.library_ui(ui);
         #[cfg(feature = "assistant")]
@@ -1183,6 +1184,40 @@ impl EditorApp {
                 "no module named {name:?} in the library"
             ))),
         }
+    }
+
+    /// Replaces the whole canvas with the factory instrument patch named `name` (000165).
+    /// Returns `false` for an unknown name or a patch that fails to load (canvas unchanged).
+    /// The load carries no undo history, like [`Self::load_doc`].
+    pub fn load_factory_patch(&mut self, name: &str) -> bool {
+        let Some(patch) = crate::factory::factory_patch(name) else {
+            return false;
+        };
+        match vb_project::from_ron(patch.ron) {
+            Ok(doc) => self.load_doc(&doc),
+            Err(_) => false,
+        }
+    }
+
+    /// Renders the "factory patches" section: one button per built-in instrument (Minitaur,
+    /// Model D, Neutron, Edge, …). Clicking one loads it onto the canvas (replacing the
+    /// current patch), so a user can recall a recognisable starting point (000165).
+    fn factory_ui(&mut self, ui: &mut Ui) {
+        ui.collapsing("factory patches", |ui| {
+            let mut chosen: Option<&'static str> = None;
+            for patch in crate::factory::FACTORY_PATCHES {
+                if ui.button(patch.name).clicked() {
+                    chosen = Some(patch.name);
+                }
+            }
+            if let Some(name) = chosen {
+                self.module_status = Some(if self.load_factory_patch(name) {
+                    format!("loaded {name}")
+                } else {
+                    format!("failed to load {name}")
+                });
+            }
+        });
     }
 
     /// Renders the library section: a searchable, tag-filtered list of saved macro modules
@@ -2120,6 +2155,33 @@ mod tests {
         assert_eq!(app.library.visible().len(), 1, "the saved module is listed");
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn load_factory_patch_replaces_the_canvas_and_rejects_unknowns() {
+        let mut app = EditorApp::new();
+        // The starting canvas is already the Minitaur (17 nodes). Load a different factory
+        // instrument and the whole canvas is replaced.
+        assert!(app.load_factory_patch("Behringer Edge"), "Edge loads");
+        assert_eq!(
+            app.patch().graph().node_count(),
+            8,
+            "the canvas is now the Edge percussion voice"
+        );
+        // A freshly loaded factory patch carries no undo history (like load_doc).
+        assert!(!app.patch().can_undo());
+
+        // An unknown name is a clean no-op.
+        let before = app.patch().graph().node_count();
+        assert!(!app.load_factory_patch("No Such Synth"));
+        assert_eq!(app.patch().graph().node_count(), before, "canvas untouched");
+    }
+
+    #[test]
+    fn the_editor_renders_with_the_factory_section_without_panicking() {
+        let mut app = EditorApp::new();
+        let ctx = egui::Context::default();
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
     }
 
     #[test]

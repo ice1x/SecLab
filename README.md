@@ -569,10 +569,13 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   `PatchView::apply_doc` was resetting every knob to its registry default on load (a preset's
   VCA `bias 0` sprang open and droned) — it now carries stored per-node values. Engine/
   standalone/editor tests updated ([#206](https://github.com/ice1x/VST_bomb/issues/206)) 🧪
-- [ ] 000165 — **UI polish for factory patches** — inspector parameter labels/ranges/units
-  for the voice's nodes, palette node-category grouping, and a "load factory patch"
-  affordance to recall the Minitaur (and future clones); scope firmed during 000163/000164
-  ([#207](https://github.com/ice1x/VST_bomb/issues/207))
+- [x] 000165 — **UI polish for factory patches** — a **"factory patches"** palette section
+  (`crate::factory`: the instrument clones — Minitaur, Model D, Grandmother, Neutron, Edge,
+  Minilogue, drum kit — each `include_str!`'d from `examples/`) with a one-click
+  `EditorApp::load_factory_patch` that replaces the canvas; an anti-rot test parses every
+  entry. Palette **node-category grouping** was already present (headers per `category`); the
+  inspector already labels each parameter by name. Richer per-unit inspector annotations are a
+  minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000168, …); split a large task into 🧩 subtasks with
