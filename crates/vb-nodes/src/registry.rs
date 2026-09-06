@@ -258,6 +258,14 @@ fn audio_out(name: &'static str) -> Port {
     Port::output(name, SignalType::Audio)
 }
 
+fn control_in(name: &'static str) -> Port {
+    Port::input(name, SignalType::Control)
+}
+
+fn control_out(name: &'static str) -> Port {
+    Port::output(name, SignalType::Control)
+}
+
 /// The built-in node descriptors.
 fn builtins() -> Vec<NodeDescriptor> {
     vec![
@@ -433,6 +441,43 @@ fn builtins() -> Vec<NodeDescriptor> {
             "attenuvert",
             "math",
             || GraphNode::new("attenuvert", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Attenuvert::new(1.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("scale", -2.0, 2.0, 1.0),
+                    Parameter::new("offset", -1.0, 1.0, 0.0),
+                ]
+            },
+            |_, v| Box::new(Attenuvert::new(arg(v, 0, 1.0), arg(v, 1, 0.0))),
+        ),
+        // Control-rate twins of `add` / `attenuvert`: the audio-typed ones cannot carry a
+        // control signal (`Audio` is not `compatible_with` `Control`), so summing/scaling CV
+        // — e.g. an envelope + an LFO into a filter cutoff — needs these. Same processors,
+        // Control ports.
+        NodeDescriptor::new(
+            "cv-add",
+            "math",
+            || {
+                GraphNode::new(
+                    "cv-add",
+                    vec![control_in("a"), control_in("b")],
+                    vec![control_out("out")],
+                )
+            },
+            || Box::new(Add),
+            Vec::new,
+            |_, _| Box::new(Add),
+        ),
+        NodeDescriptor::new(
+            "cv-attenuvert",
+            "math",
+            || {
+                GraphNode::new(
+                    "cv-attenuvert",
+                    vec![control_in("in")],
+                    vec![control_out("out")],
+                )
+            },
             || Box::new(Attenuvert::new(1.0, 0.0)),
             || {
                 vec![
@@ -1477,6 +1522,41 @@ mod tests {
     use crate::midi::BuildContext;
     use std::collections::HashMap;
     use vb_core::{Engine, Graph, PortId, ProcessContext, Processor};
+
+    #[test]
+    fn cv_math_nodes_are_control_typed_and_sum_control_signals() {
+        let r = Registry::with_builtins();
+        for kind in ["cv-add", "cv-attenuvert"] {
+            let n = r.graph_node(kind).expect("registered");
+            assert!(
+                n.inputs
+                    .iter()
+                    .all(|p| p.signal == vb_core::SignalType::Control),
+                "{kind} inputs are Control"
+            );
+            assert!(
+                n.outputs
+                    .iter()
+                    .all(|p| p.signal == vb_core::SignalType::Control),
+                "{kind} outputs are Control"
+            );
+            assert!(r.processor(kind).is_some(), "{kind} builds a processor");
+        }
+        // A control source → cv-add → a control sink connects — the audio `add` would be a
+        // signal mismatch here (this is why the CV twins exist).
+        let mut g = Graph::new();
+        let lfo = g.add_node(r.graph_node("lfo").unwrap());
+        let cv_add = g.add_node(r.graph_node("cv-add").unwrap());
+        let ladder = g.add_node(r.graph_node("ladder").unwrap());
+        assert!(
+            g.connect(lfo, PortId(0), cv_add, PortId(0)).is_ok(),
+            "lfo → cv-add.a"
+        );
+        assert!(
+            g.connect(cv_add, PortId(0), ladder, PortId(1)).is_ok(),
+            "cv-add → ladder.cutoff"
+        );
+    }
 
     #[test]
     fn builtins_are_registered() {

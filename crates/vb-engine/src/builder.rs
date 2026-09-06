@@ -120,12 +120,10 @@ pub fn default_patch(registry: &Registry) -> ProjectDoc {
 
 /// A faithful Moog Minitaur mono-bass voice (Epic 14 / 000163): two saw oscillators plus a
 /// square sub through a **leveled** mixer (per-oscillator `attenuvert`) into a Moog **ladder**
-/// low-pass, with **separate filter and amp envelopes**. Glide on the pitch; **silent until a
-/// note** (VCA biased shut). See `docs/synths/minitaur.md`. This is the voice slated to become
-/// the default patch (000164).
-///
-/// (The LFO the hardware routes to cutoff is deferred — it needs a control-rate mixer to sum
-/// with the filter envelope, since `add`/`attenuvert` are audio-typed; tracked separately.)
+/// low-pass, with **separate filter and amp envelopes** and an **LFO** summed into the cutoff
+/// (through the control-rate `cv-attenuvert`/`cv-add`; its depth is off by default for a clean
+/// bass). Glide on the pitch; **silent until a note** (VCA biased shut). See
+/// `docs/synths/minitaur.md`. This is the plugin's default patch (000164).
 #[must_use]
 pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     use vb_core::PortId;
@@ -147,6 +145,9 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         filt_eg,
         amp_eg,
         vca,
+        lfo,
+        cv_depth,
+        cv_mix,
     ) = {
         let mut add = |kind: &str| g.add_node(registry.graph_node(kind).expect("builtin"));
         (
@@ -164,6 +165,9 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
             add("adsr"),
             add("adsr"),
             add("vca"),
+            add("lfo"),
+            add("cv-attenuvert"),
+            add("cv-add"),
         )
     };
 
@@ -194,12 +198,21 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         .expect("mix → ladder.in");
     g.connect(ladder, PortId(0), vca, PortId(0))
         .expect("ladder → vca.in");
-    // Filter path: gate → filter envelope → ladder cutoff CV (a SEPARATE contour from the
-    // amp — the Minitaur has two envelopes; the ladder's `amount_hz` scales this sweep).
+    // Filter path: the ladder cutoff CV is (filter envelope + LFO·depth), summed through the
+    // control-rate `cv-add` (the audio `add` can't carry CV). The filter EG is a SEPARATE
+    // contour from the amp — the Minitaur has two envelopes; the ladder's `amount_hz` scales
+    // the sweep. The LFO's depth is off by default (a clean bass); the routing lets the user
+    // dial in a filter wobble.
     g.connect(midi, PortId(0), filt_eg, PortId(0))
         .expect("gate → filtEG");
-    g.connect(filt_eg, PortId(0), ladder, PortId(1))
-        .expect("filtEG → ladder.cutoff");
+    g.connect(filt_eg, PortId(0), cv_mix, PortId(0))
+        .expect("filtEG → cv_mix.a");
+    g.connect(lfo, PortId(0), cv_depth, PortId(0))
+        .expect("lfo → cv_depth");
+    g.connect(cv_depth, PortId(0), cv_mix, PortId(1))
+        .expect("cv_depth → cv_mix.b");
+    g.connect(cv_mix, PortId(0), ladder, PortId(1))
+        .expect("cv_mix → ladder.cutoff");
     // Amp path: gate → amp envelope → VCA cv.
     g.connect(midi, PortId(0), amp_eg, PortId(0))
         .expect("gate → ampEG");
@@ -217,6 +230,8 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     doc.set_node_values(ladder, vec![200.0, 0.6, 3000.0]); // low, resonant, EG-swept
     doc.set_node_values(filt_eg, vec![0.005, 0.15, 0.3, 0.2]); // a "ping" that decays
     doc.set_node_values(amp_eg, vec![0.005, 0.10, 0.8, 0.2]); // sustained while held
+    doc.set_node_values(lfo, vec![3.0, 0.0, 5.0, 120.0, 2.0]); // triangle ~5 Hz
+    doc.set_node_values(cv_depth, vec![0.0, 0.0]); // LFO depth OFF by default (clean bass)
     doc.set_node_values(vca, vec![0.0, 1.0]); // bias 0 → silent at rest
     doc
 }

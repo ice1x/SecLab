@@ -367,6 +367,20 @@ Auto-generated from the registry — do not edit by hand.
   - `min` — range -1..1, default -1
   - `max` — range -1..1, default 1
 
+### cv-add
+
+- **Inputs:** `a` (control), `b` (control)
+- **Outputs:** `out` (control)
+- **Parameters:** _(none)_
+
+### cv-attenuvert
+
+- **Inputs:** `in` (control)
+- **Outputs:** `out` (control)
+- **Parameters:**
+  - `scale` — range -2..2, default 1
+  - `offset` — range -1..1, default 0
+
 ### gain
 
 - **Inputs:** `in` (audio)

@@ -71,13 +71,14 @@ generated — closes gaps 1 and 3:
   osc2 = 0.8, sub = 0.7) before the `add` sum.
 - Glide, silent-until-note (VCA `bias = 0`) preserved.
 
-**Constraint (gap 2 deferred):** the LFO → cutoff route needs to *sum* the LFO with the filter
-envelope into the single cutoff CV input, but the summing/scaling utilities (`add`,
-`attenuvert`) are **audio-typed** (`SignalType::Audio`), and `Audio` is not `compatible_with`
-`Control`, so a control-rate signal cannot pass through them. There is no control-rate mixer
-node yet. The LFO is therefore **deferred** to its own subtask (add a control-rate mixer /
-CV `add`, then route `lfo → attenuvert(depth) → cv-mix ← filter-EG → ladder.cutoff`). The
-delivered voice is a complete two-envelope Minitaur bass without it.
+**Gap 2 — LFO → cutoff (closed in 000167):** routing the LFO to the cutoff needs to *sum* it
+with the filter envelope into the single cutoff CV input, but the audio `add` / `attenuvert`
+are **audio-typed** (`SignalType::Audio`, not `compatible_with` `Control`), so they cannot
+carry a control signal. 000167 added their control-rate twins — **`cv-add`** and
+**`cv-attenuvert`** (same processors, `Control` ports) — and wired
+`lfo → cv-attenuvert(depth) → cv-add ← filter-EG → ladder.cutoff`. The LFO **depth is 0 by
+default** so the shipped bass is unchanged (clean), but the routing is there for the user to
+dial in a filter wobble.
 
 000164 then points `vb_engine::default_patch` (and the editor's starting patch) at
 `minitaur_patch()`.
