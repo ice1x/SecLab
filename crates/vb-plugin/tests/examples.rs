@@ -28,6 +28,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("minimoog", include_str!("../../../examples/minimoog.ron")),
     ("minitaur", include_str!("../../../examples/minitaur.ron")),
     ("neutron", include_str!("../../../examples/neutron.ron")),
+    ("edge", include_str!("../../../examples/edge.ron")),
     (
         "grandmother",
         include_str!("../../../examples/grandmother.ron"),
@@ -173,6 +174,52 @@ fn minitaur_is_silent_at_rest_and_sings_on_a_note() {
     ctx.notes.note_on(40, 100); // ~82 Hz — a low bass note
     let on_note = peak(&ctx);
     assert!(on_note > 0.01, "minitaur must sound on a note: {on_note}");
+}
+
+#[test]
+fn edge_is_a_percussive_hit_that_decays() {
+    // The Behringer Edge clone (analog percussion): tone + noise → resonant ladder → VCA gated
+    // by a one-shot AD envelope. A note fires a short HIT that decays back to near-silence even
+    // while held (unlike the sustained Minitaur) — that is what makes it percussion.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/edge.ron");
+    let doc = vb_project::open_ron(ron).expect("edge loads");
+
+    // Render `blocks` blocks after firing a note, returning (early peak, late peak).
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(48, 120);
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let block_peak = |engine: &mut vb_runtime::RtEngine| {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        engine
+            .node_output(sink)
+            .and_then(|b| b.channel(0))
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()))
+    };
+
+    // The attack (~2 ms) opens within the first blocks: the hit is loud.
+    let mut early = 0.0_f32;
+    for _ in 0..3 {
+        early = early.max(block_peak(&mut engine));
+    }
+    assert!(early > 0.05, "the hit must be audible: {early}");
+
+    // After the ~120 ms decay (~22 blocks) it has fallen back toward silence — sample the
+    // peak of the final block.
+    let mut late = 0.0_f32;
+    for _ in 0..40 {
+        late = block_peak(&mut engine);
+    }
+    assert!(
+        late < early * 0.2,
+        "the hit must decay (percussion): early {early}, late {late}"
+    );
 }
 
 #[test]
@@ -630,6 +677,7 @@ fn the_example_set_is_the_expected_manifest() {
             "minimoog",
             "minitaur",
             "neutron",
+            "edge",
             "grandmother",
             "maul",
             "minilogue",
