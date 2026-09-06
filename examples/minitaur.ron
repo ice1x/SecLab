@@ -367,6 +367,79 @@
                 1.0,
             ],
         ),
+        (
+            id: (14),
+            node: (
+                kind: "lfo",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                3.0,
+                0.0,
+                5.0,
+                120.0,
+                2.0,
+            ],
+        ),
+        (
+            id: (15),
+            node: (
+                kind: "cv-attenuvert",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.0,
+                0.0,
+            ],
+        ),
+        (
+            id: (16),
+            node: (
+                kind: "cv-add",
+                inputs: [
+                    (
+                        name: "a",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                    (
+                        name: "b",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
     ],
     edges: [
         (
@@ -455,6 +528,24 @@
         ),
         (
             from_node: (11),
+            from_port: (0),
+            to_node: (16),
+            to_port: (0),
+        ),
+        (
+            from_node: (14),
+            from_port: (0),
+            to_node: (15),
+            to_port: (0),
+        ),
+        (
+            from_node: (15),
+            from_port: (0),
+            to_node: (16),
+            to_port: (1),
+        ),
+        (
+            from_node: (16),
             from_port: (0),
             to_node: (10),
             to_port: (1),

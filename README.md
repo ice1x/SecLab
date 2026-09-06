@@ -555,11 +555,12 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   values; tests assert silent at rest, audible + bass on a note, and pitch tracking. The LFO is
   split out to 000167 — routing it to cutoff needs a control-rate mixer (`add`/`attenuvert` are
   audio-typed, and `Audio` is not compatible with `Control`) ([#205](https://github.com/ice1x/VST_bomb/issues/205)) 🧪
-- [ ] 000167 — 🧩 **Control-rate mixer node** (CV `add`) + wire the **Minitaur LFO** — a
-  `Control`-typed summer so two CV sources (filter envelope + LFO·depth) can drive the ladder
-  cutoff; then add the `lfo → attenuvert(depth) → cv-mix ← filter-EG` route to
-  `minitaur_patch()`. Enables gap 2 from [docs/synths/minitaur.md](docs/synths/minitaur.md)
-  ([#211](https://github.com/ice1x/VST_bomb/issues/211))
+- [x] 000167 — 🧩 **Control-rate math nodes** (`cv-add`, `cv-attenuvert`) + wire the **Minitaur
+  LFO** — the audio `add`/`attenuvert` can't carry CV (`Audio` ≠ `Control`), so added their
+  `Control`-typed twins (same processors, control ports) and routed
+  `lfo → cv-attenuvert(depth) → cv-add ← filter-EG → ladder.cutoff` in `minitaur_patch`; LFO
+  depth 0 by default (clean bass, wobble on demand). Closes gap 2 from
+  [docs/synths/minitaur.md](docs/synths/minitaur.md) ([#211](https://github.com/ice1x/VST_bomb/issues/211)) 🧪
 - [x] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` delegates to
   `minitaur_patch`, so the plugin/DAW ships the Minitaur bass; the editor's starting patch
   loads the same voice from the committed `examples/minitaur.ron` (auto-laid-out), so the
