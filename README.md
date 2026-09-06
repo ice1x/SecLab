@@ -528,11 +528,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   `.component`'s codes and runs Apple's `auval` (authoritative AU check: format negotiation,
   render at all sample rates, params, MIDI); a non-blocking CI `au validate` job builds the
   AUv2 and runs it, so the VST3/AU export is proven, not just the CLAP (`auval_args` unit-tested) 🧪
-- [ ] 000166 — **Behringer Edge** clone (analog percussion): a mono percussion voice
-  (2 oscillators + noise → resonant filter → fast AR/AHR envelope → VCA), the second
-  Behringer requested alongside Neutron (000139). Different family from Neutron — kick/tom/
-  zap percussion, not bass/lead. Building blocks present (`noise`, `ahr`, `ladder`/`svf`,
-  `vca`). Issue [#208](https://github.com/ice1x/VST_bomb/issues/208)
+- [x] 000166 — **Behringer Edge** clone (analog percussion): a mono percussion voice — the
+  second Behringer requested alongside Neutron (000139). Shipped as `examples/edge.ron`: a
+  pitch-tracking tone + `noise` → resonant `ladder` → note-gated `vca`, the amp driven by a
+  one-shot `ad` envelope so a note fires a short **hit that decays** (kick/tom/zap), unlike a
+  sustained lead/bass. Built from existing nodes; wired into the examples manifest with a
+  `edge_is_a_percussive_hit_that_decays` test ([#208](https://github.com/ice1x/VST_bomb/issues/208)) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
