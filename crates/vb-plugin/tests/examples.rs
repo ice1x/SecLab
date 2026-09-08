@@ -730,6 +730,7 @@ fn the_example_set_is_the_expected_manifest() {
             "minitaur",
             "neutron",
             "edge",
+            "tb303",
             "grandmother",
             "maul",
             "minilogue",
