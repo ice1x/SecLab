@@ -29,6 +29,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("minitaur", include_str!("../../../examples/minitaur.ron")),
     ("neutron", include_str!("../../../examples/neutron.ron")),
     ("edge", include_str!("../../../examples/edge.ron")),
+    ("tb303", include_str!("../../../examples/tb303.ron")),
     (
         "grandmother",
         include_str!("../../../examples/grandmother.ron"),
@@ -219,6 +220,57 @@ fn edge_is_a_percussive_hit_that_decays() {
     assert!(
         late < early * 0.2,
         "the hit must decay (percussion): early {early}, late {late}"
+    );
+}
+
+#[test]
+fn tb303_is_silent_at_rest_squelches_on_a_note_and_decays() {
+    // The acid-bass factory patch: a single saw through a high-resonance ladder, gated by a
+    // note; silent at rest (VCA bias 0), a resonant "squelch" on a note, decaying to near
+    // silence as the amp AD envelope runs out (a plucky 303 note, not a sustained tone).
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/tb303.ron");
+    let doc = vb_project::open_ron(ron).expect("tb303 loads");
+
+    let ctx = BuildContext::default();
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut block_peak = || {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        engine
+            .node_output(sink)
+            .and_then(|b| b.channel(0))
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()))
+    };
+
+    // Silent at rest.
+    let mut rest = 0.0_f32;
+    for _ in 0..4 {
+        rest = rest.max(block_peak());
+    }
+    assert!(rest < 1e-6, "tb303 must be silent at rest: {rest}");
+
+    // A note squelches: audible in the first blocks after the gate.
+    ctx.notes.note_on(45, 120);
+    let mut early = 0.0_f32;
+    for _ in 0..8 {
+        early = early.max(block_peak());
+    }
+    assert!(early > 0.01, "tb303 must sound on a note: {early}");
+
+    // The amp AD (~0.4 s) runs out even while the note is held → the tail decays away.
+    let mut tail = 0.0_f32;
+    for _ in 0..160 {
+        tail = block_peak();
+    }
+    assert!(
+        tail < early * 0.25,
+        "the 303 note must decay (plucky), not sustain: early {early}, tail {tail}"
     );
 }
 
@@ -678,6 +730,7 @@ fn the_example_set_is_the_expected_manifest() {
             "minitaur",
             "neutron",
             "edge",
+            "tb303",
             "grandmother",
             "maul",
             "minilogue",
