@@ -534,6 +534,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   one-shot `ad` envelope so a note fires a short **hit that decays** (kick/tom/zap), unlike a
   sustained lead/bass. Built from existing nodes; wired into the examples manifest with a
   `edge_is_a_percussive_hit_that_decays` test ([#208](https://github.com/ice1x/VST_bomb/issues/208)) 🧪
+- [x] 000168 — **Roland TB-303** clone (acid bass): the classic squelchy mono-bass. Shipped as
+  `examples/tb303.ron` and offered in the editor's factory-patch list: a single saw (`pitch-osc`)
+  with `glide` (the 303 **slide**) → a **high-resonance** `ladder` swept by a filter `ad`
+  env-mod (the "wow"/squelch) → note-gated `vca` with its own short amp `ad` (a plucky, decaying
+  note). Built from existing nodes; a `tb303_is_silent_at_rest_squelches_on_a_note_and_decays`
+  test asserts the silent→squelch→decay behaviour ([#219](https://github.com/ice1x/VST_bomb/issues/219)) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -578,7 +584,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000168, …); split a large task into 🧩 subtasks with
+the end with a new global number (000169, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
