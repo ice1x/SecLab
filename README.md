@@ -540,6 +540,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   env-mod (the "wow"/squelch) → note-gated `vca` with its own short amp `ad` (a plucky, decaying
   note). Built from existing nodes; a `tb303_is_silent_at_rest_squelches_on_a_note_and_decays`
   test asserts the silent→squelch→decay behaviour ([#219](https://github.com/ice1x/VST_bomb/issues/219)) 🧪
+- [x] 000169 — **Roland SH-101** clone (mono synth): the versatile saw/pulse/sub mono-synth.
+  Shipped as `examples/sh101.ron` and in the factory-patch list: saw (`pitch-osc`) + pulse
+  (`pwm`) + square sub + a hint of `noise`, leveled (`attenuvert`) and summed → resonant
+  `ladder` → note-gated `vca`, with **one ADSR fanned out** to both the filter cutoff and the
+  amp (the SH-101 has a single envelope) and `glide` for portamento. Built from existing nodes;
+  a `sh101_is_silent_at_rest_and_sustains_a_note` test asserts silent→sustained (distinct from
+  the plucky 303/Edge) ([#221](https://github.com/ice1x/VST_bomb/issues/221)) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -584,7 +591,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000169, …); split a large task into 🧩 subtasks with
+the end with a new global number (000170, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

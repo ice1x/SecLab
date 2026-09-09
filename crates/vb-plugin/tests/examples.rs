@@ -30,6 +30,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("neutron", include_str!("../../../examples/neutron.ron")),
     ("edge", include_str!("../../../examples/edge.ron")),
     ("tb303", include_str!("../../../examples/tb303.ron")),
+    ("sh101", include_str!("../../../examples/sh101.ron")),
     (
         "grandmother",
         include_str!("../../../examples/grandmother.ron"),
@@ -271,6 +272,49 @@ fn tb303_is_silent_at_rest_squelches_on_a_note_and_decays() {
     assert!(
         tail < early * 0.25,
         "the 303 note must decay (plucky), not sustain: early {early}, tail {tail}"
+    );
+}
+
+#[test]
+fn sh101_is_silent_at_rest_and_sustains_a_note() {
+    // The SH-101 factory patch: saw + pulse + square sub + a hint of noise → resonant ladder,
+    // one ADSR fanned to filter and amp. Silent at rest (VCA bias 0); a held note is audible
+    // and SUSTAINS (the ADSR has a sustain level, unlike the plucky 303/Edge).
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/sh101.ron");
+    let doc = vb_project::open_ron(ron).expect("sh101 loads");
+
+    let ctx = BuildContext::default();
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut block_peak = || {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        engine
+            .node_output(sink)
+            .and_then(|b| b.channel(0))
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()))
+    };
+
+    let mut rest = 0.0_f32;
+    for _ in 0..4 {
+        rest = rest.max(block_peak());
+    }
+    assert!(rest < 1e-6, "sh101 must be silent at rest: {rest}");
+
+    ctx.notes.note_on(45, 110);
+    // Let the envelope reach sustain, then confirm the note is still ringing.
+    let mut held = 0.0_f32;
+    for _ in 0..40 {
+        held = block_peak();
+    }
+    assert!(
+        held > 0.01,
+        "a held sh101 note must sustain audibly: {held}"
     );
 }
 
@@ -731,6 +775,7 @@ fn the_example_set_is_the_expected_manifest() {
             "neutron",
             "edge",
             "tb303",
+            "sh101",
             "grandmother",
             "maul",
             "minilogue",
