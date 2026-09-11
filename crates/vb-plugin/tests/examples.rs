@@ -31,6 +31,7 @@ const EXAMPLES: &[(&str, &str)] = &[
     ("edge", include_str!("../../../examples/edge.ron")),
     ("tb303", include_str!("../../../examples/tb303.ron")),
     ("sh101", include_str!("../../../examples/sh101.ron")),
+    ("juno60", include_str!("../../../examples/juno60.ron")),
     (
         "grandmother",
         include_str!("../../../examples/grandmother.ron"),
@@ -316,6 +317,49 @@ fn sh101_is_silent_at_rest_and_sustains_a_note() {
         held > 0.01,
         "a held sh101 note must sustain audibly: {held}"
     );
+}
+
+#[test]
+fn juno60_is_silent_at_rest_and_polyphonic_notes_sound_through_the_chorus() {
+    // The Juno-60 factory patch: a 4-voice polyphonic pad (each voice a saw+pulse+sub DCO →
+    // resonant ladder → note-gated vca), summed into the signature chorus. Silent at rest;
+    // POLY notes (via the voice allocator's PolyNoteSource, not the mono midi-in) open the
+    // voices and are audible through the chorus.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/juno60.ron");
+    let doc = vb_project::open_ron(ron).expect("juno60 loads");
+
+    let ctx = BuildContext::default();
+    let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 256).expect("builds");
+    let sink = sink.expect("has a sink");
+    let mut block_peak = || {
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        engine
+            .node_output(sink)
+            .and_then(|b| b.channel(0))
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()))
+    };
+
+    let mut rest = 0.0_f32;
+    for _ in 0..4 {
+        rest = rest.max(block_peak());
+    }
+    assert!(rest < 1e-6, "juno60 must be silent at rest: {rest}");
+
+    // Play a three-note chord into the polyphonic source.
+    ctx.poly.note_on(48, 100);
+    ctx.poly.note_on(52, 100);
+    ctx.poly.note_on(55, 100);
+    let mut chord = 0.0_f32;
+    for _ in 0..40 {
+        chord = chord.max(block_peak());
+    }
+    assert!(chord > 0.01, "a held chord must sound: {chord}");
 }
 
 #[test]
@@ -776,6 +820,7 @@ fn the_example_set_is_the_expected_manifest() {
             "edge",
             "tb303",
             "sh101",
+            "juno60",
             "grandmother",
             "maul",
             "minilogue",

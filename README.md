@@ -547,6 +547,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   amp (the SH-101 has a single envelope) and `glide` for portamento. Built from existing nodes;
   a `sh101_is_silent_at_rest_and_sustains_a_note` test asserts silent→sustained (distinct from
   the plucky 303/Edge) ([#221](https://github.com/ice1x/VST_bomb/issues/221)) 🧪
+- [x] 000170 — **Roland Juno-60** clone (polysynth): the lush chorus polysynth. Shipped as
+  `examples/juno60.ron` and in the factory-patch list: a **4-voice polyphonic** pad (each
+  `voice-in` voice a saw + pulse (`pwm`) + square sub DCO → resonant `ladder` → note-gated
+  `vca`, one `adsr` to filter+amp), the four voices summed into the signature **`chorus`**.
+  Uses the same `PolyNoteSource`/voice-allocator the plugin drives (as the Minilogue clone
+  does). A `juno60_is_silent_at_rest_and_polyphonic_notes_sound_through_the_chorus` test plays
+  a chord into the poly source ([#223](https://github.com/ice1x/VST_bomb/issues/223)) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -591,7 +598,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000170, …); split a large task into 🧩 subtasks with
+the end with a new global number (000171, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
