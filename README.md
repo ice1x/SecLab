@@ -554,6 +554,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   Uses the same `PolyNoteSource`/voice-allocator the plugin drives (as the Minilogue clone
   does). A `juno60_is_silent_at_rest_and_polyphonic_notes_sound_through_the_chorus` test plays
   a chord into the poly source ([#223](https://github.com/ice1x/VST_bomb/issues/223)) 🧪
+- [x] 000171 — 🧩 **Wavetable oscillator node** (`wavetable`) — a pitch-tracking oscillator that
+  **morphs** across a built-in four-frame bank (sine → triangle → saw → square, each synthesised
+  additively so it is band-limited by construction). The `position` (a parameter **summed** with
+  a `position` CV input, so an envelope/LFO can sweep the timbre) blends between frames with
+  linear phase+frame interpolation. Closes the "future wavetable oscillator" gap noted for the
+  Minilogue's digital engine; unit-tested for audible/finite output, pitch tracking, and that
+  higher `position` (and CV) adds harmonics ([#225](https://github.com/ice1x/VST_bomb/issues/225)) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -598,7 +605,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000171, …); split a large task into 🧩 subtasks with
+the end with a new global number (000172, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

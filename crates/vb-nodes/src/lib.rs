@@ -59,6 +59,7 @@ pub mod vcf;
 pub mod vco;
 pub mod wavefolder;
 pub mod waveshaper;
+pub mod wavetable;
 pub mod width;
 pub mod xfade;
 

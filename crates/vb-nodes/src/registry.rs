@@ -60,6 +60,7 @@ use crate::vcf::Vcf;
 use crate::vco::Vco;
 use crate::wavefolder::Wavefolder;
 use crate::waveshaper::{Shape, Waveshaper};
+use crate::wavetable::Wavetable;
 use crate::width::Width;
 use crate::xfade::Xfade;
 
@@ -1373,6 +1374,28 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 0.0),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "wavetable",
+            "generator",
+            || {
+                GraphNode::new(
+                    "wavetable",
+                    vec![
+                        Port::input("pitch", SignalType::Control),
+                        Port::input("position", SignalType::Control),
+                    ],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Wavetable::new(440.0, 0.5)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 440.0),
+                    Parameter::new("position", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| Box::new(Wavetable::new(arg(v, 0, 440.0), arg(v, 1, 0.5))),
         ),
         NodeDescriptor::new(
             "fm-op",
