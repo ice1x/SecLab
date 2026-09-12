@@ -314,6 +314,14 @@ Auto-generated from the registry — do not edit by hand.
   - `base_hz` — range 20..20000, default 440
   - `amount_oct` — range -4..4, default 1
 
+### wavetable
+
+- **Inputs:** `pitch` (control), `position` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 440
+  - `position` — range 0..1, default 0.5
+
 ## input
 
 ### audio-in
