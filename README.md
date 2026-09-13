@@ -576,6 +576,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   table; `resonance` scales the formants' Q. Makes a buzzy source (saw/pulse/noise) "speak" —
   another new tone class. Unit-tested for finite passthrough, band-pass resonance on F1,
   vowel-dependent frequency response, vowel-CV summing, and reset 🧪
+- [x] 000174 — 🧩 **Modal resonator node** (`resonator`) — the "resonator" half of physical
+  modelling (complement to the `karplus` exciter): a bank of five high-Q band-pass **modes**
+  tuned to partials of a base pitch and summed, so any excitation (impulse, noise burst, drum
+  hit, full signal) rings into a pitched, metallic tone. `decay` maps to the modes' Q (ring
+  length); `structure` morphs the partials from a **harmonic** series toward an **inharmonic**
+  bell/tubular set (1, 2.76, 5.40…); pitch tracks a `pitch` control input. A `q` makeup gain
+  keeps the ring audible and its amplitude decay-independent (a high-Q band-pass has a tiny
+  transient gain). Unit-tested for ring-after-strike, decay-controls-length, pitch tracking
+  (autocorrelation), harmonic-vs-inharmonic difference, and reset 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -620,7 +629,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000174, …); split a large task into 🧩 subtasks with
+the end with a new global number (000175, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
