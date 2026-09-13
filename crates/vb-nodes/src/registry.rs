@@ -30,6 +30,7 @@ use crate::gate::Gate;
 use crate::glide::Glide;
 use crate::hard_sync::HardSync;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
+use crate::karplus::Karplus;
 use crate::ladder::Ladder;
 use crate::lfo::{Division, Lfo};
 use crate::limiter::Limiter;
@@ -1396,6 +1397,35 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Wavetable::new(arg(v, 0, 440.0), arg(v, 1, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "karplus",
+            "generator",
+            || {
+                GraphNode::new(
+                    "karplus",
+                    vec![
+                        Port::input("gate", SignalType::Control),
+                        Port::input("pitch", SignalType::Control),
+                    ],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Karplus::new(220.0, 0.996, 0.5)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 220.0),
+                    Parameter::new("damping", 0.0, 0.9999, 0.996),
+                    Parameter::new("tone", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| {
+                Box::new(Karplus::new(
+                    arg(v, 0, 220.0),
+                    arg(v, 1, 0.996),
+                    arg(v, 2, 0.5),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "fm-op",

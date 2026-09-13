@@ -27,6 +27,7 @@ pub mod gate;
 pub mod glide;
 pub mod hard_sync;
 pub mod io;
+pub mod karplus;
 pub mod ladder;
 pub mod lfo;
 pub mod limiter;
