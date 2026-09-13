@@ -26,6 +26,7 @@ use crate::envelope::Adsr;
 use crate::euclid::Euclid;
 use crate::filter::{Biquad, FilterKind};
 use crate::fm_op::FmOp;
+use crate::formant::Formant;
 use crate::gate::Gate;
 use crate::glide::Glide;
 use crate::hard_sync::HardSync;
@@ -308,6 +309,25 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 0.707),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "formant",
+            "filter",
+            || {
+                GraphNode::new(
+                    "formant",
+                    vec![audio_in("in"), control_in("vowel")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Formant::new(0.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("vowel", 0.0, 1.0, 0.0),
+                    Parameter::new("resonance", 0.1, 4.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(Formant::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "svf",
