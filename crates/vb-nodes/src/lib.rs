@@ -26,6 +26,7 @@ pub mod fm_op;
 pub mod formant;
 pub mod gate;
 pub mod glide;
+pub mod granular;
 pub mod hard_sync;
 pub mod io;
 pub mod karplus;

@@ -68,6 +68,17 @@ Auto-generated from the registry — do not edit by hand.
   - `delay_s` — range 0.001..2, default 0.25
   - `feedback` — range 0..0.95, default 0.4
 
+### granular
+
+- **Inputs:** `in` (audio), `position` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `grain_ms` — range 1..1000, default 80
+  - `density` — range 0.1..200, default 30
+  - `position` — range 0..1, default 0.3
+  - `pitch` — range 0.125..8, default 1
+  - `spray` — range 0..1, default 0.1
+
 ### phaser
 
 - **Inputs:** `in` (audio)
