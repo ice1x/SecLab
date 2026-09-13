@@ -255,6 +255,15 @@ Auto-generated from the registry — do not edit by hand.
   - `base_hz` — range 20..20000, default 440
   - `sync_ratio` — range 1..8, default 2
 
+### karplus
+
+- **Inputs:** `gate` (control), `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 220
+  - `damping` — range 0..0.9999, default 0.996
+  - `tone` — range 0..1, default 0.5
+
 ### noise
 
 - **Inputs:** _(none)_

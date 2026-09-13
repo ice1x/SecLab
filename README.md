@@ -561,6 +561,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   linear phase+frame interpolation. Closes the "future wavetable oscillator" gap noted for the
   Minilogue's digital engine; unit-tested for audible/finite output, pitch tracking, and that
   higher `position` (and CV) adds harmonics ([#225](https://github.com/ice1x/VST_bomb/issues/225)) 🧪
+- [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
+  oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
+  noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the
+  timbre darkens and rings down like a real string. `pitch` is latched at pluck time (a string
+  does not change length while ringing), `damping` sets the sustain, and `tone` blends between the
+  full averaging low-pass (dull) and a bright string. First plucked/percussive voice in the
+  library — a new sound class, not a subtractive-synth clone. Unit-tested for silence-until-pluck,
+  ring-down decay, retrigger, reset, and pitch tracking recovered by autocorrelation 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -605,7 +613,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000172, …); split a large task into 🧩 subtasks with
+the end with a new global number (000173, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
