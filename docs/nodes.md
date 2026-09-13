@@ -209,6 +209,15 @@ Auto-generated from the registry — do not edit by hand.
   - `resonance` — range 0..1, default 0.3
   - `amount_hz` — range -20000..20000, default 4000
 
+### resonator
+
+- **Inputs:** `in` (audio), `pitch` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `base_hz` — range 20..20000, default 220
+  - `decay` — range 0..1, default 0.7
+  - `structure` — range 0..1, default 0
+
 ### svf
 
 - **Inputs:** `in` (audio)

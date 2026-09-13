@@ -44,6 +44,7 @@ pub mod poly;
 pub mod pwm;
 pub mod quantizer;
 pub mod registry;
+pub mod resonator;
 pub mod reverb;
 pub mod ring_mod;
 pub mod routing;

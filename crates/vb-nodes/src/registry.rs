@@ -46,6 +46,7 @@ use crate::pitch_osc::PitchOsc;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::pwm::Pwm;
 use crate::quantizer::Quantizer;
+use crate::resonator::Resonator;
 use crate::reverb::Reverb;
 use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
@@ -328,6 +329,32 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Formant::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "resonator",
+            "filter",
+            || {
+                GraphNode::new(
+                    "resonator",
+                    vec![audio_in("in"), control_in("pitch")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Resonator::new(220.0, 0.7, 0.0)),
+            || {
+                vec![
+                    Parameter::new("base_hz", 20.0, 20_000.0, 220.0),
+                    Parameter::new("decay", 0.0, 1.0, 0.7),
+                    Parameter::new("structure", 0.0, 1.0, 0.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Resonator::new(
+                    arg(v, 0, 220.0),
+                    arg(v, 1, 0.7),
+                    arg(v, 2, 0.0),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "svf",
