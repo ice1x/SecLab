@@ -23,6 +23,7 @@ pub mod envelope;
 pub mod euclid;
 pub mod filter;
 pub mod fm_op;
+pub mod formant;
 pub mod gate;
 pub mod glide;
 pub mod hard_sync;

@@ -569,6 +569,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   full averaging low-pass (dull) and a bright string. First plucked/percussive voice in the
   library — a new sound class, not a subtractive-synth clone. Unit-tested for silence-until-pluck,
   ring-down decay, retrigger, reset, and pitch tracking recovered by autocorrelation 🧪
+- [x] 000173 — 🧩 **Formant (vowel) filter node** (`formant`) — shapes any input into a **vocal**
+  timbre with three parallel RBJ band-pass "formants" (F1/F2/F3) summed. The `vowel` parameter
+  (summed with a `vowel` CV input, so an envelope/LFO sweeps the mouth shape) **morphs** across
+  the five cardinal vowels **a → e → i → o → u** by interpolating the classic sung-vowel formant
+  table; `resonance` scales the formants' Q. Makes a buzzy source (saw/pulse/noise) "speak" —
+  another new tone class. Unit-tested for finite passthrough, band-pass resonance on F1,
+  vowel-dependent frequency response, vowel-CV summing, and reset 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -613,7 +620,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000173, …); split a large task into 🧩 subtasks with
+the end with a new global number (000174, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

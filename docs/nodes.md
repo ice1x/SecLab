@@ -192,6 +192,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `r` — range 0.9..0.9999, default 0.995
 
+### formant
+
+- **Inputs:** `in` (audio), `vowel` (control)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `vowel` — range 0..1, default 0
+  - `resonance` — range 0.1..4, default 1
+
 ### ladder
 
 - **Inputs:** `in` (audio), `cutoff` (control)
