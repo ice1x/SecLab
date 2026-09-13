@@ -585,6 +585,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   keeps the ring audible and its amplitude decay-independent (a high-Q band-pass has a tiny
   transient gain). Unit-tested for ring-after-strike, decay-controls-length, pitch tracking
   (autocorrelation), harmonic-vs-inharmonic difference, and reset 🧪
+- [x] 000175 — 🧩 **Granular processor node** (`granular`) — a "grain cloud": continuously
+  records the audio input into a 2 s rolling buffer and replays it as a swarm of short,
+  overlapping, Hann-windowed **grains** read from a chosen point behind the write head. Because
+  playback position is decoupled from the record head it **time-stretches** (`position`, summed
+  with a CV input, scrubs the recent past) and **pitch-shifts** (`pitch` — grain playback speed)
+  independently; `grain_ms`, `density` (grains/s) and `spray` (position randomisation, seeded
+  RNG for deterministic tests) shape the texture from smooth pad to glitchy cloud. A new synthesis
+  class. Unit-tested for finite/audible output, silence-without-input, density-adds-energy,
+  pitch-brightens-the-output, and reset 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -629,7 +638,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000175, …); split a large task into 🧩 subtasks with
+the end with a new global number (000176, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

@@ -29,6 +29,7 @@ use crate::fm_op::FmOp;
 use crate::formant::Formant;
 use crate::gate::Gate;
 use crate::glide::Glide;
+use crate::granular::Granular;
 use crate::hard_sync::HardSync;
 use crate::io::{AudioInput, AudioOutput, MAX_IO_CHANNELS};
 use crate::karplus::Karplus;
@@ -742,6 +743,36 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(Width::new(1.0)),
             || vec![Parameter::new("width", 0.0, 2.0, 1.0)],
             |_, v| Box::new(Width::new(arg(v, 0, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "granular",
+            "effect",
+            || {
+                GraphNode::new(
+                    "granular",
+                    vec![audio_in("in"), control_in("position")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Granular::new(80.0, 30.0, 0.3, 1.0, 0.1)),
+            || {
+                vec![
+                    Parameter::new("grain_ms", 1.0, 1000.0, 80.0),
+                    Parameter::new("density", 0.1, 200.0, 30.0),
+                    Parameter::new("position", 0.0, 1.0, 0.3),
+                    Parameter::new("pitch", 0.125, 8.0, 1.0),
+                    Parameter::new("spray", 0.0, 1.0, 0.1),
+                ]
+            },
+            |_, v| {
+                Box::new(Granular::new(
+                    arg(v, 0, 80.0),
+                    arg(v, 1, 30.0),
+                    arg(v, 2, 0.3),
+                    arg(v, 3, 1.0),
+                    arg(v, 4, 0.1),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "reverb",
