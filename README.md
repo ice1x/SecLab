@@ -604,6 +604,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   value, so exporting/saving a project silently lost all knob edits — now `to_doc` copies the
   inspector values into the document (regression-guarded by
   `an_edited_parameter_survives_a_project_round_trip`) 🧪
+- [x] 000178 — 🧩 **Resizable plugin window** — the plugin window can now be resized. `render`
+  is split into `render_chrome` (toolbar + palette/inspector side panels) and the canvas
+  (`canvas_ui`), so the plugin draws the canvas inside `nih_plug_egui`'s `ResizableWindow`,
+  which adds a drag corner that calls the host's `request_resize`; the standalone keeps the
+  combined `render`. This is the only resize path available: nih-plug's CLAP wrapper leaves
+  host-driven resize unimplemented (`ext_gui_can_resize` returns `false`), so dragging the DAW
+  window frame does nothing — the in-canvas corner is what resizes the window. A headless
+  `render_chrome_then_canvas_runs_a_frame_like_the_plugin_does` test runs both the split and
+  combined frames through egui's context without panicking 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -648,7 +657,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000178, …); split a large task into 🧩 subtasks with
+the end with a new global number (000179, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

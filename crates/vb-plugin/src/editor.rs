@@ -20,9 +20,14 @@
 use std::sync::{Arc, Mutex};
 
 use nih_plug::prelude::{AsyncExecutor, Editor};
-use nih_plug_egui::{create_egui_editor, EguiState};
+use nih_plug_egui::resizable_window::ResizableWindow;
+use nih_plug_egui::{create_egui_editor, egui, EguiState};
 use vb_editor::EditorApp;
 use vb_project::ProjectDoc;
+
+/// The plugin window will not shrink below this (logical px) — enough for the toolbar, both
+/// side panels, and a usable canvas.
+const MIN_WINDOW: (f32, f32) = (720.0, 480.0);
 
 use crate::{PluginTask, VstBomb};
 
@@ -49,12 +54,23 @@ pub(crate) fn create(
     }
     let last_revision = app.patch().revision();
 
+    // The render closure needs the state to request window resizes; `create_egui_editor` takes
+    // ownership of the original, so keep a clone for the closure.
+    let window_state = egui_state.clone();
     create_egui_editor(
         egui_state,
         EditorHost { app, last_revision },
         |_ctx, _state| {},
         move |ctx, _setter, state| {
-            state.app.render(ctx);
+            // Draw the toolbar and side panels, then the canvas inside a `ResizableWindow` so
+            // the plugin window gets a drag-to-resize corner (bottom-right of the canvas). nih-
+            // plug's CLAP wrapper does not implement host-driven resize (`ext_gui_can_resize`
+            // returns false), so this GUI-initiated path — which calls the host's
+            // `request_resize` — is the way a plugin window resizes at all.
+            state.app.render_chrome(ctx);
+            ResizableWindow::new("vb-plugin-window")
+                .min_size(egui::vec2(MIN_WINDOW.0, MIN_WINDOW.1))
+                .show(ctx, &window_state, |ui| state.app.canvas_ui(ui));
 
             // A structural edit bumps the patch revision: mirror the new graph into the
             // shared doc and rebuild the engine off the audio thread.
