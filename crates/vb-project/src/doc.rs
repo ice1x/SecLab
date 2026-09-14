@@ -41,6 +41,11 @@ pub struct NodeEntry {
     /// than the editor's `WidgetKind` enum so `vb-project` stays free of a `vb-editor` dependency.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub widgets: Vec<String>,
+    /// Optional **panel accent colour** for this node's control block, as a `#rrggbb` hex string.
+    /// `None` means the module uses the theme's default framing. Presentational and optional, so
+    /// an unstyled patch stores nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel_color: Option<String>,
 }
 
 impl NodeEntry {
@@ -53,6 +58,7 @@ impl NodeEntry {
             values: Vec::new(),
             panel_pos: None,
             widgets: Vec::new(),
+            panel_color: None,
         }
     }
 
@@ -65,6 +71,7 @@ impl NodeEntry {
             values,
             panel_pos: None,
             widgets: Vec::new(),
+            panel_color: None,
         }
     }
 }
@@ -168,6 +175,28 @@ impl ProjectDoc {
         match self.nodes.iter_mut().find(|e| e.id == id) {
             Some(entry) => {
                 entry.widgets = widgets;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// This node's saved panel accent colour (`#rrggbb`), or `None` if the id is unknown or the
+    /// module uses the default framing.
+    #[must_use]
+    pub fn node_panel_color(&self, id: NodeId) -> Option<&str> {
+        self.nodes
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.panel_color.as_deref())
+    }
+
+    /// Records a node's panel accent colour (`None` clears it back to the default). Returns
+    /// `false` if the id is not present.
+    pub fn set_node_panel_color(&mut self, id: NodeId, color: Option<String>) -> bool {
+        match self.nodes.iter_mut().find(|e| e.id == id) {
+            Some(entry) => {
+                entry.panel_color = color;
                 true
             }
             None => false,
@@ -285,13 +314,16 @@ mod tests {
         let id = doc.nodes[0].id;
         assert!(doc.set_node_panel_pos(id, Some((120.5, 40.0))));
         assert!(doc.set_node_widgets(id, vec!["slider".to_owned()]));
+        assert!(doc.set_node_panel_color(id, Some("#ff8800".to_owned())));
         let ron = crate::io::to_ron(&doc).expect("serializes");
         let back = crate::io::from_ron(&ron).expect("parses");
         assert_eq!(back.node_panel_pos(id), Some((120.5, 40.0)));
         assert_eq!(back.node_widgets(id), &["slider".to_owned()]);
+        assert_eq!(back.node_panel_color(id), Some("#ff8800"));
         assert_eq!(doc, back);
         // Unknown ids read as absent, and setting on a missing id fails.
         assert_eq!(doc.node_panel_pos(NodeId(9999)), None);
+        assert_eq!(doc.node_panel_color(NodeId(9999)), None);
         assert!(!doc.set_node_widgets(NodeId(9999), vec!["knob".to_owned()]));
     }
 
@@ -306,6 +338,7 @@ mod tests {
             !ron.contains("widgets"),
             "no widget overrides to store: {ron}"
         );
+        assert!(!ron.contains("panel_color"), "no accent to store: {ron}");
     }
 
     #[test]
