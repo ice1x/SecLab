@@ -65,6 +65,10 @@ jobs:
   coverage:
     name: coverage (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -78,6 +82,10 @@ jobs:
   library:
     name: library / drevo (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -90,6 +98,10 @@ jobs:
   gui:
     name: plugin editor / gui (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -105,6 +117,10 @@ jobs:
   assistant:
     name: assistant panel (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -124,6 +140,10 @@ jobs:
   wasm:
     name: wasm build (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -158,6 +178,10 @@ jobs:
   browser-audio:
     name: browser audio (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -176,6 +200,10 @@ jobs:
   au-validate:
     name: au validate (macos-self-hosted)
     runs-on: [self-hosted, macOS, ARM64]
+    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
+    # that keeps the single self-hosted runner free for the next PR instead of re-running
+    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
