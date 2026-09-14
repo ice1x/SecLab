@@ -2262,6 +2262,44 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_panel_layout_reopens_with_its_placements_and_control_types() {
+        // The constructor is only useful if the arrangement survives a save: place a module,
+        // retype one of its controls, round-trip through the project RON, and expect both back.
+        let mut app = EditorApp::new();
+        let ladder = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("the default voice has a ladder")
+            .node;
+        app.patch_mut()
+            .set_panel_position(ladder, Pos2::new(300.0, 90.0));
+        assert!(app.patch_mut().set_widget(ladder, 0, WidgetKind::Slider));
+
+        let ron = app.export_project_ron().expect("serializes");
+        let mut reopened = EditorApp::new();
+        reopened.import_project_ron(&ron).expect("reimports");
+
+        // Ids are reallocated on import, so find the ladder again by its module title.
+        let restored = reopened
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("ladder survived the round-trip")
+            .node;
+        assert_eq!(
+            reopened.patch().panel_position(restored),
+            Some(Pos2::new(300.0, 90.0)),
+            "the dragged placement came back"
+        );
+        assert_eq!(
+            reopened.patch().params(restored)[0].widget,
+            WidgetKind::Slider,
+            "the chosen control type came back"
+        );
+    }
+
+    #[test]
     fn panel_bindings_carry_and_track_the_control_type() {
         // The panel draws each parameter as its assigned WidgetKind, and choosing a control type
         // in the panel (or the inspector) is honored by both surfaces — the binding reports it.

@@ -29,6 +29,18 @@ pub struct NodeEntry {
     /// Saved parameter values in registry `params()` order; empty means defaults.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub values: Vec<f32>,
+    /// **Panel-surface** position of this node's control block, `(x, y)`. `None` means the
+    /// panel auto-flows the module into a grid slot. Purely presentational — it never affects
+    /// the audio graph — and optional, so structure-only graphs and older documents load with
+    /// no placement.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub panel_pos: Option<(f32, f32)>,
+    /// Per-parameter **control-widget kind** on the panel, in registry `params()` order, each as
+    /// the kind's short label (`"knob"` / `"slider"` / `"switch"` / `"xy-pad"`). Empty means every
+    /// parameter uses its default control. The format stores the label (a plain string) rather
+    /// than the editor's `WidgetKind` enum so `vb-project` stays free of a `vb-editor` dependency.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub widgets: Vec<String>,
 }
 
 impl NodeEntry {
@@ -39,13 +51,21 @@ impl NodeEntry {
             id,
             node,
             values: Vec::new(),
+            panel_pos: None,
+            widgets: Vec::new(),
         }
     }
 
     /// An entry carrying saved parameter values, in registry `params()` order.
     #[must_use]
     pub fn with_values(id: NodeId, node: GraphNode, values: Vec<f32>) -> Self {
-        Self { id, node, values }
+        Self {
+            id,
+            node,
+            values,
+            panel_pos: None,
+            widgets: Vec::new(),
+        }
     }
 }
 
@@ -104,6 +124,50 @@ impl ProjectDoc {
         match self.nodes.iter_mut().find(|e| e.id == id) {
             Some(entry) => {
                 entry.values = values;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// This node's saved panel position, or `None` if the id is unknown or the module is
+    /// unplaced (auto-flowed).
+    #[must_use]
+    pub fn node_panel_pos(&self, id: NodeId) -> Option<(f32, f32)> {
+        self.nodes
+            .iter()
+            .find(|e| e.id == id)
+            .and_then(|e| e.panel_pos)
+    }
+
+    /// Records a node's panel position (`None` clears it back to auto-flow). Returns `false`
+    /// if the id is not present.
+    pub fn set_node_panel_pos(&mut self, id: NodeId, pos: Option<(f32, f32)>) -> bool {
+        match self.nodes.iter_mut().find(|e| e.id == id) {
+            Some(entry) => {
+                entry.panel_pos = pos;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// This node's saved per-parameter widget-kind labels (registry `params()` order), or an
+    /// empty slice if the id is unknown or the node uses default controls.
+    #[must_use]
+    pub fn node_widgets(&self, id: NodeId) -> &[String] {
+        self.nodes
+            .iter()
+            .find(|e| e.id == id)
+            .map_or(&[], |e| e.widgets.as_slice())
+    }
+
+    /// Records a node's per-parameter widget-kind labels, replacing any existing ones. Returns
+    /// `false` if the id is not present.
+    pub fn set_node_widgets(&mut self, id: NodeId, widgets: Vec<String>) -> bool {
+        match self.nodes.iter_mut().find(|e| e.id == id) {
+            Some(entry) => {
+                entry.widgets = widgets;
                 true
             }
             None => false,
@@ -213,6 +277,35 @@ mod tests {
         let legacy = r#"(version: 1, nodes: [(id: (0), node: (kind: "gain", inputs: [], outputs: []))], edges: [])"#;
         let doc = crate::io::from_ron(legacy).expect("legacy doc parses");
         assert!(doc.nodes[0].values.is_empty());
+    }
+
+    #[test]
+    fn panel_layout_survives_ron_round_trip() {
+        let mut doc = ProjectDoc::from_graph(&one_node_graph());
+        let id = doc.nodes[0].id;
+        assert!(doc.set_node_panel_pos(id, Some((120.5, 40.0))));
+        assert!(doc.set_node_widgets(id, vec!["slider".to_owned()]));
+        let ron = crate::io::to_ron(&doc).expect("serializes");
+        let back = crate::io::from_ron(&ron).expect("parses");
+        assert_eq!(back.node_panel_pos(id), Some((120.5, 40.0)));
+        assert_eq!(back.node_widgets(id), &["slider".to_owned()]);
+        assert_eq!(doc, back);
+        // Unknown ids read as absent, and setting on a missing id fails.
+        assert_eq!(doc.node_panel_pos(NodeId(9999)), None);
+        assert!(!doc.set_node_widgets(NodeId(9999), vec!["knob".to_owned()]));
+    }
+
+    #[test]
+    fn an_unplaced_default_panel_is_omitted_from_ron() {
+        // A patch nobody has arranged must not emit panel fields — no format bloat, and old
+        // readers see exactly the document they saw before the panel layout existed.
+        let doc = ProjectDoc::from_graph(&one_node_graph());
+        let ron = crate::io::to_ron(&doc).expect("serializes");
+        assert!(!ron.contains("panel_pos"), "no placement to store: {ron}");
+        assert!(
+            !ron.contains("widgets"),
+            "no widget overrides to store: {ron}"
+        );
     }
 
     #[test]
