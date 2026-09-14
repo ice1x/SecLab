@@ -670,6 +670,16 @@ per-widget styling and a saved layout in the project.
   module to its explicit spot or its auto-grid slot. Tested: the auto-grid order, that an explicit
   placement wins, and that moving a module is not audible. *(Next: per-widget styling, then a saved
   panel layout persisted in the project.)* 🧪
+- [x] 000185 — 🧩 **Panel layout persisted in the project** — the arrangement now travels with the
+  patch. `NodeEntry` gained two optional, presentational fields — `panel_pos` (the module's dragged
+  position) and `widgets` (per-parameter control-kind labels) — both `#[serde(default,
+  skip_serializing_if)]`, so a patch nobody arranged emits nothing new and older documents still
+  load (format stays version 1, forward- and backward-compatible). `PatchView::to_doc` writes them,
+  `apply_doc` restores them (positions into `panel_positions`, labels back into each slot's
+  `WidgetKind` via `WidgetKind::from_label`), so saving and reopening a project brings the panel
+  back exactly. Tested: a placed + retyped panel round-trips through the RON in both `vb-project`
+  (field round-trip / omitted-when-default) and `vb-editor` (end-to-end export → import). *(Follow-up:
+  capture live view-only panel edits into the plugin's DAW-saved state; then per-widget styling.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 

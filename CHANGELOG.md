@@ -33,6 +33,11 @@ Two independent version numbers matter in this project:
 - **Editor (`vb-editor`)** — panel modules are **draggable**: grab a module's title bar to place
   it anywhere; unplaced modules auto-flow into a grid. Placement is view-only
   (`PatchView::set_panel_position`) and does not rebuild the engine.
+- **Project (`vb-project`) / Editor (`vb-editor`)** — the panel layout is **saved with the
+  project**: `NodeEntry` gained optional `panel_pos` and `widgets` fields (both omitted when
+  unset, so old documents still load and the format stays version 1), and the editor writes them
+  in `to_doc` / restores them in `apply_doc`. A saved project reopens with its dragged module
+  positions and chosen control types intact.
 
 ### Fixed
 

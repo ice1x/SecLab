@@ -43,6 +43,14 @@ impl WidgetKind {
             WidgetKind::XyPad => "xy-pad",
         }
     }
+
+    /// The widget kind for a [`label`](Self::label), or `None` for an unrecognized string — the
+    /// inverse used when restoring a saved panel layout from the project (which stores the label,
+    /// not the enum). An unknown label falls back to the default control at the call site.
+    #[must_use]
+    pub fn from_label(label: &str) -> Option<Self> {
+        WidgetKind::ALL.into_iter().find(|k| k.label() == label)
+    }
 }
 
 /// Widget a freshly added parameter gets. Everything defaults to a knob — a
@@ -145,6 +153,14 @@ mod tests {
 
     fn fractional() -> Parameter {
         Parameter::new("q", 0.1, 10.0, 0.707)
+    }
+
+    #[test]
+    fn label_round_trips_through_from_label() {
+        for kind in WidgetKind::ALL {
+            assert_eq!(WidgetKind::from_label(kind.label()), Some(kind));
+        }
+        assert_eq!(WidgetKind::from_label("nonsense"), None);
     }
 
     #[test]

@@ -194,7 +194,20 @@ impl PatchView {
             if let Some(slots) = self.params.get(&id) {
                 if !slots.is_empty() {
                     doc.set_node_values(id, slots.iter().map(|s| s.value).collect());
+                    // Persist the panel-surface control types alongside the values, so a saved
+                    // project reopens with the controls the user chose — but only when some
+                    // parameter departs from its default control, to keep default patches clean.
+                    let widgets: Vec<String> =
+                        slots.iter().map(|s| s.widget.label().to_owned()).collect();
+                    if slots.iter().any(|s| s.widget != WidgetKind::default()) {
+                        doc.set_node_widgets(id, widgets);
+                    }
                 }
+            }
+            // Persist the panel placement of any module the user has dragged; unplaced modules
+            // stay absent (they auto-flow on load).
+            if let Some(pos) = self.panel_positions.get(&id) {
+                doc.set_node_panel_pos(id, Some((pos.x, pos.y)));
             }
         }
         doc
@@ -340,6 +353,7 @@ impl PatchView {
 
         self.graph = Graph::new();
         self.positions.clear();
+        self.panel_positions.clear();
         self.order.clear();
         self.params.clear();
         self.subpatches.clear();
@@ -370,11 +384,22 @@ impl PatchView {
                 .enumerate()
                 .map(|(i, param)| ParamSlot {
                     value: entry.values.get(i).copied().unwrap_or(param.default),
-                    widget: default_widget(&param),
+                    // Restore the saved panel control type for this parameter; an unknown or
+                    // missing label falls back to the default control.
+                    widget: entry
+                        .widgets
+                        .get(i)
+                        .and_then(|label| WidgetKind::from_label(label))
+                        .unwrap_or_else(|| default_widget(&param)),
                     param,
                 })
                 .collect();
             self.params.insert(new_id, slots);
+            // Restore the module's saved panel placement; an unplaced module (no stored pos)
+            // auto-flows into a grid slot on the panel.
+            if let Some((x, y)) = entry.panel_pos {
+                self.panel_positions.insert(new_id, Pos2::new(x, y));
+            }
             remap.insert(entry.id, new_id);
         }
         for edge in &doc.edges {
