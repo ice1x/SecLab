@@ -1820,19 +1820,31 @@ mod tests {
     }
 
     #[test]
-    fn render_chrome_then_canvas_runs_a_frame_like_the_plugin_does() {
-        // The plugin draws the chrome and then the canvas separately (the canvas wrapped in a
-        // resizable window); the standalone calls render(). Both must run a full egui frame
-        // without panicking. Exercised headlessly through egui's own context.
+    fn render_fills_the_context_at_any_size() {
+        // The editor must lay out and run a full frame at whatever surface size it is given —
+        // small or large — without panicking, and the standalone's `render` and the split
+        // `render_chrome` + `canvas_ui` paths must both work.
+        //
+        // NOTE: this covers only our *layout* across sizes. It does NOT cover the plugin
+        // window actually resizing: that lives in the host↔window surface layer (the host's
+        // `request_resize`, baseview's framebuffer), which has no headless test surface — a
+        // desync there (window grown but egui's surface not) cannot be reproduced in a
+        // `cargo test`, only in a real host.
         let mut app = EditorApp::new();
-        let ctx = egui::Context::default();
-        // The plugin's split path: chrome, then the canvas in a central panel.
-        let _ = ctx.run(egui::RawInput::default(), |ctx| {
-            app.render_chrome(ctx);
-            egui::CentralPanel::default().show(ctx, |ui| app.canvas_ui(ui));
-        });
-        // The standalone's combined path.
-        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
+        for size in [egui::vec2(640.0, 400.0), egui::vec2(1600.0, 1000.0)] {
+            let ctx = egui::Context::default();
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                ..Default::default()
+            };
+            // Standalone path.
+            let _ = ctx.run(input.clone(), |ctx| app.render(ctx));
+            // Split path (chrome + canvas), as an embedder would drive it.
+            let _ = ctx.run(input, |ctx| {
+                app.render_chrome(ctx);
+                egui::CentralPanel::default().show(ctx, |ui| app.canvas_ui(ui));
+            });
+        }
     }
 
     #[test]

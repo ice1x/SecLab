@@ -604,15 +604,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   value, so exporting/saving a project silently lost all knob edits — now `to_doc` copies the
   inspector values into the document (regression-guarded by
   `an_edited_parameter_survives_a_project_round_trip`) 🧪
-- [x] 000178 — 🧩 **Resizable plugin window** — the plugin window can now be resized. `render`
-  is split into `render_chrome` (toolbar + palette/inspector side panels) and the canvas
-  (`canvas_ui`), so the plugin draws the canvas inside `nih_plug_egui`'s `ResizableWindow`,
-  which adds a drag corner that calls the host's `request_resize`; the standalone keeps the
-  combined `render`. This is the only resize path available: nih-plug's CLAP wrapper leaves
-  host-driven resize unimplemented (`ext_gui_can_resize` returns `false`), so dragging the DAW
-  window frame does nothing — the in-canvas corner is what resizes the window. A headless
-  `render_chrome_then_canvas_runs_a_frame_like_the_plugin_does` test runs both the split and
-  combined frames through egui's context without panicking 🧪
+- [x] 000178 — 🧩 **Resizable plugin window** (⚠️ **reverted in 000180**) — wrapped the canvas in
+  `nih_plug_egui`'s `ResizableWindow` for a drag-to-resize corner. It broke on the AU/clap-wrapper
+  path (resizing left most of the enlarged window black — the host grew the window but egui's
+  surface did not track it), so it was reverted. The harmless part — splitting `render` into
+  `render_chrome` + `canvas_ui` — was kept.
 - [x] 000179 — 🧩 **Fixed control-rate quantum (bounce == realtime)** — the plugin processed the
   host's whole buffer as one engine pass, so block-rate modulation (the `ladder` cutoff is
   retuned once per pass; note gates land at block start) resolved at the host's buffer size.
@@ -623,6 +619,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   writing each quantum at its offset), so modulation resolves identically regardless of the host
   buffer. Tested: quanta equal a single pass when the block fits one quantum, and a 1024-sample
   block quantised differs from one big pass in the filter attack 🧪
+- [x] 000180 — 🧩 **Revert the resizable plugin window (000178)** — the `ResizableWindow` drag
+  corner left most of the window black after a resize on the AU/clap-wrapper path (the host grew
+  the window but egui's surface did not track the new size). Reverted to the fixed-size window,
+  which renders correctly. The `render` split (`render_chrome` + `canvas_ui`) is kept, and the
+  render smoke test is generalised to render the editor at a small **and** a large context size
+  (`render_fills_the_context_at_any_size`) — the coverable part; the host↔window surface layer
+  where the resize bug lived has no headless test surface. Real host-driven resize waits on
+  nih-plug implementing it upstream (`ext_gui_can_resize` still returns `false`) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -667,7 +671,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000180, …); split a large task into 🧩 subtasks with
+the end with a new global number (000181, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
