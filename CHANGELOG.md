@@ -31,8 +31,10 @@ Two independent version numbers matter in this project:
   slider / switch), and **right-clicking a control** switches its type in place. `PanelBinding`
   carries the `widget`, so the panel and the inspector stay in lock-step.
 - **Editor (`vb-editor`)** — panel modules are **draggable**: grab a module's title bar to place
-  it anywhere; unplaced modules auto-flow into a grid. Placement is view-only
-  (`PatchView::set_panel_position`) and does not rebuild the engine.
+  it anywhere; unplaced modules flow in a wrapping layout. Placement is view-only
+  (`PatchView::set_panel_position`) and does not rebuild the engine. Un-placed modules lay out in a
+  real wrapping flow (egui measures each block's height, so tall modules never overlap the row
+  below); dragging a module's title lifts it out of the flow into a free-positioned layer.
 - **Project (`vb-project`) / Editor (`vb-editor`)** — the panel layout is **saved with the
   project**: `NodeEntry` gained optional `panel_pos` and `widgets` fields (both omitted when
   unset, so old documents still load and the format stays version 1), and the editor writes them
