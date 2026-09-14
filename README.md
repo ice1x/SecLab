@@ -628,6 +628,23 @@ values), so a preset can pin exact knob settings, not just a graph.
   where the resize bug lived has no headless test surface. Real host-driven resize waits on
   nih-plug implementing it upstream (`ext_gui_can_resize` still returns `false`) 🧪
 
+### Epic 15 — Panel view (interface constructor)
+
+A **performance-facing control surface** distinct from the node graph — Reaktor's Panel vs
+Structure. The graph is where you *build* the instrument; the Panel is what a player *tweaks*.
+Built up in slices: an auto-generated panel first, then custom widget placement/binding, then
+per-widget styling and a saved layout in the project.
+
+- [x] 000181 — 🧩 **Panel view toggle + auto-panel** — a `ViewMode { Structure, Panel }` with a
+  **Blocks / Panel** switch in the toolbar. Blocks is the existing node graph; Panel is a new
+  surface that auto-generates one live-bound slider per node parameter (labelled `"<kind>
+  <param>"`), each editing the same value through `PatchView::set_param` that the inspector and
+  the engine use. `panel_widgets()` returns the binding set as data so it is testable without an
+  egui frame. Both the standalone and the plugin get the toggle (they share `render`). Tested:
+  starts on Blocks and toggles; the panel lists every node parameter; a panel edit updates the
+  shared value; both surfaces render at a small and large size. *(Next: custom widget
+  placement/binding, then styling + a saved panel layout in the project.)* 🧪
+
 ### Epic 14 — Minitaur as the default synth
 
 Make the plugin/standalone load a recognisable **Moog Minitaur mono-bass** as its default
@@ -671,7 +688,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000181, …); split a large task into 🧩 subtasks with
+the end with a new global number (000182, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License

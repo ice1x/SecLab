@@ -195,10 +195,42 @@ pub struct EditorApp {
     project_ron: String,
     /// Last whole-project import/export outcome, shown next to the buffer.
     project_status: Option<String>,
+    /// Which surface is shown: the node graph (Blocks) or the control panel (Panel).
+    view_mode: ViewMode,
     /// The native AI assistant panel and its live edit session (backlog 000108). Behind the
     /// `assistant` feature so the provider/HTTP stack never reaches the wasm or plugin builds.
     #[cfg(feature = "assistant")]
     assistant: AssistantHost,
+}
+
+/// The editor's two surfaces. **Structure** is the node/wire graph where a patch is built;
+/// **Panel** is an auto-generated control surface — one live-bound widget per node parameter —
+/// the performance-facing view a player tweaks without seeing the wiring.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ViewMode {
+    /// The node graph (blocks and wires).
+    #[default]
+    Structure,
+    /// The auto-generated control panel.
+    Panel,
+}
+
+/// One control on the [`ViewMode::Panel`] surface: a node parameter to show and edit, resolved
+/// from the live patch. Returned by [`EditorApp::panel_widgets`] so the binding set is testable
+/// independently of rendering.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelBinding {
+    /// The node the parameter belongs to.
+    pub node: vb_core::NodeId,
+    /// The parameter's index within that node.
+    pub index: usize,
+    /// Display label — `"<kind> <param>"`, e.g. `"ladder base_hz"`.
+    pub label: String,
+    /// Current value.
+    pub value: f32,
+    /// Range bounds.
+    pub min: f32,
+    pub max: f32,
 }
 
 impl Default for EditorApp {
@@ -224,6 +256,7 @@ impl Default for EditorApp {
             module_status: None,
             project_ron: String::new(),
             project_status: None,
+            view_mode: ViewMode::default(),
             #[cfg(feature = "assistant")]
             assistant: AssistantHost::new(),
         }
@@ -1640,19 +1673,6 @@ impl EditorApp {
     /// directly inside its own egui context — one editor, drawn the same everywhere, no
     /// `eframe::Frame` required.
     pub fn render(&mut self, ctx: &egui::Context) {
-        self.render_chrome(ctx);
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
-            .show(ctx, |ui| self.canvas_ui(ui));
-    }
-
-    /// Renders everything **except** the central canvas: the toolbar and the palette/inspector
-    /// side panels. Split out so an embedder (the plugin) can draw the canvas itself — e.g.
-    /// wrapped in `nih_plug_egui`'s `ResizableWindow` to give the plugin window a drag-to-resize
-    /// corner — while the standalone keeps calling [`render`], which draws the canvas in a plain
-    /// `CentralPanel`. The side panels are added to the context first, exactly as egui's panel
-    /// layout requires, so the canvas (whoever draws it) fills the space that remains.
-    pub fn render_chrome(&mut self, ctx: &egui::Context) {
         // Consume any assistant proposal a worker finished since the last frame, and keep the
         // UI ticking while one is still running so the poll actually fires.
         #[cfg(feature = "assistant")]
@@ -1668,8 +1688,36 @@ impl EditorApp {
             ctx.set_visuals(self.theme.egui_visuals());
             self.visuals_dirty = false;
         }
+        self.toolbar_ui(ctx);
+        match self.view_mode {
+            // The node graph: palette + inspector side panels around the canvas.
+            ViewMode::Structure => {
+                egui::SidePanel::left("palette")
+                    .resizable(true)
+                    .show(ctx, |ui| self.palette_ui(ui));
+                egui::SidePanel::right("inspector")
+                    .resizable(true)
+                    .show(ctx, |ui| self.inspector_ui(ui));
+                egui::CentralPanel::default()
+                    .frame(egui::Frame::NONE)
+                    .show(ctx, |ui| self.canvas_ui(ui));
+            }
+            // The control panel: one live-bound widget per node parameter, no wiring.
+            ViewMode::Panel => {
+                egui::CentralPanel::default().show(ctx, |ui| self.panel_ui(ui));
+            }
+        }
+    }
+
+    /// The top toolbar: the **Blocks / Panel** view switch first, then the macro breadcrumbs,
+    /// view controls (zoom, snap, theme), and undo/redo. Shared by both view modes.
+    fn toolbar_ui(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             ui.horizontal(|ui| {
+                // Switch between the node graph and the control panel.
+                ui.selectable_value(&mut self.view_mode, ViewMode::Structure, "Blocks");
+                ui.selectable_value(&mut self.view_mode, ViewMode::Panel, "Panel");
+                ui.separator();
                 ui.label("VST_bomb");
                 ui.separator();
                 // Breadcrumbs: root / macro#n / … — click any level to jump back.
@@ -1728,12 +1776,65 @@ impl EditorApp {
                 }
             });
         });
-        egui::SidePanel::left("palette")
-            .resizable(true)
-            .show(ctx, |ui| self.palette_ui(ui));
-        egui::SidePanel::right("inspector")
-            .resizable(true)
-            .show(ctx, |ui| self.inspector_ui(ui));
+    }
+
+    /// The current view surface (Blocks or Panel).
+    #[must_use]
+    pub fn view_mode(&self) -> ViewMode {
+        self.view_mode
+    }
+
+    /// Switches the view surface (Blocks vs Panel).
+    pub fn set_view_mode(&mut self, mode: ViewMode) {
+        self.view_mode = mode;
+    }
+
+    /// The control-panel bindings for the **active** patch: one [`PanelBinding`] per parameter
+    /// of every node, in canvas draw order. This is the model the Panel surface renders and the
+    /// unit tests assert against, independent of any egui frame.
+    #[must_use]
+    pub fn panel_widgets(&self) -> Vec<PanelBinding> {
+        let mut out = Vec::new();
+        for (id, node, _) in self.patch.draw_order() {
+            for (index, slot) in self.patch.params(id).iter().enumerate() {
+                out.push(PanelBinding {
+                    node: id,
+                    index,
+                    label: format!("{} {}", node.kind, slot.param.name),
+                    value: slot.value,
+                    min: slot.param.min,
+                    max: slot.param.max,
+                });
+            }
+        }
+        out
+    }
+
+    /// Renders the control panel: a scrollable list of labelled sliders, one per node
+    /// parameter, each bound live to [`PatchView::set_param`] so tweaking a knob here edits the
+    /// same value the inspector and the engine see.
+    fn panel_ui(&mut self, ui: &mut Ui) {
+        ui.heading("panel");
+        let bindings = self.panel_widgets();
+        if bindings.is_empty() {
+            ui.weak("this patch has no parameters to control");
+            return;
+        }
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for b in bindings {
+                ui.horizontal(|ui| {
+                    ui.add_sized([180.0, 18.0], egui::Label::new(&b.label).truncate());
+                    let mut value = b.value;
+                    let response = ui.add(egui::Slider::new(&mut value, b.min..=b.max));
+                    if response.changed() {
+                        self.patch.set_param(b.node, b.index, value);
+                    }
+                    if response.drag_stopped() || response.lost_focus() {
+                        self.patch.end_gesture();
+                    }
+                });
+            }
+        });
     }
 }
 
@@ -1820,6 +1921,53 @@ mod tests {
     }
 
     #[test]
+    fn the_view_starts_on_blocks_and_toggles_to_panel() {
+        let mut app = EditorApp::new();
+        assert_eq!(app.view_mode(), ViewMode::Structure);
+        app.set_view_mode(ViewMode::Panel);
+        assert_eq!(app.view_mode(), ViewMode::Panel);
+        app.set_view_mode(ViewMode::Structure);
+        assert_eq!(app.view_mode(), ViewMode::Structure);
+    }
+
+    #[test]
+    fn the_panel_lists_every_node_parameter_of_the_patch() {
+        let app = EditorApp::new();
+        let bindings = app.panel_widgets();
+        // The default Minitaur voice has many parameters; the panel exposes them all, one
+        // widget per parameter, with the "<kind> <param>" labels.
+        let expected: usize = app
+            .patch()
+            .draw_order()
+            .map(|(id, _, _)| app.patch().params(id).len())
+            .sum();
+        assert_eq!(bindings.len(), expected);
+        assert!(bindings.iter().any(|b| b.label == "ladder base_hz"));
+        assert!(bindings.iter().any(|b| b.label == "vca bias"));
+    }
+
+    #[test]
+    fn editing_a_panel_binding_updates_the_shared_parameter() {
+        // A panel widget edits the same value the inspector/engine read (via set_param), so a
+        // later panel_widgets() reflects the change.
+        let mut app = EditorApp::new();
+        let target = app
+            .panel_widgets()
+            .into_iter()
+            .find(|b| b.label == "ladder resonance")
+            .expect("ladder resonance is a panel control");
+        let new_value = (target.value + 0.1).min(target.max);
+        app.patch_mut()
+            .set_param(target.node, target.index, new_value);
+        let after = app
+            .panel_widgets()
+            .into_iter()
+            .find(|b| b.node == target.node && b.index == target.index)
+            .unwrap();
+        assert!((after.value - new_value).abs() < 1e-4);
+    }
+
+    #[test]
     fn render_fills_the_context_at_any_size() {
         // The editor must lay out and run a full frame at whatever surface size it is given —
         // small or large — without panicking, and the standalone's `render` and the split
@@ -1832,18 +1980,16 @@ mod tests {
         // `cargo test`, only in a real host.
         let mut app = EditorApp::new();
         for size in [egui::vec2(640.0, 400.0), egui::vec2(1600.0, 1000.0)] {
-            let ctx = egui::Context::default();
             let input = egui::RawInput {
                 screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
                 ..Default::default()
             };
-            // Standalone path.
-            let _ = ctx.run(input.clone(), |ctx| app.render(ctx));
-            // Split path (chrome + canvas), as an embedder would drive it.
-            let _ = ctx.run(input, |ctx| {
-                app.render_chrome(ctx);
-                egui::CentralPanel::default().show(ctx, |ui| app.canvas_ui(ui));
-            });
+            // Both view surfaces must lay out and run a frame at either size.
+            for mode in [ViewMode::Structure, ViewMode::Panel] {
+                app.set_view_mode(mode);
+                let ctx = egui::Context::default();
+                let _ = ctx.run(input.clone(), |ctx| app.render(ctx));
+            }
         }
     }
 

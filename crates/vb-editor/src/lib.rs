@@ -29,7 +29,7 @@ pub mod widgets;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "app"))]
 pub use app::run;
-pub use app::EditorApp;
+pub use app::{EditorApp, PanelBinding, ViewMode};
 #[cfg(feature = "assistant")]
 pub use assistant_panel::{assistant_panel_ui, AssistantAction};
 pub use camera::{Camera, MAX_ZOOM, MIN_ZOOM};
