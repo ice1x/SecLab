@@ -48,6 +48,18 @@ impl Processor for Vca {
             out[i] = x * (self.bias + self.amount * c);
         }
     }
+
+    /// Live-updates `bias`, `amount` (registry order). The VCA is stateless, so the update is
+    /// seamless — the next sample simply uses the new gain.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.bias = v;
+        }
+        if let Some(&v) = values.get(1) {
+            self.amount = v;
+        }
+        true
+    }
 }
 
 #[cfg(test)]

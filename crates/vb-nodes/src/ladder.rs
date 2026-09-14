@@ -127,6 +127,22 @@ impl Processor for Ladder {
     fn reset(&mut self) {
         self.z = [0.0; 4];
     }
+
+    /// Live-updates `base_hz`, `resonance`, `amount_hz` (registry order) without touching the
+    /// integrator states `z`, so turning a cutoff/resonance knob retunes the running filter
+    /// smoothly instead of rebuilding it (which would clear its memory and click).
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.base_hz = v;
+        }
+        if let Some(&v) = values.get(1) {
+            self.resonance = v.clamp(0.0, 1.0);
+        }
+        if let Some(&v) = values.get(2) {
+            self.amount_hz = v;
+        }
+        true
+    }
 }
 
 #[cfg(test)]
@@ -153,6 +169,44 @@ mod tests {
         }
         let tail = &out[frames / 2..];
         (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt()
+    }
+
+    #[test]
+    fn set_params_retunes_live_and_keeps_filter_memory() {
+        let ctx = ProcessContext {
+            sample_rate: SR,
+            frames: 64,
+        };
+        let input = vec![1.0_f32; 64]; // a DC step charges the integrator states
+        let run = |f: &mut Ladder| {
+            let mut out = vec![0.0_f32; 64];
+            f.process(&ctx, &[&input, &[]], &mut [&mut out]);
+            out[63]
+        };
+
+        // Two identical filters, both charged by one block.
+        let mut live = Ladder::new(1_000.0, 0.3, 0.0);
+        let mut cleared = Ladder::new(1_000.0, 0.3, 0.0);
+        let _ = run(&mut live);
+        let _ = run(&mut cleared);
+
+        // `set_params` retunes to a new cutoff without clearing state; `reset` clears it.
+        assert!(live.set_params(&[400.0, 0.6, 0.0]));
+        cleared.reset();
+
+        // The next block: the live filter continues from its charged state, the reset one
+        // restarts from zero — so their outputs differ. This proves set_params kept the memory.
+        let after_live = run(&mut live);
+        let after_cleared = run(&mut cleared);
+        // The cutoff is recomputed inside process(), so read it after that block.
+        assert!(
+            (live.cutoff_hz() - 400.0).abs() < 1.0,
+            "cutoff retuned live to the new base_hz"
+        );
+        assert!(
+            (after_live - after_cleared).abs() > 1e-4,
+            "set_params must preserve filter state (live {after_live} vs reset {after_cleared})"
+        );
     }
 
     #[test]

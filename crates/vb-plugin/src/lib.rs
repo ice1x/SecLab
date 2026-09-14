@@ -508,17 +508,53 @@ impl Plugin for VstBomb {
         // A background rebuild may have delivered a fresh engine.
         self.rx.poll_swap(engine);
 
-        // Detect automation: compare current values against what the engine was
-        // built with — in place, allocation-free — and kick a background rebuild.
-        let mut changed = false;
-        for (slot, b) in self.built_values.iter_mut().zip(&self.params.bound) {
-            let value = b.param.value();
-            if (*slot - value).abs() > f32::EPSILON {
-                *slot = value;
-                changed = true;
+        // Detect a parameter change (automation, or a knob moved in the editor) and apply it to
+        // the RUNNING engine in place — no rebuild, no engine swap — so the sound retunes
+        // smoothly instead of clicking. Turning a knob during playback used to rebuild the whole
+        // engine every block, resetting every processor's state (oscillator phase, filter memory,
+        // envelope stage) and corrupting the sound during the turn. Now each changed node is
+        // live-updated via `RtEngine::set_doc_params`, addressed by its document id.
+        //
+        // A node whose processor does not support a live update returns `false`; only then do we
+        // fall back to a full background rebuild (also the path for structural edits). Parameters
+        // are grouped by node contiguously in `bound` (built per node, in registry order), so this
+        // gathers each node's full value slice on the stack — allocation-free, audio-thread safe.
+        const MAX_LIVE_PARAMS: usize = 32;
+        let bound = &self.params.bound;
+        let mut needs_rebuild = false;
+        let mut i = 0;
+        while i < bound.len() {
+            let node = bound[i].node;
+            let mut vals = [0.0_f32; MAX_LIVE_PARAMS];
+            let mut n = 0;
+            let mut node_changed = false;
+            let mut j = i;
+            while j < bound.len() && bound[j].node == node {
+                let value = bound[j].param.value();
+                if (self.built_values[j] - value).abs() > f32::EPSILON {
+                    node_changed = true;
+                }
+                if n < MAX_LIVE_PARAMS {
+                    vals[n] = value;
+                    n += 1;
+                }
+                j += 1;
             }
+            if node_changed {
+                // A node with more than MAX_LIVE_PARAMS parameters could not be fully applied on
+                // the stack; rebuild it instead of live-updating a truncated slice.
+                let live = n <= MAX_LIVE_PARAMS && engine.set_doc_params(node, &vals[..n]);
+                if !live {
+                    needs_rebuild = true;
+                }
+                // Sync built_values for this node's run to the current values.
+                for (k, b) in bound[i..j].iter().enumerate() {
+                    self.built_values[i + k] = b.param.value();
+                }
+            }
+            i = j;
         }
-        if changed {
+        if needs_rebuild {
             context.execute_background(PluginTask::RebuildEngine);
         }
 
@@ -1103,6 +1139,42 @@ mod tests {
             "full graph came back"
         );
         assert_eq!(restored.edges.len(), doc.edges.len());
+    }
+
+    #[test]
+    fn a_default_patch_node_updates_live_by_document_id() {
+        // The engine built from a document aliases document ids, so the plugin can retune a
+        // running node in place (no rebuild, no click) via its document id — the fix for turning
+        // a knob during playback corrupting the sound.
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let ctx = BuildContext::default();
+        let (mut engine, _sink) =
+            engine_from_doc_with_values(&doc, &registry, &ctx, 128, &HashMap::new()).unwrap();
+
+        let ladder = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "ladder")
+            .map(|e| e.id)
+            .expect("default patch has a ladder");
+        assert!(
+            engine.set_doc_params(ladder, &[500.0, 0.5, 2_000.0]),
+            "the ladder retunes live by its document id"
+        );
+
+        // midi-in carries no params (default no-op set_params → false), and an unknown id is false.
+        let midi = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "midi-in")
+            .map(|e| e.id)
+            .expect("default patch has a midi-in");
+        assert!(
+            !engine.set_doc_params(midi, &[0.0]),
+            "midi-in has no live params"
+        );
+        assert!(!engine.set_doc_params(NodeId(99_999), &[0.0]), "unknown id");
     }
 
     #[test]

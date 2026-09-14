@@ -28,6 +28,19 @@ pub enum Division {
 }
 
 impl Division {
+    /// Maps a stepped float parameter to a division (0 whole, 1 half, 2 quarter, 3 eighth,
+    /// 4 sixteenth), rounding and clamping — the encoding the registry's `division` parameter uses.
+    #[must_use]
+    pub fn from_stepped(v: f32) -> Self {
+        match v.round() as i32 {
+            0 => Division::Whole,
+            1 => Division::Half,
+            3 => Division::Eighth,
+            4 => Division::Sixteenth,
+            _ => Division::Quarter,
+        }
+    }
+
     /// Cycle frequency in Hz for this division at `bpm` (a beat is a quarter note).
     #[must_use]
     pub fn hz(self, bpm: f32) -> f32 {
@@ -117,6 +130,25 @@ impl Processor for Lfo {
 
     fn reset(&mut self) {
         self.phase = 0.0;
+    }
+
+    /// Live-updates the LFO from `waveform`, `sync`, `freq_hz`, `bpm`, `division` (registry order),
+    /// preserving the phase so the modulation keeps running. In sync mode the effective frequency
+    /// is re-derived from `bpm` + `division`; otherwise it is the `freq_hz` parameter — mirroring
+    /// how the registry builds a free vs synced LFO.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.waveform = Waveform::from_stepped(v);
+        }
+        let synced = values.get(1).copied().unwrap_or(0.0).round() as i32 == 1;
+        if synced {
+            let bpm = values.get(3).copied().unwrap_or(120.0);
+            let division = Division::from_stepped(values.get(4).copied().unwrap_or(2.0));
+            self.freq_hz = division.hz(bpm);
+        } else if let Some(&v) = values.get(2) {
+            self.freq_hz = v;
+        }
+        true
     }
 }
 

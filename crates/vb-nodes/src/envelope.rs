@@ -115,6 +115,25 @@ impl Processor for Adsr {
         self.level = 0.0;
         self.gate_prev = false;
     }
+
+    /// Live-updates `attack_s`, `decay_s`, `sustain`, `release_s` (registry order), preserving the
+    /// current stage and level so editing the envelope during a held note reshapes it smoothly
+    /// instead of restarting it from zero.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.attack_s = v;
+        }
+        if let Some(&v) = values.get(1) {
+            self.decay_s = v;
+        }
+        if let Some(&v) = values.get(2) {
+            self.sustain = v.clamp(0.0, 1.0);
+        }
+        if let Some(&v) = values.get(3) {
+            self.release_s = v;
+        }
+        true
+    }
 }
 
 #[cfg(test)]

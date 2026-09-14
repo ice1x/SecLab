@@ -20,6 +20,20 @@ pub enum Waveform {
     Triangle,
 }
 
+impl Waveform {
+    /// Maps a stepped float parameter to a waveform (0 sine, 1 saw, 2 square, 3 triangle),
+    /// rounding and clamping — the encoding the registry's `waveform` parameter uses.
+    #[must_use]
+    pub fn from_stepped(v: f32) -> Self {
+        match v.round() as i32 {
+            1 => Waveform::Saw,
+            2 => Waveform::Square,
+            3 => Waveform::Triangle,
+            _ => Waveform::Sine,
+        }
+    }
+}
+
 /// A single-output oscillator running at a fixed frequency.
 ///
 /// No inputs yet; a `freq` control input arrives with the control-rate work. The output
@@ -58,6 +72,12 @@ impl Oscillator {
     /// signal can sweep the pitch continuously (see [`crate::Vco`]).
     pub fn set_freq_hz(&mut self, freq_hz: f32) {
         self.freq_hz = freq_hz;
+    }
+
+    /// Switches the waveform without disturbing the phase, so a live waveform change does not
+    /// restart the cycle (no click).
+    pub fn set_waveform(&mut self, waveform: Waveform) {
+        self.waveform = waveform;
     }
 
     /// Computes the current sample for the given per-sample phase increment `dt`.

@@ -104,8 +104,11 @@ pub fn engine_from_doc_with_values(
         .map(|entry| remap[&entry.id])
         .find(|&runtime_id| !graph.edges().iter().any(|e| e.from_node == runtime_id));
 
-    let engine =
+    let mut engine =
         RtEngine::compile(&graph, procs, frames).map_err(|e| BuildError::Engine(e.to_string()))?;
+    // Alias document ids so a host can live-update a node's parameters by the id it tracks
+    // (its automatable parameters are keyed by document id) — see `RtEngine::set_doc_params`.
+    engine.alias_doc_ids(&remap);
     Ok((engine, sink))
 }
 

@@ -49,6 +49,13 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Engine (`vb-runtime` / `vb-nodes` / `vb-plugin`)** — turning a knob during playback no longer
+  corrupts the sound. A parameter change (knob or automation) used to rebuild the whole engine and
+  swap it in, resetting every processor's DSP state (oscillator phase, filter memory, envelope
+  stage) — a click on every change, ~60 a second while dragging. Parameters now update the running
+  engine **in place** via a new `Processor::set_params` (implemented for every node in the default
+  voice), so the sound retunes smoothly; a full rebuild happens only for structural edits or a node
+  without live support.
 - **Editor (`vb-editor`)** — exporting or saving a project no longer drops edited parameter
   values. `PatchView::to_doc` built the document from the graph shape alone, so every knob
   edited in the inspector reverted to its registry default on export/import; it now copies the
