@@ -182,7 +182,19 @@ impl PatchView {
     /// single source of truth for structure.
     #[must_use]
     pub fn to_doc(&self) -> ProjectDoc {
-        ProjectDoc::from_graph(&self.graph)
+        // `from_graph` captures only the graph shape (kinds, ports, edges). The inspector's
+        // edited parameter values live alongside the graph in `self.params`, so they must be
+        // copied in — otherwise exporting or saving a project silently drops every knob edit
+        // and it reloads at the registry defaults.
+        let mut doc = ProjectDoc::from_graph(&self.graph);
+        for id in self.graph.node_ids() {
+            if let Some(slots) = self.params.get(&id) {
+                if !slots.is_empty() {
+                    doc.set_node_values(id, slots.iter().map(|s| s.value).collect());
+                }
+            }
+        }
+        doc
     }
 
     /// Captures the current state for the undo stack.

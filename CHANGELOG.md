@@ -20,7 +20,13 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Editor (`vb-editor`)** — exporting or saving a project no longer drops edited parameter
+  values. `PatchView::to_doc` built the document from the graph shape alone, so every knob
+  edited in the inspector reverted to its registry default on export/import; it now copies the
+  inspector values into the document. Guarded by new end-to-end interface tests
+  (`vb-editor/tests/e2e_interface.rs`) that drive `EditorApp` through the public UI API.
 
 ## [0.0.1] - 2026-09-14
 

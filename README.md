@@ -594,6 +594,16 @@ values), so a preset can pin exact knob settings, not just a graph.
   RNG for deterministic tests) shape the texture from smooth pad to glitchy cloud. A new synthesis
   class. Unit-tested for finite/audible output, silence-without-input, density-adds-energy,
   pitch-brightens-the-output, and reset 🧪
+- [x] 000177 — 🧩 **End-to-end interface tests** (`vb-editor/tests/e2e_interface.rs`) — headless
+  journeys driving `EditorApp` through the **same public API the plugin/standalone UI calls**:
+  the launch seed, camera hit-testing (click-to-select, drag-to-wire), the inspector's parameter
+  edits, and the project RON export/import buttons. Covers the launch invariant (the canvas must
+  open on the real **gated** default voice, not a bare oscillator) and a full session
+  (add → wire → edit → export → re-import → select). **Caught a real bug on the first run:**
+  `PatchView::to_doc` built the document from the graph alone and dropped every edited parameter
+  value, so exporting/saving a project silently lost all knob edits — now `to_doc` copies the
+  inspector values into the document (regression-guarded by
+  `an_edited_parameter_survives_a_project_round_trip`) 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -638,7 +648,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000176, …); split a large task into 🧩 subtasks with
+the end with a new global number (000178, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
