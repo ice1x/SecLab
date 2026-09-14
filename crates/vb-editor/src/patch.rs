@@ -161,6 +161,10 @@ pub struct PatchView {
     /// Bumped on every audible mutation (structure, params, undo/redo) so embedders
     /// know when to rebuild the audio engine. Selection changes do not count.
     revision: u64,
+    /// Bumped on every view-only mutation (panel placement, widget type) so an embedder knows
+    /// when to re-persist the document without rebuilding the engine. Separate from [`revision`]
+    /// precisely because these edits are inaudible.
+    view_revision: u64,
 }
 
 impl PatchView {
@@ -260,6 +264,21 @@ impl PatchView {
     #[must_use]
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// Marks a **presentational** change — a panel placement or a control-widget retype. These
+    /// are not audible (they never [`touch`](Self::touch) the engine revision), but they must
+    /// still be persisted: an embedder watches this counter to know when to re-serialize the
+    /// document into its saved state (see the plugin's editor mirror).
+    fn touch_view(&mut self) {
+        self.view_revision = self.view_revision.wrapping_add(1);
+    }
+
+    /// Monotonic counter of view-only edits (panel placement, widget type). Equal values mean
+    /// "no presentational change to persist".
+    #[must_use]
+    pub fn view_revision(&self) -> u64 {
+        self.view_revision
     }
 
     /// Adds a macro node at `pos`: one audio in, one audio out, with a fresh inner
@@ -645,12 +664,14 @@ impl PatchView {
     /// Reassigns the control widget for parameter `index` on `id`.
     ///
     /// A widget is a view-only mapping — it changes nothing audible and is not an undo
-    /// step — so this neither [`touch`](Self::touch)es the revision nor records history.
+    /// step — so this neither [`touch`](Self::touch)es the revision nor records history. It does
+    /// bump the [`view_revision`](Self::view_revision) so an embedder re-persists the choice.
     /// Returns `false` for an unknown node/index.
     pub fn set_widget(&mut self, id: NodeId, index: usize, widget: WidgetKind) -> bool {
         match self.params.get_mut(&id).and_then(|s| s.get_mut(index)) {
             Some(slot) => {
                 slot.widget = widget;
+                self.touch_view();
                 true
             }
             None => false,
@@ -695,9 +716,11 @@ impl PatchView {
     ///
     /// Like a widget assignment ([`set_widget`](Self::set_widget)), panel placement is a
     /// **view-only** mapping — it changes nothing audible, so it neither records an undo step nor
-    /// touches the revision (the engine never rebuilds because a control block moved).
+    /// touches the revision (the engine never rebuilds because a control block moved). It does
+    /// bump the [`view_revision`](Self::view_revision) so an embedder re-persists the placement.
     pub fn set_panel_position(&mut self, id: NodeId, pos: Pos2) {
         self.panel_positions.insert(id, pos);
+        self.touch_view();
     }
 
     /// Nodes in draw order (back to front), with their positions.
@@ -1815,6 +1838,41 @@ mod tests {
         let r4 = patch.revision();
         assert!(patch.undo());
         assert!(patch.revision() > r4, "undo changes what sounds");
+    }
+
+    #[test]
+    fn view_revision_tracks_presentational_edits_only() {
+        let mut patch = PatchView::new();
+        let node = patch.add_node_with_params(
+            gain(),
+            vec![Parameter::new("gain", 0.0, 2.0, 1.0)],
+            Pos2::ZERO,
+        );
+
+        // A panel placement and a widget retype are presentational: they bump view_revision,
+        // never the audible revision.
+        let (rev, view) = (patch.revision(), patch.view_revision());
+        patch.set_panel_position(node, Pos2::new(120.0, 40.0));
+        assert!(
+            patch.view_revision() > view,
+            "placement bumps view_revision"
+        );
+        assert_eq!(patch.revision(), rev, "placement is not audible");
+
+        let view2 = patch.view_revision();
+        assert!(patch.set_widget(node, 0, WidgetKind::Slider));
+        assert!(patch.view_revision() > view2, "retype bumps view_revision");
+        assert_eq!(patch.revision(), rev, "retype is not audible");
+
+        // An audible edit bumps the audible revision but leaves view_revision alone.
+        let view3 = patch.view_revision();
+        patch.set_param(node, 0, 0.25);
+        assert!(patch.revision() > rev, "param edit is audible");
+        assert_eq!(
+            patch.view_revision(),
+            view3,
+            "a param edit is not a view edit"
+        );
     }
 
     #[test]
