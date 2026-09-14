@@ -1780,7 +1780,10 @@ impl EditorApp {
                 ui.selectable_value(&mut self.view_mode, ViewMode::Structure, "Blocks");
                 ui.selectable_value(&mut self.view_mode, ViewMode::Panel, "Panel");
                 ui.separator();
+                // Name + version, so the build in the host window is always identifiable.
                 ui.label("VST_bomb");
+                ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
+                    .on_hover_text("VST_bomb version (crate version)");
                 ui.separator();
                 // Breadcrumbs: root / macro#n / … — click any level to jump back.
                 let depth = self.stack.len();
