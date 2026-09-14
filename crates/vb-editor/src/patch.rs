@@ -60,6 +60,25 @@ fn audio_out(name: &str) -> vb_core::Port {
     vb_core::Port::output(name, vb_core::SignalType::Audio)
 }
 
+/// A panel accent colour as a `#rrggbb` hex string (alpha dropped — panel accents are opaque),
+/// the form the project document stores.
+fn color_to_hex(color: egui::Color32) -> String {
+    format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
+}
+
+/// Parses a `#rrggbb` (or bare `rrggbb`) hex string into an opaque colour, or `None` if it is not
+/// six hex digits — a malformed stored colour then falls back to the theme default.
+fn hex_to_color(hex: &str) -> Option<egui::Color32> {
+    let s = hex.strip_prefix('#').unwrap_or(hex);
+    if s.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&s[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&s[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&s[4..6], 16).ok()?;
+    Some(egui::Color32::from_rgb(r, g, b))
+}
+
 /// An in-progress wire drag: the port it started from.
 ///
 /// Either end can start the drag; [`PatchView::end_wire`] normalizes the direction so
@@ -147,6 +166,9 @@ pub struct PatchView {
     /// Panel-surface positions per node's control block. View-only (not in [`Snapshot`], never
     /// touches the revision); empty means every module auto-flows into a grid.
     panel_positions: HashMap<NodeId, Pos2>,
+    /// Panel accent colour per node's control block. View-only; absent means the module uses the
+    /// theme's default framing.
+    panel_colors: HashMap<NodeId, egui::Color32>,
     /// Draw order, back to front. Hit-testing walks it front to back.
     order: Vec<NodeId>,
     selected: Option<NodeId>,
@@ -212,6 +234,10 @@ impl PatchView {
             // stay absent (they auto-flow on load).
             if let Some(pos) = self.panel_positions.get(&id) {
                 doc.set_node_panel_pos(id, Some((pos.x, pos.y)));
+            }
+            // Persist the panel accent colour of any styled module; unstyled ones stay absent.
+            if let Some(color) = self.panel_colors.get(&id) {
+                doc.set_node_panel_color(id, Some(color_to_hex(*color)));
             }
         }
         doc
@@ -373,6 +399,7 @@ impl PatchView {
         self.graph = Graph::new();
         self.positions.clear();
         self.panel_positions.clear();
+        self.panel_colors.clear();
         self.order.clear();
         self.params.clear();
         self.subpatches.clear();
@@ -418,6 +445,10 @@ impl PatchView {
             // auto-flows into a grid slot on the panel.
             if let Some((x, y)) = entry.panel_pos {
                 self.panel_positions.insert(new_id, Pos2::new(x, y));
+            }
+            // Restore the module's accent colour; a malformed hex falls back to the default.
+            if let Some(color) = entry.panel_color.as_deref().and_then(hex_to_color) {
+                self.panel_colors.insert(new_id, color);
             }
             remap.insert(entry.id, new_id);
         }
@@ -720,6 +751,28 @@ impl PatchView {
     /// bump the [`view_revision`](Self::view_revision) so an embedder re-persists the placement.
     pub fn set_panel_position(&mut self, id: NodeId, pos: Pos2) {
         self.panel_positions.insert(id, pos);
+        self.touch_view();
+    }
+
+    /// The panel accent colour of the module for `id`, if the user has set one. `None` means the
+    /// module uses the theme's default framing.
+    #[must_use]
+    pub fn panel_color(&self, id: NodeId) -> Option<egui::Color32> {
+        self.panel_colors.get(&id).copied()
+    }
+
+    /// Sets (or, with `None`, clears) the panel accent colour of the module for `id`. Like a
+    /// placement, this is a **view-only** mapping: it bumps the [`view_revision`](Self::view_revision)
+    /// so an embedder re-persists it, but never the audible revision.
+    pub fn set_panel_color(&mut self, id: NodeId, color: Option<egui::Color32>) {
+        match color {
+            Some(c) => {
+                self.panel_colors.insert(id, c);
+            }
+            None => {
+                self.panel_colors.remove(&id);
+            }
+        }
         self.touch_view();
     }
 
@@ -1864,6 +1917,15 @@ mod tests {
         assert!(patch.view_revision() > view2, "retype bumps view_revision");
         assert_eq!(patch.revision(), rev, "retype is not audible");
 
+        let view_c = patch.view_revision();
+        patch.set_panel_color(node, Some(egui::Color32::from_rgb(0xff, 0x88, 0x00)));
+        assert!(patch.view_revision() > view_c, "accent bumps view_revision");
+        assert_eq!(patch.revision(), rev, "accent is not audible");
+        assert_eq!(
+            patch.panel_color(node),
+            Some(egui::Color32::from_rgb(0xff, 0x88, 0x00))
+        );
+
         // An audible edit bumps the audible revision but leaves view_revision alone.
         let view3 = patch.view_revision();
         patch.set_param(node, 0, 0.25);
@@ -1873,6 +1935,16 @@ mod tests {
             view3,
             "a param edit is not a view edit"
         );
+    }
+
+    #[test]
+    fn accent_colour_round_trips_through_hex() {
+        let c = egui::Color32::from_rgb(0xff, 0x88, 0x00);
+        assert_eq!(color_to_hex(c), "#ff8800");
+        assert_eq!(hex_to_color("#ff8800"), Some(c));
+        assert_eq!(hex_to_color("ff8800"), Some(c), "bare hex is accepted");
+        assert_eq!(hex_to_color("#zzzzzz"), None, "non-hex is rejected");
+        assert_eq!(hex_to_color("#12345"), None, "wrong length is rejected");
     }
 
     #[test]

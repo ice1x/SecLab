@@ -244,6 +244,17 @@ const PANEL_COLS: usize = 3;
 /// enough that a tall module rarely overlaps its neighbour before it is dragged into place.
 const PANEL_CELL: Vec2 = Vec2::new(248.0, 240.0);
 
+/// Preset accent colours offered in a module's right-click styling menu. A small, legible palette
+/// (rather than a full colour wheel) keeps the panel looking deliberate and the choice quick.
+const PANEL_ACCENTS: [(&str, Color32); 6] = [
+    ("amber", Color32::from_rgb(0xff, 0x9f, 0x1c)),
+    ("red", Color32::from_rgb(0xe6, 0x39, 0x46)),
+    ("green", Color32::from_rgb(0x2a, 0x9d, 0x8f)),
+    ("blue", Color32::from_rgb(0x45, 0x7b, 0x9d)),
+    ("violet", Color32::from_rgb(0x9b, 0x5d, 0xe5)),
+    ("slate", Color32::from_rgb(0x8d, 0x99, 0xae)),
+];
+
 /// One node's block on the [`ViewMode::Panel`] surface: a titled group of that node's parameter
 /// controls, so the panel reads as a rack of labelled modules (like a hardware synth) instead of
 /// one flat wall of look-alike sliders. Returned by [`EditorApp::panel_modules`] so the grouping
@@ -1956,34 +1967,62 @@ impl EditorApp {
         // The controls need the live `Parameter` (range + normalize); take an owned copy so the
         // set_param / set_widget edits below do not clash with the borrow.
         let slots = self.patch.params(module.node).to_vec();
-        egui::Frame::group(ui.style())
-            .inner_margin(8.0)
-            .show(ui, |ui| {
-                ui.set_width(MODULE_WIDTH);
-                ui.vertical(|ui| {
-                    // Title doubles as the move handle: a grabbed title drags the whole module.
-                    let title = ui.add(
-                        egui::Label::new(egui::RichText::new(&module.title).strong())
-                            .sense(Sense::drag()),
-                    );
-                    if title.dragged() {
-                        self.patch
-                            .set_panel_position(module.node, pos + title.drag_delta());
-                    }
-                    if title.hovered() {
-                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                    }
-                    ui.add_space(4.0);
-                    ui.horizontal_wrapped(|ui| {
-                        for b in &module.bindings {
-                            let Some(slot) = slots.get(b.index) else {
-                                continue;
-                            };
-                            self.panel_control_ui(ui, theme, b.node, b.index, slot);
+        let accent = self.patch.panel_color(module.node);
+        // A styled module gets a coloured border; an unstyled one keeps the theme's group frame.
+        let mut frame = egui::Frame::group(ui.style()).inner_margin(8.0);
+        if let Some(color) = accent {
+            frame = frame.stroke(Stroke::new(1.5_f32, color));
+        }
+        frame.show(ui, |ui| {
+            ui.set_width(MODULE_WIDTH);
+            ui.vertical(|ui| {
+                // Title doubles as the move handle: a grabbed title drags the whole module.
+                let title_text = egui::RichText::new(&module.title).strong();
+                let title_text = match accent {
+                    Some(color) => title_text.color(color),
+                    None => title_text,
+                };
+                let title = ui.add(egui::Label::new(title_text).sense(Sense::drag()));
+                if title.dragged() {
+                    self.patch
+                        .set_panel_position(module.node, pos + title.drag_delta());
+                }
+                if title.hovered() {
+                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                }
+                // Right-click the title to recolour (or drag it to move) the module.
+                let node = module.node;
+                title.context_menu(|ui| {
+                    ui.label("module accent");
+                    ui.horizontal(|ui| {
+                        for (name, color) in PANEL_ACCENTS {
+                            let selected = accent == Some(color);
+                            if ui
+                                .add(egui::Button::new("  ").fill(color).selected(selected))
+                                .on_hover_text(name)
+                                .clicked()
+                            {
+                                self.patch.set_panel_color(node, Some(color));
+                                ui.close_menu();
+                            }
                         }
                     });
+                    if ui.button("default").clicked() {
+                        self.patch.set_panel_color(node, None);
+                        ui.close_menu();
+                    }
+                });
+                ui.add_space(4.0);
+                ui.horizontal_wrapped(|ui| {
+                    for b in &module.bindings {
+                        let Some(slot) = slots.get(b.index) else {
+                            continue;
+                        };
+                        self.panel_control_ui(ui, theme, b.node, b.index, slot);
+                    }
                 });
             });
+        });
     }
 
     /// Renders one panel control (a single parameter) as its [`WidgetKind`], with a name/value
@@ -2275,6 +2314,8 @@ mod tests {
         app.patch_mut()
             .set_panel_position(ladder, Pos2::new(300.0, 90.0));
         assert!(app.patch_mut().set_widget(ladder, 0, WidgetKind::Slider));
+        let accent = egui::Color32::from_rgb(0x2a, 0x9d, 0x8f);
+        app.patch_mut().set_panel_color(ladder, Some(accent));
 
         let ron = app.export_project_ron().expect("serializes");
         let mut reopened = EditorApp::new();
@@ -2296,6 +2337,11 @@ mod tests {
             reopened.patch().params(restored)[0].widget,
             WidgetKind::Slider,
             "the chosen control type came back"
+        );
+        assert_eq!(
+            reopened.patch().panel_color(restored),
+            Some(accent),
+            "the module accent colour came back"
         );
     }
 

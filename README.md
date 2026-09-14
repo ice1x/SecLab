@@ -690,6 +690,15 @@ per-widget styling and a saved layout in the project.
   with that arrangement. Tested: `view_revision` bumps on placement/retype but not on audible edits
   (and vice-versa), and `set_patch_ron` makes the saved host state carry the edited patch. *(Next:
   per-widget styling.)* 🧪
+- [x] 000187 — 🧩 **Module accent colours (panel styling)** — a module can be given an **accent
+  colour** (right-click its title → a small preset palette, or "default"); the accent frames the
+  module and tints its title, so a panel can be laid out and colour-coded like a real instrument
+  front. The colour is view-only (`PatchView::set_panel_color`, bumps `view_revision`) and **saved
+  with the patch**: `NodeEntry` gained an optional `panel_color` (`#rrggbb`) field, written by
+  `to_doc` and restored by `apply_doc` (a malformed hex falls back to the theme). Tested: hex ↔
+  colour round-trip, `view_revision` bumps on recolour but stays inaudible, the field round-trips
+  through the project RON (and is omitted when unset), and the end-to-end editor reopen restores
+  the accent. *(Next: per-control size and custom labels.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 

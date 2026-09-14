@@ -43,6 +43,9 @@ Two independent version numbers matter in this project:
   a rearranged/retyped panel — and any other in-window change — survives a project save/reopen.
   View-only edits (panel placement, control type) bump a new `PatchView::view_revision` and
   re-persist without rebuilding the audio engine.
+- **Editor (`vb-editor`) / Project (`vb-project`)** — panel modules can be given an **accent
+  colour** (right-click a module's title). The accent frames the module and tints its title, and
+  is saved with the patch via a new optional `NodeEntry.panel_color` (`#rrggbb`) field.
 
 ### Fixed
 
