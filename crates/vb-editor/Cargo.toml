@@ -67,6 +67,10 @@ console_error_panic_hook = "0.1"
 # vb-editor, so there is no dependency cycle.
 vb-ai.workspace = true
 ron.workspace = true
+# End-to-end interface tests drive EditorApp through the same public API the plugin/standalone
+# UI calls; they need egui coordinate types and vb-core port ids to target ports on the canvas.
+egui.workspace = true
+vb-core.workspace = true
 
 [lints]
 workspace = true
