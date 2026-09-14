@@ -60,6 +60,12 @@ Two independent version numbers matter in this project:
   the panel now computes the column count from the available width (`panel_column_count`) and lays
   un-placed modules out row by row, so every module is visible and wraps into a grid. Verified in
   the browser (WASM) build.
+- **Engine / Plugin editor (`vb-plugin`)** — turning a knob **in the plugin editor** during
+  playback no longer clicks. The live-update path landed first, but the embedded editor still
+  kicked a full engine rebuild on every audible edit — including a plain knob move — and that
+  rebuild swapped in a fresh, state-reset engine, clicking anyway. The editor now rebuilds **only
+  when the graph structure changes** (a node or wire added/removed); a parameter tweak is applied
+  live through the host parameters.
 - **Engine (`vb-runtime` / `vb-nodes` / `vb-plugin`)** — turning a knob during playback no longer
   corrupts the sound. A parameter change (knob or automation) used to rebuild the whole engine and
   swap it in, resetting every processor's DSP state (oscillator phase, filter memory, envelope
