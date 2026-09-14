@@ -19,6 +19,7 @@ use vb_core::{GraphNode, Port, SignalType};
 
 use vb_nodes::Registry;
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::camera::{grid_step, Camera};
@@ -231,6 +232,22 @@ pub struct PanelBinding {
     /// Range bounds.
     pub min: f32,
     pub max: f32,
+}
+
+/// One node's block on the [`ViewMode::Panel`] surface: a titled group of that node's parameter
+/// controls, so the panel reads as a rack of labelled modules (like a hardware synth) instead of
+/// one flat wall of look-alike sliders. Returned by [`EditorApp::panel_modules`] so the grouping
+/// and titling are testable independently of rendering.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PanelModule {
+    /// The node this block controls.
+    pub node: vb_core::NodeId,
+    /// Unique display title: the node kind, suffixed with an ordinal when the same kind appears
+    /// more than once in the patch (e.g. `"pitch-osc 1"`, `"pitch-osc 2"`), so three oscillators
+    /// no longer render as three identical `"pitch-osc"` headings.
+    pub title: String,
+    /// The node's parameter controls, in registry order.
+    pub bindings: Vec<PanelBinding>,
 }
 
 impl Default for EditorApp {
@@ -1810,31 +1827,122 @@ impl EditorApp {
         out
     }
 
-    /// Renders the control panel: a scrollable list of labelled sliders, one per node
-    /// parameter, each bound live to [`PatchView::set_param`] so tweaking a knob here edits the
-    /// same value the inspector and the engine see.
+    /// The panel's controls **grouped by node** into titled [`PanelModule`]s, in canvas draw
+    /// order. Nodes with no parameters (e.g. `midi-in`) contribute no module. When the same node
+    /// kind occurs more than once, each module's title carries an ordinal (`"pitch-osc 1"`,
+    /// `"pitch-osc 2"`, …) so the blocks are told apart; a kind that occurs once keeps its bare
+    /// name. This is the model the Panel surface renders and the tests assert against.
+    #[must_use]
+    pub fn panel_modules(&self) -> Vec<PanelModule> {
+        // First pass: how many param-bearing nodes share each kind, so a kind seen once stays
+        // un-numbered while a repeated kind gets 1-based ordinals.
+        let mut totals: HashMap<&str, usize> = HashMap::new();
+        for (id, node, _) in self.patch.draw_order() {
+            if !self.patch.params(id).is_empty() {
+                *totals.entry(node.kind.as_str()).or_default() += 1;
+            }
+        }
+
+        let mut seen: HashMap<&str, usize> = HashMap::new();
+        let mut out = Vec::new();
+        for (id, node, _) in self.patch.draw_order() {
+            let slots = self.patch.params(id);
+            if slots.is_empty() {
+                continue;
+            }
+            let kind = node.kind.as_str();
+            let title = if totals.get(kind).copied().unwrap_or(0) > 1 {
+                let n = seen.entry(kind).or_default();
+                *n += 1;
+                format!("{kind} {n}")
+            } else {
+                kind.to_owned()
+            };
+            let bindings = slots
+                .iter()
+                .enumerate()
+                .map(|(index, slot)| PanelBinding {
+                    node: id,
+                    index,
+                    label: format!("{} {}", node.kind, slot.param.name),
+                    value: slot.value,
+                    min: slot.param.min,
+                    max: slot.param.max,
+                })
+                .collect();
+            out.push(PanelModule {
+                node: id,
+                title,
+                bindings,
+            });
+        }
+        out
+    }
+
+    /// Renders the control panel as a rack of titled modules — one framed block per node, its
+    /// parameters shown as rotary knobs — laid out in a wrapping grid, so it reads like a synth
+    /// front panel rather than a flat column of look-alike sliders. Every knob is bound live to
+    /// [`PatchView::set_param`], so a tweak here edits the same value the inspector and the audio
+    /// engine see.
     fn panel_ui(&mut self, ui: &mut Ui) {
         ui.heading("panel");
-        let bindings = self.panel_widgets();
-        if bindings.is_empty() {
+        let modules = self.panel_modules();
+        if modules.is_empty() {
             ui.weak("this patch has no parameters to control");
             return;
         }
+        let theme = self.theme; // Copy — frees `self` for the set_param calls below.
         egui::ScrollArea::vertical().show(ui, |ui| {
-            for b in bindings {
-                ui.horizontal(|ui| {
-                    ui.add_sized([180.0, 18.0], egui::Label::new(&b.label).truncate());
-                    let mut value = b.value;
-                    let response = ui.add(egui::Slider::new(&mut value, b.min..=b.max));
-                    if response.changed() {
-                        self.patch.set_param(b.node, b.index, value);
-                    }
-                    if response.drag_stopped() || response.lost_focus() {
-                        self.patch.end_gesture();
-                    }
-                });
-            }
+            ui.horizontal_wrapped(|ui| {
+                for module in modules {
+                    self.panel_module_ui(ui, &theme, &module);
+                }
+            });
         });
+    }
+
+    /// Renders one [`PanelModule`] as a framed, titled block of knobs (wrapping within a fixed
+    /// width). Split out of [`panel_ui`] so the per-module layout stays readable.
+    fn panel_module_ui(&mut self, ui: &mut Ui, theme: &Theme, module: &PanelModule) {
+        const MODULE_WIDTH: f32 = 232.0;
+        // The knobs need the live `Parameter` (range + normalize) to draw; take an owned copy so
+        // the set_param edits below do not clash with the borrow.
+        let slots = self.patch.params(module.node).to_vec();
+        egui::Frame::group(ui.style())
+            .inner_margin(8.0)
+            .show(ui, |ui| {
+                ui.set_width(MODULE_WIDTH);
+                ui.vertical(|ui| {
+                    ui.strong(&module.title);
+                    ui.add_space(4.0);
+                    ui.horizontal_wrapped(|ui| {
+                        for b in &module.bindings {
+                            let Some(slot) = slots.get(b.index) else {
+                                continue;
+                            };
+                            ui.vertical(|ui| {
+                                ui.set_width(64.0);
+                                let (response, changed) =
+                                    knob_widget(ui, theme, &slot.param, slot.value);
+                                if let Some(v) = changed {
+                                    self.patch.set_param(b.node, b.index, v);
+                                }
+                                if response.drag_stopped() {
+                                    self.patch.end_gesture();
+                                }
+                                let unit = param_unit(&slot.param.name);
+                                let name = &slot.param.name;
+                                ui.small(if unit.is_empty() {
+                                    name.to_owned()
+                                } else {
+                                    format!("{name} ({unit})")
+                                });
+                                ui.weak(format!("{:.3}", self.patch.params(b.node)[b.index].value));
+                            });
+                        }
+                    });
+                });
+            });
     }
 }
 
@@ -1944,6 +2052,55 @@ mod tests {
         assert_eq!(bindings.len(), expected);
         assert!(bindings.iter().any(|b| b.label == "ladder base_hz"));
         assert!(bindings.iter().any(|b| b.label == "vca bias"));
+    }
+
+    #[test]
+    fn panel_modules_group_parameters_by_node_and_cover_every_binding() {
+        let app = EditorApp::new();
+        let modules = app.panel_modules();
+        // One module per param-bearing node, no duplicates, and together they hold exactly the
+        // flat binding set — the grouping only re-shapes it, never adds or drops a control.
+        let nodes: Vec<_> = modules.iter().map(|m| m.node).collect();
+        let mut unique = nodes.clone();
+        unique.sort_by_key(|n| n.0);
+        unique.dedup();
+        assert_eq!(unique.len(), nodes.len(), "each node appears once");
+        assert!(
+            modules.iter().all(|m| !m.bindings.is_empty()),
+            "paramless nodes contribute no module"
+        );
+        let grouped: usize = modules.iter().map(|m| m.bindings.len()).sum();
+        assert_eq!(
+            grouped,
+            app.panel_widgets().len(),
+            "no binding lost in grouping"
+        );
+    }
+
+    #[test]
+    fn panel_modules_number_only_repeated_kinds() {
+        let app = EditorApp::new();
+        let titles: Vec<String> = app.panel_modules().into_iter().map(|m| m.title).collect();
+        // The Minitaur voice has three pitch-osc nodes: they must be told apart by ordinal.
+        assert!(titles.contains(&"pitch-osc 1".to_owned()));
+        assert!(titles.contains(&"pitch-osc 2".to_owned()));
+        assert!(titles.contains(&"pitch-osc 3".to_owned()));
+        // The single ladder keeps its bare name — no needless "ladder 1".
+        assert!(titles.contains(&"ladder".to_owned()));
+        assert!(!titles.iter().any(|t| t == "ladder 1"));
+    }
+
+    #[test]
+    fn panel_modules_are_empty_without_parameters() {
+        // A patch of only a paramless node has nothing to control: no modules, and the panel
+        // renders its "nothing to control" note instead of an empty rack.
+        let registry = Registry::with_builtins();
+        let mut g = vb_core::Graph::new();
+        g.add_node(registry.graph_node("midi-in").expect("builtin"));
+        let doc = vb_project::ProjectDoc::from_graph(&g);
+        let mut app = EditorApp::new();
+        app.load_doc(&doc);
+        assert!(app.panel_modules().is_empty());
     }
 
     #[test]

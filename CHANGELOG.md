@@ -20,6 +20,14 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **Editor (`vb-editor`)** — the **Panel** view is now a rack of titled modules instead of a
+  flat list of sliders. `EditorApp::panel_modules` groups the controls by node (one framed block
+  per param-bearing node), numbering repeated kinds (`pitch-osc 1/2/3`) while leaving once-only
+  kinds bare, and each module renders its parameters as rotary knobs live-bound through
+  `set_param`. First step of Epic 15's interface constructor.
+
 ### Fixed
 
 - **Editor (`vb-editor`)** — exporting or saving a project no longer drops edited parameter

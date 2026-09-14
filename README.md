@@ -644,6 +644,15 @@ per-widget styling and a saved layout in the project.
   starts on Blocks and toggles; the panel lists every node parameter; a panel edit updates the
   shared value; both surfaces render at a small and large size. *(Next: custom widget
   placement/binding, then styling + a saved panel layout in the project.)* 🧪
+- [x] 000182 — 🧩 **Grouped panel modules with knobs** — the flat wall of look-alike sliders
+  becomes a **rack of titled modules**: `panel_modules()` groups the bindings by node (one framed
+  block per param-bearing node) and gives each block a unique title, numbering repeated kinds
+  (`pitch-osc 1/2/3`) while leaving a once-only kind bare (`ladder`). Each module renders its
+  parameters as **rotary knobs** (reusing the inspector's `knob_widget`, live-bound through
+  `set_param`) in a wrapping grid, so the Panel reads like a synth front panel. Model is data —
+  tested for grouping/coverage, ordinal titling, and the empty-patch case; both surfaces still
+  render at any size. *(Next: custom widget placement/binding, then styling + a saved panel
+  layout in the project.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
