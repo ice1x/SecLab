@@ -238,6 +238,18 @@ pub struct PanelBinding {
     pub widget: WidgetKind,
 }
 
+/// One panel module's footprint (width 232 + frame margin + inter-column gap), used to decide how
+/// many module columns fit across the panel.
+const MODULE_CELL: f32 = 252.0;
+
+/// How many module columns fit in `available_width`, at least one. The panel lays un-placed
+/// modules out row by row using this — `horizontal_wrapped` does not wrap framed blocks, so the
+/// wrap is computed explicitly here (and is unit-testable, unlike the egui rendering).
+#[must_use]
+fn panel_column_count(available_width: f32) -> usize {
+    ((available_width / MODULE_CELL).floor() as usize).max(1)
+}
+
 /// Columns the panel auto-grid flows unplaced modules into before the user drags them.
 const PANEL_COLS: usize = 3;
 /// Auto-grid cell size (width × height) for an unplaced panel module, in panel points. Generous
@@ -1960,15 +1972,28 @@ impl EditorApp {
         //   colliding with it — the bug the fixed-height auto-grid caused.
         // - A module the user has dragged floats as a free-positioned area on top, anywhere.
         // Dragging an un-placed module's title lifts it out of the flow into the placed layer.
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for module in &modules {
-                    if self.patch.panel_position(module.node).is_none() {
-                        self.panel_module_ui(ui, &theme, module, None, origin);
-                    }
+        // Manual wrapping into a fixed number of columns. `horizontal_wrapped` does NOT wrap
+        // `Frame::group` items (a framed block does not report its width up front, so the flow
+        // just runs them off the right edge and they vanish) — so compute the column count from
+        // the available width and lay the un-placed modules out row by row. Each row is a
+        // top-aligned horizontal strip; rows stack in the vertical scroll area, so a tall module
+        // never overlaps the row below.
+        let unplaced: Vec<&PanelModule> = modules
+            .iter()
+            .filter(|m| self.patch.panel_position(m.node).is_none())
+            .collect();
+        let cols = panel_column_count(ui.available_width());
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                for row in unplaced.chunks(cols) {
+                    ui.horizontal_top(|ui| {
+                        for module in row {
+                            self.panel_module_ui(ui, &theme, module, None, origin);
+                        }
+                    });
                 }
             });
-        });
         for module in &modules {
             if let Some(pos) = self.patch.panel_position(module.node) {
                 let screen_pos = origin + pos.to_vec2();
@@ -2311,6 +2336,17 @@ mod tests {
         let mut app = EditorApp::new();
         app.load_doc(&doc);
         assert!(app.panel_modules().is_empty());
+    }
+
+    #[test]
+    fn panel_column_count_scales_with_width_and_is_at_least_one() {
+        // Even a sliver of width shows one column (never zero — that would hide every module).
+        assert_eq!(panel_column_count(0.0), 1);
+        assert_eq!(panel_column_count(100.0), 1);
+        // Width grows the column count by whole modules.
+        assert_eq!(panel_column_count(MODULE_CELL), 1);
+        assert_eq!(panel_column_count(MODULE_CELL * 2.0), 2);
+        assert_eq!(panel_column_count(MODULE_CELL * 4.5), 4);
     }
 
     #[test]

@@ -55,6 +55,11 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Editor (`vb-editor`)** — the Panel view no longer hides most modules. `horizontal_wrapped`
+  does not wrap framed blocks, so the modules ran off the right edge in a single row and vanished;
+  the panel now computes the column count from the available width (`panel_column_count`) and lays
+  un-placed modules out row by row, so every module is visible and wraps into a grid. Verified in
+  the browser (WASM) build.
 - **Engine (`vb-runtime` / `vb-nodes` / `vb-plugin`)** — turning a knob during playback no longer
   corrupts the sound. A parameter change (knob or automation) used to rebuild the whole engine and
   swap it in, resetting every processor's DSP state (oscillator phase, filter memory, envelope
