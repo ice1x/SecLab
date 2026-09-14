@@ -1938,22 +1938,36 @@ impl EditorApp {
             return;
         }
         let theme = self.theme; // Copy — frees `self` for the set_param calls below.
-                                // The modules float as free-positioned areas on the region below the heading, so each can
-                                // be dragged anywhere. Anchor them to the panel's own origin (not the screen) and keep
-                                // them inside its rect. Reserve the space first so the surrounding layout gives the panel
-                                // room to hold the floating areas.
         let region = ui.max_rect();
         let origin = ui.cursor().min;
-        ui.allocate_space(ui.available_size());
-        for (module, pos) in layout {
-            let screen_pos = origin + pos.to_vec2();
-            egui::Area::new(egui::Id::new(("panel-module", module.node)))
-                .fixed_pos(screen_pos)
-                .movable(false)
-                .constrain_to(region)
-                .show(ui.ctx(), |ui| {
-                    self.panel_module_ui(ui, &theme, &module, pos);
-                });
+        let modules = self.panel_modules();
+
+        // Two-layer layout so modules never overlap:
+        // - Un-placed modules flow in a normal wrapping row. egui measures each module's real
+        //   height, so a tall block (a 5-knob envelope) pushes the next row down instead of
+        //   colliding with it — the bug the fixed-height auto-grid caused.
+        // - A module the user has dragged floats as a free-positioned area on top, anywhere.
+        // Dragging an un-placed module's title lifts it out of the flow into the placed layer.
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                for module in &modules {
+                    if self.patch.panel_position(module.node).is_none() {
+                        self.panel_module_ui(ui, &theme, module, None, origin);
+                    }
+                }
+            });
+        });
+        for module in &modules {
+            if let Some(pos) = self.patch.panel_position(module.node) {
+                let screen_pos = origin + pos.to_vec2();
+                egui::Area::new(egui::Id::new(("panel-module", module.node)))
+                    .fixed_pos(screen_pos)
+                    .movable(false)
+                    .constrain_to(region)
+                    .show(ui.ctx(), |ui| {
+                        self.panel_module_ui(ui, &theme, module, Some(pos), origin);
+                    });
+            }
         }
     }
 
@@ -1962,7 +1976,14 @@ impl EditorApp {
     /// starting from `pos`, its resolved spot this frame). Each parameter is drawn as the control
     /// its [`WidgetKind`] selects — knob, slider or switch — and **right-clicking a control opens a
     /// menu to change that type**, so the player builds the surface they want.
-    fn panel_module_ui(&mut self, ui: &mut Ui, theme: &Theme, module: &PanelModule, pos: Pos2) {
+    fn panel_module_ui(
+        &mut self,
+        ui: &mut Ui,
+        theme: &Theme,
+        module: &PanelModule,
+        placed_pos: Option<Pos2>,
+        origin: Pos2,
+    ) {
         const MODULE_WIDTH: f32 = 232.0;
         // The controls need the live `Parameter` (range + normalize); take an owned copy so the
         // set_param / set_widget edits below do not clash with the borrow.
@@ -1984,8 +2005,11 @@ impl EditorApp {
                 };
                 let title = ui.add(egui::Label::new(title_text).sense(Sense::drag()));
                 if title.dragged() {
+                    // A placed module moves from its known spot; an un-placed one lifts out of the
+                    // flow from where it currently sits (its title, in panel-relative coordinates).
+                    let base = placed_pos.unwrap_or_else(|| (title.rect.min - origin).to_pos2());
                     self.patch
-                        .set_panel_position(module.node, pos + title.drag_delta());
+                        .set_panel_position(module.node, base + title.drag_delta());
                 }
                 if title.hovered() {
                     ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
