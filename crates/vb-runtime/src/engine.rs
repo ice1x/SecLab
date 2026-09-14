@@ -62,6 +62,10 @@ pub struct RtEngine {
     processors: Vec<Box<dyn Processor>>,
     /// Per node (in `order`), per input port: the `(node index, output port)` feeding it.
     input_sources: Vec<Vec<Option<(usize, usize)>>>,
+    /// Optional map from a **document** node id (a host's stable id) to this engine's processor
+    /// index, so a host can update a running node's parameters by the id it tracks without knowing
+    /// the runtime id. Populated by [`alias_doc_ids`](Self::alias_doc_ids); empty otherwise.
+    doc_index: HashMap<NodeId, usize>,
     frames: usize,
 }
 
@@ -124,8 +128,23 @@ impl RtEngine {
             scratch,
             processors: procs,
             input_sources,
+            doc_index: HashMap::new(),
             frames,
         })
+    }
+
+    /// Records aliases from **document** node ids to processor indices, given `remap` (document id
+    /// → runtime id, from the builder) — the runtime id is resolved to this engine's index. After
+    /// this, [`set_doc_params`](Self::set_doc_params) can address a node by its document id. Ids in
+    /// `remap` that this engine does not contain are ignored.
+    pub fn alias_doc_ids(&mut self, remap: &HashMap<NodeId, NodeId>) {
+        self.doc_index.clear();
+        self.doc_index.reserve(remap.len());
+        for (&doc_id, &runtime_id) in remap {
+            if let Some(&i) = self.index.get(&runtime_id) {
+                self.doc_index.insert(doc_id, i);
+            }
+        }
     }
 
     /// Processes one block in topological order.
@@ -205,6 +224,27 @@ impl RtEngine {
     pub fn reset(&mut self) {
         for processor in &mut self.processors {
             processor.reset();
+        }
+    }
+
+    /// Applies new parameter `values` to the node `id` **in place** (preserving its DSP state),
+    /// via [`Processor::set_params`]. Returns `true` if the node exists and applied them, `false`
+    /// if the id is unknown or the processor does not support a live update (the caller then
+    /// rebuilds to change that node). Allocation-free — safe to call on the audio thread.
+    pub fn set_node_params(&mut self, id: NodeId, values: &[f32]) -> bool {
+        match self.index.get(&id) {
+            Some(&i) => self.processors[i].set_params(values),
+            None => false,
+        }
+    }
+
+    /// Like [`set_node_params`](Self::set_node_params) but addresses the node by its **document**
+    /// id (see [`alias_doc_ids`](Self::alias_doc_ids)). Returns `false` if the document id is not
+    /// aliased or the processor does not support a live update. Allocation-free.
+    pub fn set_doc_params(&mut self, doc_id: NodeId, values: &[f32]) -> bool {
+        match self.doc_index.get(&doc_id) {
+            Some(&i) => self.processors[i].set_params(values),
+            None => false,
         }
     }
 

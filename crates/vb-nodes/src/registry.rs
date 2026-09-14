@@ -2479,6 +2479,41 @@ mod tests {
     }
 
     #[test]
+    fn default_patch_kinds_live_update_and_others_fall_back() {
+        let r = Registry::with_builtins();
+        let ctx = BuildContext::default();
+        // Every param-bearing node in the default Minitaur voice must apply parameter changes in
+        // place (so the plugin retunes the running engine instead of rebuilding it and clicking).
+        for kind in [
+            "ladder",
+            "vca",
+            "attenuvert",
+            "cv-attenuvert",
+            "adsr",
+            "pitch-osc",
+            "glide",
+            "lfo",
+        ] {
+            let d = r.get(kind).unwrap();
+            let defaults: Vec<f32> = d.params().iter().map(|p| p.default).collect();
+            let mut p = d.processor_with(&ctx, &defaults);
+            assert!(
+                p.set_params(&defaults),
+                "{kind} must support live param updates"
+            );
+        }
+        // A node without a live implementation reports `false`, so a caller knows to rebuild it.
+        let mut reverb = r
+            .get("reverb")
+            .unwrap()
+            .processor_with(&ctx, &[0.5, 0.5, 0.5]);
+        assert!(
+            !reverb.set_params(&[0.6]),
+            "reverb has no live update yet — must fall back to a rebuild"
+        );
+    }
+
+    #[test]
     fn processor_with_applies_param_values() {
         let r = Registry::with_builtins();
         let input = vec![1.0_f32; 64];

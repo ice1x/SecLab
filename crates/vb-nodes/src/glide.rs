@@ -80,6 +80,15 @@ impl Processor for Glide {
         self.last_target = 0.0;
         self.primed = false;
     }
+
+    /// Live-updates `glide_ms` (registry order), preserving the smoother's current value and
+    /// target so the pitch keeps gliding from where it is instead of snapping.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.glide_ms = v.clamp(0.0, MAX_GLIDE_MS);
+        }
+        true
+    }
 }
 
 #[cfg(test)]

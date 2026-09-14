@@ -25,6 +25,21 @@ pub trait Processor: Send {
     /// Resets internal state (filter memory, envelope phase, …). Default: no-op.
     fn reset(&mut self) {}
 
+    /// Applies new parameter `values` (in the node's registry `params()` order) to the running
+    /// processor **in place**, preserving DSP state — oscillator phase, filter memory, envelope
+    /// stage — so a live knob turn or automation move takes effect without a click.
+    ///
+    /// Returns `true` if the processor applied the values, `false` (the default) if it does not
+    /// support a live update. A caller that gets `false` must fall back to rebuilding the node to
+    /// change its parameters. Missing trailing values keep their current field (mirrors how the
+    /// registry's `processor_with` tolerates a short list).
+    ///
+    /// Called on the audio thread, so an implementation must be allocation-free and non-blocking:
+    /// write fields and recompute cheap per-sample coefficients only.
+    fn set_params(&mut self, _values: &[f32]) -> bool {
+        false
+    }
+
     /// Latency in frames the node introduces. Default: none.
     #[must_use]
     fn latency_frames(&self) -> usize {

@@ -27,6 +27,22 @@ impl Processor for Scale {
     }
 }
 
+/// Scales its input by a factor that can be updated live via `set_params`.
+struct LiveScale(f32);
+impl Processor for LiveScale {
+    fn process(&mut self, ctx: &ProcessContext, inp: &[&[f32]], out: &mut [&mut [f32]]) {
+        for (o, x) in out[0].iter_mut().zip(inp[0].iter()).take(ctx.frames) {
+            *o = *x * self.0;
+        }
+    }
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&f) = values.first() {
+            self.0 = f;
+        }
+        true
+    }
+}
+
 /// Sums its two inputs.
 struct Sum;
 impl Processor for Sum {
@@ -74,6 +90,40 @@ fn runs_a_const_scale_chain() {
         engine.node_output(amp).unwrap().channel(0).unwrap(),
         &[6.0; 4]
     );
+}
+
+#[test]
+fn set_node_params_updates_a_node_live_or_reports_unsupported() {
+    let mut g = Graph::new();
+    let src = g.add_node(source("const"));
+    let amp = g.add_node(mono("live"));
+    g.connect(src, PortId(0), amp, PortId(0)).unwrap();
+
+    let mut procs: HashMap<NodeId, Box<dyn Processor>> = HashMap::new();
+    procs.insert(src, Box::new(Constant(1.0)));
+    procs.insert(amp, Box::new(LiveScale(1.0)));
+    let mut engine = RtEngine::compile(&g, procs, 4).unwrap();
+
+    engine.process(&ctx(4));
+    assert_eq!(
+        engine.node_output(amp).unwrap().channel(0).unwrap(),
+        &[1.0; 4]
+    );
+
+    // A live update reaches the running processor — the next block reflects it, no rebuild.
+    assert!(engine.set_node_params(amp, &[0.25]));
+    engine.process(&ctx(4));
+    assert_eq!(
+        engine.node_output(amp).unwrap().channel(0).unwrap(),
+        &[0.25; 4]
+    );
+
+    // A processor without a live implementation reports false, as does an unknown id.
+    assert!(
+        !engine.set_node_params(src, &[0.0]),
+        "Constant has no set_params"
+    );
+    assert!(!engine.set_node_params(NodeId(9999), &[0.0]), "unknown id");
 }
 
 #[test]

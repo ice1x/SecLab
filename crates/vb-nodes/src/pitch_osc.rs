@@ -75,6 +75,22 @@ impl Processor for PitchOsc {
     fn reset(&mut self) {
         self.osc.reset();
     }
+
+    /// Live-updates `waveform`, `base_hz`, `detune_semitones` (registry order) without disturbing
+    /// the oscillator's phase, so retuning or reshaping the oscillator while a note sounds does
+    /// not click. The frequency itself is re-derived from the pitch input each block.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.osc.set_waveform(Waveform::from_stepped(v));
+        }
+        if let Some(&v) = values.get(1) {
+            self.base_hz = v;
+        }
+        if let Some(&v) = values.get(2) {
+            self.detune_ratio = 2.0_f32.powf(v / 12.0);
+        }
+        true
+    }
 }
 
 #[cfg(test)]

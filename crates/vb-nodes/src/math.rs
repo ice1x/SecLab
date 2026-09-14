@@ -171,6 +171,17 @@ impl Processor for Attenuvert {
             *o = *x * self.scale + self.offset;
         }
     }
+
+    /// Live-updates `scale`, `offset` (registry order). Stateless, so the update is seamless.
+    fn set_params(&mut self, values: &[f32]) -> bool {
+        if let Some(&v) = values.first() {
+            self.scale = v;
+        }
+        if let Some(&v) = values.get(1) {
+            self.offset = v;
+        }
+        true
+    }
 }
 
 /// Sample-wise minimum of two inputs: `out = min(a, b)`.

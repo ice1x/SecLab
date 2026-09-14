@@ -325,6 +325,19 @@ the definition of done.
 - [x] 000078 — Presets: save/load a set of parameter values 🧪
 - [x] 000079 — Preset bank and switching from UI/host 🧪
 - [x] 000080 — Modulation matrix (sources → destinations) 🧪
+- [x] 000188 — 🐛 **Live parameter updates (no rebuild click)** — turning a knob during playback
+  corrupted the sound: every parameter change (a knob move or automation) rebuilt the **whole**
+  engine and swapped it in, resetting each processor's DSP state (oscillator phase, filter memory,
+  envelope stage) — a click per rebuild, ~60/s while dragging. Parameters now update the **running**
+  engine in place. `Processor::set_params` (default no-op → `false`) writes a node's fields without
+  touching its state; `RtEngine::set_node_params` / `set_doc_params` (with `alias_doc_ids` mapping
+  document ids, from the builder) route an update by id; the plugin's `process` applies each changed
+  node's values live on the audio thread (allocation-free, gathered on the stack) and only rebuilds
+  for a node without live support or a structural edit. Implemented for every param-bearing node in
+  the default voice (ladder, pitch-osc, attenuvert/cv-attenuvert, adsr, vca, glide, lfo). Tested:
+  `set_params` retunes the ladder while keeping its filter memory (vs `reset`), the default-patch
+  kinds all report live support (others fall back), the engine routes a live update by node id, and
+  a default-patch node updates by its document id. 🧪
 
 ### Epic 9 — WebUI (future)
 
