@@ -451,21 +451,14 @@ impl Plugin for VstBomb {
                 _ => {}
             }
         }
+        // Process the host block in fixed control-rate quanta so block-rate modulation (the
+        // ladder cutoff, note gates) resolves the same way regardless of the host buffer size —
+        // realtime and offline bounce then sound identical.
         let frames = buffer.samples();
-        engine.process(&vb_core::ProcessContext {
-            sample_rate: self.sample_rate,
-            frames,
-        });
-
+        let sink = self.sink;
+        let sample_rate = self.sample_rate;
         let output = buffer.as_slice();
-        match self.sink.and_then(|sink| engine.node_output(sink)) {
-            Some(buf) => deliver_to_host(buf, output, frames),
-            None => {
-                for channel in output.iter_mut() {
-                    channel[..frames].fill(0.0);
-                }
-            }
-        }
+        process_in_quanta(engine, sink, sample_rate, frames, output);
         ProcessStatus::Normal
     }
 }
@@ -506,7 +499,21 @@ fn route_note(ctx: &BuildContext, note: u8, velocity: f32, on: bool) {
 /// patch that ends in a stereo node feeds the host true stereo. If the host has more
 /// channels than the sink, the sink's last channel is reused; a zero-channel sink is
 /// silence.
+/// Whole-block convenience over [`deliver_to_host_at`] (offset 0), used by the tests.
+#[cfg(test)]
 fn deliver_to_host(sink: &vb_core::AudioBuffer, host: &mut [&mut [f32]], frames: usize) {
+    deliver_to_host_at(sink, host, 0, frames);
+}
+
+/// Like [`deliver_to_host`], but writes the sink's `frames` samples into each host channel
+/// starting at `offset` — the entry point the sub-block loop uses to place each quantum's
+/// output at its place in the full host buffer.
+fn deliver_to_host_at(
+    sink: &vb_core::AudioBuffer,
+    host: &mut [&mut [f32]],
+    offset: usize,
+    frames: usize,
+) {
     let nch = sink.channels();
     for (h, channel) in host.iter_mut().enumerate() {
         let src = if nch == 0 {
@@ -516,16 +523,57 @@ fn deliver_to_host(sink: &vb_core::AudioBuffer, host: &mut [&mut [f32]], frames:
         } else {
             sink.channel(h.min(nch - 1))
         };
+        let room = channel.len().saturating_sub(offset);
         match src {
             Some(src) => {
-                let n = frames.min(src.len()).min(channel.len());
-                channel[..n].copy_from_slice(&src[..n]);
+                let n = frames.min(src.len()).min(room);
+                channel[offset..offset + n].copy_from_slice(&src[..n]);
             }
             None => {
-                let n = frames.min(channel.len());
-                channel[..n].fill(0.0);
+                let n = frames.min(room);
+                channel[offset..offset + n].fill(0.0);
             }
         }
+    }
+}
+
+/// Number of samples the engine advances per pass. Control-rate modulation (an envelope on the
+/// [`vb_nodes::Ladder`] cutoff, note gates, and any node that reads its control inputs once per
+/// pass) updates at this granularity, so the host's buffer size is split into quanta of this
+/// length before processing. That keeps the sound **independent of the host buffer**: a Logic
+/// bounce at a large offline buffer resolves the filter's attack sweep exactly as realtime
+/// playback at a small buffer does, instead of stepping the cutoff coarsely and thickening the
+/// low-frequency attack. 64 samples ≈ 1.3 ms at 48 kHz — fine enough to be inaudible, coarse
+/// enough to stay cheap.
+const CONTROL_QUANTUM: usize = 64;
+
+/// Runs `engine` over `frames` samples in [`CONTROL_QUANTUM`]-sized passes, writing the `sink`
+/// node's output into `host` at the matching offset. Splitting the host block into fixed quanta
+/// is what makes block-rate modulation independent of the host buffer size.
+fn process_in_quanta(
+    engine: &mut RtEngine,
+    sink: Option<NodeId>,
+    sample_rate: f32,
+    frames: usize,
+    host: &mut [&mut [f32]],
+) {
+    let mut done = 0;
+    while done < frames {
+        let n = CONTROL_QUANTUM.min(frames - done);
+        engine.process(&vb_core::ProcessContext {
+            sample_rate,
+            frames: n,
+        });
+        match sink.and_then(|s| engine.node_output(s)) {
+            Some(buf) => deliver_to_host_at(buf, host, done, n),
+            None => {
+                for channel in host.iter_mut() {
+                    let end = (done + n).min(channel.len());
+                    channel[done..end].fill(0.0);
+                }
+            }
+        }
+        done += n;
     }
 }
 
@@ -534,6 +582,70 @@ nih_export_clap!(VstBomb);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Renders the first `frames` samples of the default (Minitaur) patch after a low note-on,
+    /// either as one engine pass (`chunked = false`, the old behaviour = one host block) or in
+    /// [`CONTROL_QUANTUM`] quanta (`chunked = true`, the new behaviour). A fresh engine each
+    /// call so the attack starts from reset.
+    fn render_default_attack(frames: usize, chunked: bool) -> Vec<f32> {
+        let registry = Registry::with_builtins();
+        let doc = default_patch(&registry);
+        let build_ctx = BuildContext::default();
+        let (mut engine, sink) =
+            engine_from_doc(&doc, &registry, &build_ctx, frames.max(CONTROL_QUANTUM)).unwrap();
+        route_note(&build_ctx, 45, 1.0, true); // a low bass note, where the filter sweep shows
+        let mut ch = vec![0.0_f32; frames];
+        {
+            let mut host: [&mut [f32]; 1] = [&mut ch];
+            if chunked {
+                process_in_quanta(&mut engine, sink, 48_000.0, frames, &mut host);
+            } else {
+                engine.process(&vb_core::ProcessContext {
+                    sample_rate: 48_000.0,
+                    frames,
+                });
+                if let Some(buf) = sink.and_then(|s| engine.node_output(s)) {
+                    deliver_to_host(buf, &mut host, frames);
+                }
+            }
+        }
+        ch
+    }
+
+    #[test]
+    fn quanta_match_a_single_pass_when_the_block_fits_one_quantum() {
+        // A host block no larger than one quantum must behave exactly like a single pass —
+        // splitting changes nothing, so small-buffer realtime is untouched.
+        let single = render_default_attack(CONTROL_QUANTUM, false);
+        let quantised = render_default_attack(CONTROL_QUANTUM, true);
+        assert_eq!(single, quantised);
+    }
+
+    #[test]
+    fn quanta_resolve_the_filter_attack_independently_of_block_size() {
+        // The bug the user heard: one big offline block retunes the ladder cutoff once for the
+        // whole buffer, thickening the low-frequency attack, while realtime's small blocks
+        // resolve the sweep finely. Processing a big block in quanta must reproduce the fine
+        // resolution — so the quantised render differs from the single-block render in the
+        // attack, and both are audible.
+        let one_block = render_default_attack(1024, false);
+        let quantised = render_default_attack(1024, true);
+        assert!(one_block.iter().all(|s| s.is_finite()));
+        assert!(quantised.iter().all(|s| s.is_finite()));
+        assert!(
+            quantised[..512].iter().map(|s| s.abs()).sum::<f32>() > 0.0,
+            "the note must sound"
+        );
+        let attack_diff: f32 = one_block[..512]
+            .iter()
+            .zip(&quantised[..512])
+            .map(|(a, b)| (a - b).abs())
+            .sum();
+        assert!(
+            attack_diff > 0.01,
+            "quantising must change the block-rate filter attack: {attack_diff}"
+        );
+    }
 
     #[test]
     fn the_editor_window_is_roomy_enough_for_the_node_editor() {

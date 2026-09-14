@@ -613,6 +613,16 @@ values), so a preset can pin exact knob settings, not just a graph.
   window frame does nothing — the in-canvas corner is what resizes the window. A headless
   `render_chrome_then_canvas_runs_a_frame_like_the_plugin_does` test runs both the split and
   combined frames through egui's context without panicking 🧪
+- [x] 000179 — 🧩 **Fixed control-rate quantum (bounce == realtime)** — the plugin processed the
+  host's whole buffer as one engine pass, so block-rate modulation (the `ladder` cutoff is
+  retuned once per pass; note gates land at block start) resolved at the host's buffer size.
+  A Logic **offline bounce** uses a larger buffer than realtime playback, so the filter's attack
+  sweep stepped coarsely and the low-frequency attack thickened — audibly different from
+  realtime. `process` now splits the host block into fixed **64-sample quanta**
+  (`CONTROL_QUANTUM`) and runs the engine per quantum (`process_in_quanta` + `deliver_to_host_at`
+  writing each quantum at its offset), so modulation resolves identically regardless of the host
+  buffer. Tested: quanta equal a single pass when the block fits one quantum, and a 1024-sample
+  block quantised differs from one big pass in the filter attack 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
@@ -657,7 +667,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
-the end with a new global number (000179, …); split a large task into 🧩 subtasks with
+the end with a new global number (000180, …); split a large task into 🧩 subtasks with
 their own numbers.
 
 ## 📄 License
