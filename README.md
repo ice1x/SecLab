@@ -680,6 +680,16 @@ per-widget styling and a saved layout in the project.
   back exactly. Tested: a placed + retyped panel round-trips through the RON in both `vb-project`
   (field round-trip / omitted-when-default) and `vb-editor` (end-to-end export → import). *(Follow-up:
   capture live view-only panel edits into the plugin's DAW-saved state; then per-widget styling.)* 🧪
+- [x] 000186 — 🧩 **Plugin saves in-window panel edits into the DAW project** — the plugin used to
+  serialize its host state from a `patch_ron` frozen at load, so *any* in-window edit (and a
+  rearranged panel in particular) was lost when the DAW project was reopened. The editor now bumps
+  a separate `PatchView::view_revision` on presentational edits (panel placement, control type),
+  and the plugin's editor mirror re-serializes the live document into the host state
+  (`VstBombParams::set_patch_ron`) on **both** audible and view-only changes — rebuilding the audio
+  engine only for the audible ones. So a project saved after arranging the panel in the DAW reopens
+  with that arrangement. Tested: `view_revision` bumps on placement/retype but not on audible edits
+  (and vice-versa), and `set_patch_ron` makes the saved host state carry the edited patch. *(Next:
+  per-widget styling.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 

@@ -91,6 +91,18 @@ impl VstBombParams {
         vb_project::open_ron(&ron).ok()
     }
 
+    /// Replaces the serialized patch that the host saves in its project state.
+    ///
+    /// The editor calls this whenever the in-window patch changes — including **view-only**
+    /// edits (panel placement, control type) that never rebuild the engine — so a DAW project
+    /// saved after arranging the panel reopens with that arrangement. Without it, the host state
+    /// would keep the patch as it was at load and every in-plugin edit would be lost on reload.
+    pub fn set_patch_ron(&self, ron: String) {
+        if let Ok(mut slot) = self.patch_ron.lock() {
+            *slot = ron;
+        }
+    }
+
     /// Builds the parameter set for `doc` from the registry metadata. Unknown node
     /// kinds contribute nothing (the engine builder rejects them separately).
     #[must_use]
@@ -1091,6 +1103,26 @@ mod tests {
             "full graph came back"
         );
         assert_eq!(restored.edges.len(), doc.edges.len());
+    }
+
+    #[test]
+    fn set_patch_ron_updates_the_saved_host_state() {
+        // The editor persists an in-window edit (here: a smaller patch) into the params; the
+        // host's saved state must then carry that edited patch, not the one loaded at construction
+        // — this is what lets a rearranged panel survive a DAW project save/reopen.
+        let registry = Registry::with_builtins();
+        let params = VstBombParams::for_doc(&default_patch(&registry), &registry);
+
+        let mut edited = vb_core::Graph::new();
+        edited.add_node(registry.graph_node("oscillator").unwrap());
+        let edited_doc = ProjectDoc::from_graph(&edited);
+        params.set_patch_ron(vb_project::to_ron(&edited_doc).unwrap());
+
+        let fields = params.serialize_fields();
+        let saved = fields.get("patch").expect("patch field present");
+        let restored = vb_project::open_ron(saved).expect("saved patch parses");
+        assert_eq!(restored.nodes.len(), 1, "the host saves the edited patch");
+        assert_eq!(params.stored_patch().unwrap().nodes.len(), 1);
     }
 
     #[test]

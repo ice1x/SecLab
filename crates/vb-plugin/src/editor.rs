@@ -44,6 +44,9 @@ fn doc_values(doc: &ProjectDoc) -> HashMap<NodeId, Vec<f32>> {
 struct EditorHost {
     app: EditorApp,
     last_revision: u64,
+    /// View-only revision last persisted, so a panel drag / control retype re-serializes the
+    /// document into the host state without rebuilding the engine.
+    last_view_revision: u64,
     last_values: HashMap<NodeId, Vec<f32>>,
 }
 
@@ -63,6 +66,7 @@ pub(crate) fn create(
         app.load_doc(&current);
     }
     let last_revision = app.patch().revision();
+    let last_view_revision = app.patch().view_revision();
     // Seed from the host-parameter snapshot (always the full, current value set), so the first
     // edit diffs against what the host actually holds and only real knob moves are pushed.
     let last_values = params.values_by_node();
@@ -72,6 +76,7 @@ pub(crate) fn create(
         EditorHost {
             app,
             last_revision,
+            last_view_revision,
             last_values,
         },
         |_ctx, _state| {},
@@ -87,31 +92,46 @@ pub(crate) fn create(
             // resizable one. Revisit when nih-plug implements host resize upstream.
             state.app.render(ctx);
 
-            // An audible edit (a knob move, a wire, an added node) bumps the patch revision.
+            // Two edit streams reach the document: audible edits (a knob move, a wire, an added
+            // node) bump the patch revision and need an engine rebuild; view-only edits (a panel
+            // drag, a control retype) bump only the view revision and just need re-persisting.
             let revision = state.app.patch().revision();
-            if revision != state.last_revision {
+            let view_revision = state.app.patch().view_revision();
+            let audible = revision != state.last_revision;
+            let presentational = view_revision != state.last_view_revision;
+            if audible || presentational {
                 state.last_revision = revision;
+                state.last_view_revision = view_revision;
                 let new_doc = state.app.patch().to_doc();
 
-                // Write each moved knob through to its host parameter. The engine rebuild
-                // sources node values from the host-parameter snapshot, and that snapshot wins
-                // over the document's stored values — so without this, an in-editor knob edit
-                // is silently reverted on the next rebuild (the bug behind "the knobs don't
-                // change the sound"). Pushing through the ParamSetter also lets the DAW record
-                // the gesture as automation.
-                let new_values = doc_values(&new_doc);
-                for (node, index, value) in changed_values(&state.last_values, &new_values) {
-                    params.set_bound(setter, node, index, value);
+                if audible {
+                    // Write each moved knob through to its host parameter. The engine rebuild
+                    // sources node values from the host-parameter snapshot, and that snapshot
+                    // wins over the document's stored values — so without this, an in-editor knob
+                    // edit is silently reverted on the next rebuild (the bug behind "the knobs
+                    // don't change the sound"). Pushing through the ParamSetter also lets the DAW
+                    // record the gesture as automation.
+                    let new_values = doc_values(&new_doc);
+                    for (node, index, value) in changed_values(&state.last_values, &new_values) {
+                        params.set_bound(setter, node, index, value);
+                    }
+                    state.last_values = new_values;
                 }
-                state.last_values = new_values;
 
-                // Mirror the new graph into the shared doc and rebuild off the audio thread.
-                // (A structural edit has no host parameter to carry it; the mirror is how the
-                // rebuild sees added/removed nodes and wires.)
+                // Persist the document into the host's saved state so a DAW project reopens with
+                // the current patch — including a rearranged/ retyped panel, which is otherwise
+                // inaudible and would be lost. Then mirror it into the shared doc.
+                if let Ok(ron) = vb_project::to_ron(&new_doc) {
+                    params.set_patch_ron(ron);
+                }
                 if let Ok(mut slot) = doc.lock() {
                     *slot = Arc::new(new_doc);
                 }
-                executor.execute_background(PluginTask::RebuildEngine);
+
+                // Only an audible change needs the audio engine rebuilt; a panel move does not.
+                if audible {
+                    executor.execute_background(PluginTask::RebuildEngine);
+                }
             }
         },
     )

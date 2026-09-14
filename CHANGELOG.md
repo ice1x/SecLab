@@ -38,6 +38,11 @@ Two independent version numbers matter in this project:
   unset, so old documents still load and the format stays version 1), and the editor writes them
   in `to_doc` / restores them in `apply_doc`. A saved project reopens with its dragged module
   positions and chosen control types intact.
+- **Plugin (`vb-plugin`)** — in-window edits are now saved into the **DAW project state**. The
+  plugin re-serializes the live document into its host state on every edit (not just at load), so
+  a rearranged/retyped panel — and any other in-window change — survives a project save/reopen.
+  View-only edits (panel placement, control type) bump a new `PatchView::view_revision` and
+  re-persist without rebuilding the audio engine.
 
 ### Fixed
 
