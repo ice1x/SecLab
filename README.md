@@ -712,6 +712,14 @@ per-widget styling and a saved layout in the project.
   colour round-trip, `view_revision` bumps on recolour but stays inaudible, the field round-trips
   through the project RON (and is omitted when unset), and the end-to-end editor reopen restores
   the accent. *(Next: per-control size and custom labels.)* 🧪
+- [x] 000189 — 🧩 **Vertical faders (and faders by default for envelopes)** — added a `Fader`
+  widget kind — a vertical fader — rendered by both the panel and the inspector, and offered in the
+  right-click control-type menu. Envelope segments now **default** to a fader (`default_widget`
+  returns `Fader` for a `*_s` time or `sustain` level), so an ADSR reads as the attack/decay/sustain/
+  release fader stack players expect instead of a row of identical dials. Like any control type the
+  choice persists with the patch (the `fader` label round-trips through the saved layout). Tested:
+  envelope params default to a fader while other params stay knobs, and the label round-trips. *(Next:
+  per-control size and custom labels.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 

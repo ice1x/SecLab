@@ -1082,6 +1082,18 @@ impl EditorApp {
                 }
                 1
             }
+            WidgetKind::Fader => {
+                let mut value = slot.value;
+                let range = slot.param.min..=slot.param.max;
+                let response = ui.add(egui::Slider::new(&mut value, range).vertical());
+                if response.changed() {
+                    self.patch.set_param(id, i, value);
+                }
+                if response.drag_stopped() || response.lost_focus() {
+                    self.patch.end_gesture();
+                }
+                1
+            }
             WidgetKind::Knob => {
                 let (response, changed) = knob_widget(ui, &theme, &slot.param, slot.value);
                 if let Some(v) = changed {
@@ -2072,6 +2084,21 @@ impl EditorApp {
                         &mut value,
                         slot.param.min..=slot.param.max,
                     ));
+                    if r.changed() {
+                        self.patch.set_param(node, index, value);
+                    }
+                    if r.drag_stopped() || r.lost_focus() {
+                        self.patch.end_gesture();
+                    }
+                    r
+                }
+                WidgetKind::Fader => {
+                    let mut value = slot.value;
+                    let r = ui.add(
+                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                            .vertical()
+                            .show_value(false),
+                    );
                     if r.changed() {
                         self.patch.set_param(node, index, value);
                     }
