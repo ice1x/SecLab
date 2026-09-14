@@ -1640,6 +1640,19 @@ impl EditorApp {
     /// directly inside its own egui context — one editor, drawn the same everywhere, no
     /// `eframe::Frame` required.
     pub fn render(&mut self, ctx: &egui::Context) {
+        self.render_chrome(ctx);
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| self.canvas_ui(ui));
+    }
+
+    /// Renders everything **except** the central canvas: the toolbar and the palette/inspector
+    /// side panels. Split out so an embedder (the plugin) can draw the canvas itself — e.g.
+    /// wrapped in `nih_plug_egui`'s `ResizableWindow` to give the plugin window a drag-to-resize
+    /// corner — while the standalone keeps calling [`render`], which draws the canvas in a plain
+    /// `CentralPanel`. The side panels are added to the context first, exactly as egui's panel
+    /// layout requires, so the canvas (whoever draws it) fills the space that remains.
+    pub fn render_chrome(&mut self, ctx: &egui::Context) {
         // Consume any assistant proposal a worker finished since the last frame, and keep the
         // UI ticking while one is still running so the poll actually fires.
         #[cfg(feature = "assistant")]
@@ -1721,9 +1734,6 @@ impl EditorApp {
         egui::SidePanel::right("inspector")
             .resizable(true)
             .show(ctx, |ui| self.inspector_ui(ui));
-        egui::CentralPanel::default()
-            .frame(egui::Frame::NONE)
-            .show(ctx, |ui| self.canvas_ui(ui));
     }
 }
 
@@ -1807,6 +1817,22 @@ mod tests {
         assert_eq!(param_unit("resonance"), "");
         assert_eq!(param_unit("mix"), "");
         assert_eq!(param_unit("bias"), "");
+    }
+
+    #[test]
+    fn render_chrome_then_canvas_runs_a_frame_like_the_plugin_does() {
+        // The plugin draws the chrome and then the canvas separately (the canvas wrapped in a
+        // resizable window); the standalone calls render(). Both must run a full egui frame
+        // without panicking. Exercised headlessly through egui's own context.
+        let mut app = EditorApp::new();
+        let ctx = egui::Context::default();
+        // The plugin's split path: chrome, then the canvas in a central panel.
+        let _ = ctx.run(egui::RawInput::default(), |ctx| {
+            app.render_chrome(ctx);
+            egui::CentralPanel::default().show(ctx, |ui| app.canvas_ui(ui));
+        });
+        // The standalone's combined path.
+        let _ = ctx.run(egui::RawInput::default(), |ctx| app.render(ctx));
     }
 
     #[test]
