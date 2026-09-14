@@ -30,6 +30,9 @@ Two independent version numbers matter in this project:
 - **Editor (`vb-editor`)** — panel controls now honor each parameter's **widget type** (knob /
   slider / switch), and **right-clicking a control** switches its type in place. `PanelBinding`
   carries the `widget`, so the panel and the inspector stay in lock-step.
+- **Editor (`vb-editor`)** — panel modules are **draggable**: grab a module's title bar to place
+  it anywhere; unplaced modules auto-flow into a grid. Placement is view-only
+  (`PatchView::set_panel_position`) and does not rebuild the engine.
 
 ### Fixed
 

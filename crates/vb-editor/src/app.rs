@@ -238,6 +238,12 @@ pub struct PanelBinding {
     pub widget: WidgetKind,
 }
 
+/// Columns the panel auto-grid flows unplaced modules into before the user drags them.
+const PANEL_COLS: usize = 3;
+/// Auto-grid cell size (width × height) for an unplaced panel module, in panel points. Generous
+/// enough that a tall module rarely overlaps its neighbour before it is dragged into place.
+const PANEL_CELL: Vec2 = Vec2::new(248.0, 240.0);
+
 /// One node's block on the [`ViewMode::Panel`] surface: a titled group of that node's parameter
 /// controls, so the panel reads as a rack of labelled modules (like a hardware synth) instead of
 /// one flat wall of look-alike sliders. Returned by [`EditorApp::panel_modules`] so the grouping
@@ -1885,33 +1891,67 @@ impl EditorApp {
         out
     }
 
+    /// The panel modules paired with their **resolved** position on the surface: the explicit
+    /// spot the user dragged the module to, or — until it is placed — a deterministic auto-grid
+    /// slot derived from its order (`PANEL_COLS` columns of `PANEL_CELL`-sized cells). This is the
+    /// model the draggable panel renders and the tests assert against.
+    #[must_use]
+    pub fn panel_layout(&self) -> Vec<(PanelModule, Pos2)> {
+        self.panel_modules()
+            .into_iter()
+            .enumerate()
+            .map(|(i, module)| {
+                let pos = self.patch.panel_position(module.node).unwrap_or_else(|| {
+                    let col = (i % PANEL_COLS) as f32;
+                    let row = (i / PANEL_COLS) as f32;
+                    Pos2::new(col * PANEL_CELL.x, row * PANEL_CELL.y)
+                });
+                (module, pos)
+            })
+            .collect()
+    }
+
     /// Renders the control panel as a rack of titled modules — one framed block per node, its
-    /// parameters shown as rotary knobs — laid out in a wrapping grid, so it reads like a synth
-    /// front panel rather than a flat column of look-alike sliders. Every knob is bound live to
-    /// [`PatchView::set_param`], so a tweak here edits the same value the inspector and the audio
-    /// engine see.
+    /// parameters shown as their chosen controls — that the player can **drag to arrange** freely
+    /// (grab a module's title bar). Until a module is placed it auto-flows into a grid slot. Every
+    /// control is bound live to [`PatchView::set_param`], so a tweak here edits the same value the
+    /// inspector and the audio engine see.
     fn panel_ui(&mut self, ui: &mut Ui) {
-        ui.heading("panel");
-        let modules = self.panel_modules();
-        if modules.is_empty() {
+        ui.horizontal(|ui| {
+            ui.heading("panel");
+            ui.weak("· drag a module's title to arrange · right-click a control for its type");
+        });
+        let layout = self.panel_layout();
+        if layout.is_empty() {
             ui.weak("this patch has no parameters to control");
             return;
         }
         let theme = self.theme; // Copy — frees `self` for the set_param calls below.
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for module in modules {
-                    self.panel_module_ui(ui, &theme, &module);
-                }
-            });
-        });
+                                // The modules float as free-positioned areas on the region below the heading, so each can
+                                // be dragged anywhere. Anchor them to the panel's own origin (not the screen) and keep
+                                // them inside its rect. Reserve the space first so the surrounding layout gives the panel
+                                // room to hold the floating areas.
+        let region = ui.max_rect();
+        let origin = ui.cursor().min;
+        ui.allocate_space(ui.available_size());
+        for (module, pos) in layout {
+            let screen_pos = origin + pos.to_vec2();
+            egui::Area::new(egui::Id::new(("panel-module", module.node)))
+                .fixed_pos(screen_pos)
+                .movable(false)
+                .constrain_to(region)
+                .show(ui.ctx(), |ui| {
+                    self.panel_module_ui(ui, &theme, &module, pos);
+                });
+        }
     }
 
-    /// Renders one [`PanelModule`] as a framed, titled block of controls (wrapping within a fixed
-    /// width). Each parameter is drawn as the control its [`WidgetKind`] selects — knob, slider or
-    /// switch — and **right-clicking a control opens a menu to change that type**, so the player
-    /// builds the surface they want. Split out of [`panel_ui`] to keep the layout readable.
-    fn panel_module_ui(&mut self, ui: &mut Ui, theme: &Theme, module: &PanelModule) {
+    /// Renders one [`PanelModule`] as a framed, titled block of controls. The **title bar is a
+    /// drag handle** — dragging it moves the module on the panel (via [`PatchView::set_panel_position`],
+    /// starting from `pos`, its resolved spot this frame). Each parameter is drawn as the control
+    /// its [`WidgetKind`] selects — knob, slider or switch — and **right-clicking a control opens a
+    /// menu to change that type**, so the player builds the surface they want.
+    fn panel_module_ui(&mut self, ui: &mut Ui, theme: &Theme, module: &PanelModule, pos: Pos2) {
         const MODULE_WIDTH: f32 = 232.0;
         // The controls need the live `Parameter` (range + normalize); take an owned copy so the
         // set_param / set_widget edits below do not clash with the borrow.
@@ -1921,7 +1961,18 @@ impl EditorApp {
             .show(ui, |ui| {
                 ui.set_width(MODULE_WIDTH);
                 ui.vertical(|ui| {
-                    ui.strong(&module.title);
+                    // Title doubles as the move handle: a grabbed title drags the whole module.
+                    let title = ui.add(
+                        egui::Label::new(egui::RichText::new(&module.title).strong())
+                            .sense(Sense::drag()),
+                    );
+                    if title.dragged() {
+                        self.patch
+                            .set_panel_position(module.node, pos + title.drag_delta());
+                    }
+                    if title.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    }
                     ui.add_space(4.0);
                     ui.horizontal_wrapped(|ui| {
                         for b in &module.bindings {
@@ -2170,6 +2221,44 @@ mod tests {
         let mut app = EditorApp::new();
         app.load_doc(&doc);
         assert!(app.panel_modules().is_empty());
+    }
+
+    #[test]
+    fn panel_layout_auto_grids_unplaced_modules_by_order() {
+        let app = EditorApp::new();
+        let layout = app.panel_layout();
+        // Every module gets a position, one per module, and an unplaced module lands on the
+        // deterministic auto-grid (PANEL_COLS columns of PANEL_CELL-sized cells) in order.
+        assert_eq!(layout.len(), app.panel_modules().len());
+        for (i, (_, pos)) in layout.iter().enumerate() {
+            let col = (i % PANEL_COLS) as f32;
+            let row = (i / PANEL_COLS) as f32;
+            assert_eq!(*pos, Pos2::new(col * PANEL_CELL.x, row * PANEL_CELL.y));
+        }
+    }
+
+    #[test]
+    fn panel_layout_honors_a_dragged_module_position() {
+        let mut app = EditorApp::new();
+        let node = app.panel_modules()[1].node; // the second module, on the auto-grid otherwise
+        let placed = Pos2::new(600.0, 40.0);
+        app.patch_mut().set_panel_position(node, placed);
+
+        let layout = app.panel_layout();
+        let (_, pos) = layout
+            .iter()
+            .find(|(m, _)| m.node == node)
+            .expect("module still present");
+        assert_eq!(*pos, placed, "explicit placement wins over the auto-grid");
+        // Placement is view-only: it must not bump the audio revision.
+        let r = app.patch().revision();
+        app.patch_mut()
+            .set_panel_position(node, Pos2::new(10.0, 10.0));
+        assert_eq!(
+            app.patch().revision(),
+            r,
+            "moving a panel module is not audible"
+        );
     }
 
     #[test]

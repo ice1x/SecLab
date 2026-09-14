@@ -144,6 +144,9 @@ pub struct ParamSlot {
 pub struct PatchView {
     graph: Graph,
     positions: HashMap<NodeId, Pos2>,
+    /// Panel-surface positions per node's control block. View-only (not in [`Snapshot`], never
+    /// touches the revision); empty means every module auto-flows into a grid.
+    panel_positions: HashMap<NodeId, Pos2>,
     /// Draw order, back to front. Hit-testing walks it front to back.
     order: Vec<NodeId>,
     selected: Option<NodeId>,
@@ -650,6 +653,26 @@ impl PatchView {
     #[must_use]
     pub fn position(&self, id: NodeId) -> Option<Pos2> {
         self.positions.get(&id).copied()
+    }
+
+    /// The panel-surface position of the module for `id`, if the user has placed it. `None`
+    /// means "not placed yet" — the panel auto-flows it into a grid slot until it is dragged.
+    ///
+    /// This is the **Panel** layout, kept separate from the canvas [`position`](Self::position):
+    /// where a node's control block sits on the performance surface has nothing to do with where
+    /// its node sits in the graph.
+    #[must_use]
+    pub fn panel_position(&self, id: NodeId) -> Option<Pos2> {
+        self.panel_positions.get(&id).copied()
+    }
+
+    /// Places the module for `id` at `pos` on the panel surface.
+    ///
+    /// Like a widget assignment ([`set_widget`](Self::set_widget)), panel placement is a
+    /// **view-only** mapping — it changes nothing audible, so it neither records an undo step nor
+    /// touches the revision (the engine never rebuilds because a control block moved).
+    pub fn set_panel_position(&mut self, id: NodeId, pos: Pos2) {
+        self.panel_positions.insert(id, pos);
     }
 
     /// Nodes in draw order (back to front), with their positions.

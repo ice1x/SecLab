@@ -662,6 +662,14 @@ per-widget styling and a saved layout in the project.
   paths the inspector uses. Tested: a binding reports its assigned type and tracks a re-assign
   across both views. *(Next: custom widget placement/drag, then styling + a saved panel layout in
   the project.)* 🧪
+- [x] 000184 — 🧩 **Draggable panel layout** — panel modules are now **free-positioned**: grab a
+  module's **title bar** to drag it anywhere on the surface. Until placed, a module auto-flows into
+  a deterministic grid slot (`PANEL_COLS` columns), so a fresh patch still reads cleanly.
+  `PatchView::panel_position` / `set_panel_position` hold the placement (view-only — like a widget
+  assignment it never touches the audio revision), and `EditorApp::panel_layout` resolves each
+  module to its explicit spot or its auto-grid slot. Tested: the auto-grid order, that an explicit
+  placement wins, and that moving a module is not audible. *(Next: per-widget styling, then a saved
+  panel layout persisted in the project.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
