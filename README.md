@@ -653,6 +653,15 @@ per-widget styling and a saved layout in the project.
   tested for grouping/coverage, ordinal titling, and the empty-patch case; both surfaces still
   render at any size. *(Next: custom widget placement/binding, then styling + a saved panel
   layout in the project.)* 🧪
+- [x] 000183 — 🧩 **Per-control widget type on the panel** — each panel control is now drawn as
+  the [`WidgetKind`] its parameter is assigned (knob / slider / switch), and **right-clicking a
+  control opens a menu to change that type** — the first "constructor" gesture on the surface.
+  `PanelBinding` carries the `widget`, populated from the slot and honored by both the flat and
+  grouped views, so the panel and the inspector stay in lock-step (choosing a control in either
+  is reflected in both). Type and value edits go through the same `set_widget` / `set_param`
+  paths the inspector uses. Tested: a binding reports its assigned type and tracks a re-assign
+  across both views. *(Next: custom widget placement/drag, then styling + a saved panel layout in
+  the project.)* 🧪
 
 ### Epic 14 — Minitaur as the default synth
 
