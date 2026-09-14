@@ -27,6 +27,9 @@ Two independent version numbers matter in this project:
   per param-bearing node), numbering repeated kinds (`pitch-osc 1/2/3`) while leaving once-only
   kinds bare, and each module renders its parameters as rotary knobs live-bound through
   `set_param`. First step of Epic 15's interface constructor.
+- **Editor (`vb-editor`)** — panel controls now honor each parameter's **widget type** (knob /
+  slider / switch), and **right-clicking a control** switches its type in place. `PanelBinding`
+  carries the `widget`, so the panel and the inspector stay in lock-step.
 
 ### Fixed
 

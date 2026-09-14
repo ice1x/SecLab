@@ -232,6 +232,10 @@ pub struct PanelBinding {
     /// Range bounds.
     pub min: f32,
     pub max: f32,
+    /// The control this parameter is drawn as on the panel — the same [`WidgetKind`] the
+    /// inspector assigns, so choosing a control (knob / slider / switch) in either surface is
+    /// honored by both. This is what makes the panel a *constructor* and not a fixed grid.
+    pub widget: WidgetKind,
 }
 
 /// One node's block on the [`ViewMode::Panel`] surface: a titled group of that node's parameter
@@ -1821,6 +1825,7 @@ impl EditorApp {
                     value: slot.value,
                     min: slot.param.min,
                     max: slot.param.max,
+                    widget: slot.widget,
                 });
             }
         }
@@ -1868,6 +1873,7 @@ impl EditorApp {
                     value: slot.value,
                     min: slot.param.min,
                     max: slot.param.max,
+                    widget: slot.widget,
                 })
                 .collect();
             out.push(PanelModule {
@@ -1901,12 +1907,14 @@ impl EditorApp {
         });
     }
 
-    /// Renders one [`PanelModule`] as a framed, titled block of knobs (wrapping within a fixed
-    /// width). Split out of [`panel_ui`] so the per-module layout stays readable.
+    /// Renders one [`PanelModule`] as a framed, titled block of controls (wrapping within a fixed
+    /// width). Each parameter is drawn as the control its [`WidgetKind`] selects — knob, slider or
+    /// switch — and **right-clicking a control opens a menu to change that type**, so the player
+    /// builds the surface they want. Split out of [`panel_ui`] to keep the layout readable.
     fn panel_module_ui(&mut self, ui: &mut Ui, theme: &Theme, module: &PanelModule) {
         const MODULE_WIDTH: f32 = 232.0;
-        // The knobs need the live `Parameter` (range + normalize) to draw; take an owned copy so
-        // the set_param edits below do not clash with the borrow.
+        // The controls need the live `Parameter` (range + normalize); take an owned copy so the
+        // set_param / set_widget edits below do not clash with the borrow.
         let slots = self.patch.params(module.node).to_vec();
         egui::Frame::group(ui.style())
             .inner_margin(8.0)
@@ -1920,29 +1928,90 @@ impl EditorApp {
                             let Some(slot) = slots.get(b.index) else {
                                 continue;
                             };
-                            ui.vertical(|ui| {
-                                ui.set_width(64.0);
-                                let (response, changed) =
-                                    knob_widget(ui, theme, &slot.param, slot.value);
-                                if let Some(v) = changed {
-                                    self.patch.set_param(b.node, b.index, v);
-                                }
-                                if response.drag_stopped() {
-                                    self.patch.end_gesture();
-                                }
-                                let unit = param_unit(&slot.param.name);
-                                let name = &slot.param.name;
-                                ui.small(if unit.is_empty() {
-                                    name.to_owned()
-                                } else {
-                                    format!("{name} ({unit})")
-                                });
-                                ui.weak(format!("{:.3}", self.patch.params(b.node)[b.index].value));
-                            });
+                            self.panel_control_ui(ui, theme, b.node, b.index, slot);
                         }
                     });
                 });
             });
+    }
+
+    /// Renders one panel control (a single parameter) as its [`WidgetKind`], with a name/value
+    /// caption and a right-click menu to switch the control type. Edits go through
+    /// [`PatchView::set_param`] (value) and [`PatchView::set_widget`] (type), the same paths the
+    /// inspector uses, so the two surfaces stay in lock-step.
+    fn panel_control_ui(
+        &mut self,
+        ui: &mut Ui,
+        theme: &Theme,
+        node: vb_core::NodeId,
+        index: usize,
+        slot: &crate::patch::ParamSlot,
+    ) {
+        ui.vertical(|ui| {
+            ui.set_width(72.0);
+            // Draw the control the widget kind selects; every arm reports the response so the
+            // right-click type menu can hang off the same rect.
+            let response = match slot.widget {
+                WidgetKind::Slider => {
+                    let mut value = slot.value;
+                    let r = ui.add(egui::Slider::new(
+                        &mut value,
+                        slot.param.min..=slot.param.max,
+                    ));
+                    if r.changed() {
+                        self.patch.set_param(node, index, value);
+                    }
+                    if r.drag_stopped() || r.lost_focus() {
+                        self.patch.end_gesture();
+                    }
+                    r
+                }
+                WidgetKind::Switch => {
+                    let before = slot.value;
+                    ui.scope(|ui| {
+                        if let Some(v) = switch_widget(ui, &slot.param, before) {
+                            self.patch.set_param(node, index, v);
+                            self.patch.end_gesture();
+                        }
+                    })
+                    .response
+                }
+                // Knob is the default; an XY-pad has no compact panel form yet, so it also
+                // falls back to a knob here (the inspector remains the place to drive a pad).
+                WidgetKind::Knob | WidgetKind::XyPad => {
+                    let (r, changed) = knob_widget(ui, theme, &slot.param, slot.value);
+                    if let Some(v) = changed {
+                        self.patch.set_param(node, index, v);
+                    }
+                    if r.drag_stopped() {
+                        self.patch.end_gesture();
+                    }
+                    r
+                }
+            };
+
+            let unit = param_unit(&slot.param.name);
+            ui.small(if unit.is_empty() {
+                slot.param.name.clone()
+            } else {
+                format!("{} ({unit})", slot.param.name)
+            });
+            ui.weak(format!("{:.3}", self.patch.params(node)[index].value));
+
+            // Right-click any control to rebuild it as a different type — the constructor gesture.
+            response.context_menu(|ui| {
+                ui.label("control type");
+                for kind in WidgetKind::ALL {
+                    if ui
+                        .selectable_label(slot.widget == kind, kind.label())
+                        .clicked()
+                    {
+                        self.patch.set_widget(node, index, kind);
+                        ui.close_menu();
+                    }
+                }
+            });
+        });
     }
 }
 
@@ -2101,6 +2170,40 @@ mod tests {
         let mut app = EditorApp::new();
         app.load_doc(&doc);
         assert!(app.panel_modules().is_empty());
+    }
+
+    #[test]
+    fn panel_bindings_carry_and_track_the_control_type() {
+        // The panel draws each parameter as its assigned WidgetKind, and choosing a control type
+        // in the panel (or the inspector) is honored by both surfaces — the binding reports it.
+        let mut app = EditorApp::new();
+        let target = app
+            .panel_widgets()
+            .into_iter()
+            .find(|b| b.label == "ladder base_hz")
+            .expect("ladder base_hz is a panel control");
+        // Continuous params default to a knob.
+        assert_eq!(target.widget, WidgetKind::Knob);
+
+        // Re-assign it to a slider (the same call the right-click menu makes).
+        assert!(app
+            .patch_mut()
+            .set_widget(target.node, target.index, WidgetKind::Slider));
+
+        // Both the flat and the grouped views now report the slider for that binding.
+        let flat = app
+            .panel_widgets()
+            .into_iter()
+            .find(|b| b.node == target.node && b.index == target.index)
+            .unwrap();
+        assert_eq!(flat.widget, WidgetKind::Slider);
+        let grouped = app
+            .panel_modules()
+            .into_iter()
+            .flat_map(|m| m.bindings)
+            .find(|b| b.node == target.node && b.index == target.index)
+            .unwrap();
+        assert_eq!(grouped.widget, WidgetKind::Slider);
     }
 
     #[test]
