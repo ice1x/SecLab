@@ -17,20 +17,34 @@
 //! The whole module compiles only under the `gui` feature (see `lib.rs`), so the default
 //! build — and the headless clap-validator gate — never links an editor.
 
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use nih_plug::prelude::{AsyncExecutor, Editor};
 use nih_plug_egui::{create_egui_editor, EguiState};
+use vb_core::NodeId;
 use vb_editor::EditorApp;
 use vb_project::ProjectDoc;
 
-use crate::{PluginTask, VstBomb};
+use crate::{changed_values, PluginTask, VstBomb, VstBombParams};
 
-/// The editor's persistent state: the live editor plus the patch revision last mirrored into
-/// the shared doc, so a rebuild is kicked only when the graph actually changed.
+/// Per-node parameter values (registry `params()` order) of a document — the snapshot
+/// [`changed_values`] diffs to find the knob the user moved in the editor.
+fn doc_values(doc: &ProjectDoc) -> HashMap<NodeId, Vec<f32>> {
+    doc.nodes
+        .iter()
+        .map(|entry| (entry.id, entry.values.clone()))
+        .collect()
+}
+
+/// The editor's persistent state: the live editor, the patch revision last mirrored into the
+/// shared doc (so a rebuild is kicked only when the graph actually changed), and the parameter
+/// values last pushed to the host (so a knob edit is written through to exactly its host
+/// parameter — see [`create`]).
 struct EditorHost {
     app: EditorApp,
     last_revision: u64,
+    last_values: HashMap<NodeId, Vec<f32>>,
 }
 
 /// Builds the embedded node editor for the plugin window.
@@ -39,6 +53,7 @@ struct EditorHost {
 /// schedules the off-audio-thread rebuild when the graph is edited.
 pub(crate) fn create(
     egui_state: Arc<EguiState>,
+    params: Arc<VstBombParams>,
     doc: Arc<Mutex<Arc<ProjectDoc>>>,
     executor: AsyncExecutor<VstBomb>,
 ) -> Option<Box<dyn Editor>> {
@@ -48,12 +63,19 @@ pub(crate) fn create(
         app.load_doc(&current);
     }
     let last_revision = app.patch().revision();
+    // Seed from the host-parameter snapshot (always the full, current value set), so the first
+    // edit diffs against what the host actually holds and only real knob moves are pushed.
+    let last_values = params.values_by_node();
 
     create_egui_editor(
         egui_state,
-        EditorHost { app, last_revision },
+        EditorHost {
+            app,
+            last_revision,
+            last_values,
+        },
         |_ctx, _state| {},
-        move |ctx, _setter, state| {
+        move |ctx, setter, state| {
             // Fixed-size window: render the whole editor into the context.
             //
             // A `ResizableWindow` drag corner was tried (000178) but reverted (000180): on the
@@ -65,12 +87,27 @@ pub(crate) fn create(
             // resizable one. Revisit when nih-plug implements host resize upstream.
             state.app.render(ctx);
 
-            // A structural edit bumps the patch revision: mirror the new graph into the
-            // shared doc and rebuild the engine off the audio thread.
+            // An audible edit (a knob move, a wire, an added node) bumps the patch revision.
             let revision = state.app.patch().revision();
             if revision != state.last_revision {
                 state.last_revision = revision;
                 let new_doc = state.app.patch().to_doc();
+
+                // Write each moved knob through to its host parameter. The engine rebuild
+                // sources node values from the host-parameter snapshot, and that snapshot wins
+                // over the document's stored values — so without this, an in-editor knob edit
+                // is silently reverted on the next rebuild (the bug behind "the knobs don't
+                // change the sound"). Pushing through the ParamSetter also lets the DAW record
+                // the gesture as automation.
+                let new_values = doc_values(&new_doc);
+                for (node, index, value) in changed_values(&state.last_values, &new_values) {
+                    params.set_bound(setter, node, index, value);
+                }
+                state.last_values = new_values;
+
+                // Mirror the new graph into the shared doc and rebuild off the audio thread.
+                // (A structural edit has no host parameter to carry it; the mirror is how the
+                // rebuild sees added/removed nodes and wires.)
                 if let Ok(mut slot) = doc.lock() {
                     *slot = Arc::new(new_doc);
                 }

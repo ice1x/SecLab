@@ -167,6 +167,74 @@ impl VstBombParams {
     pub fn is_empty(&self) -> bool {
         self.bound.is_empty()
     }
+
+    /// Flat index into `bound` for the parameter at registry position `index` of `node`,
+    /// or `None` when that node/index is not host-automatable (e.g. a node added in-session,
+    /// whose params are not exposed until reload). Routes an editor knob edit to the matching
+    /// host parameter.
+    fn bound_index_of(&self, node: NodeId, index: usize) -> Option<usize> {
+        let mut seen = 0usize;
+        for (bi, b) in self.bound.iter().enumerate() {
+            if b.node == node {
+                if seen == index {
+                    return Some(bi);
+                }
+                seen += 1;
+            }
+        }
+        None
+    }
+
+    /// Moves the host parameter bound to `(node, index)` to `value` through `setter`,
+    /// wrapping it in a one-shot host gesture so the DAW records the editor knob move.
+    ///
+    /// This is the fix for editor knobs not reaching the audio engine: the engine rebuild
+    /// sources every node's values from [`values_by_node`](Self::values_by_node) (the host
+    /// parameter snapshot), and that override wins over the document's stored values (see
+    /// [`engine_from_doc_with_values`]). So an in-editor edit that only touched the document
+    /// was silently reverted on the next rebuild. Writing the edit through to the host
+    /// parameter makes the snapshot — and therefore the rebuilt engine — reflect it.
+    ///
+    /// A no-op (returns `false`) for a `(node, index)` that is not automatable.
+    pub fn set_bound(&self, setter: &ParamSetter, node: NodeId, index: usize, value: f32) -> bool {
+        let Some(bi) = self.bound_index_of(node, index) else {
+            return false;
+        };
+        let param = &self.bound[bi].param;
+        setter.begin_set_parameter(param);
+        setter.set_parameter(param, value);
+        setter.end_set_parameter(param);
+        true
+    }
+}
+
+/// Parameters whose value changed between two per-node value snapshots (each a node id →
+/// values in registry `params()` order, the shape [`VstBombParams::values_by_node`] and
+/// [`ProjectDoc`] both use): returns `(node, index, new_value)` for each.
+///
+/// Drives the plugin's editor→host parameter write-through so **only** the knob the user
+/// actually moved in the editor is pushed to the host — parameters the editor never touched
+/// (for example one moved by host automation) do not appear here and are left alone. A value
+/// present in `next` but absent from `prev` counts as changed.
+#[must_use]
+pub fn changed_values(
+    prev: &HashMap<NodeId, Vec<f32>>,
+    next: &HashMap<NodeId, Vec<f32>>,
+) -> Vec<(NodeId, usize, f32)> {
+    let mut out = Vec::new();
+    for (node, values) in next {
+        let before = prev.get(node);
+        for (index, &value) in values.iter().enumerate() {
+            let changed = match before.and_then(|b| b.get(index)) {
+                Some(&old) => (old - value).abs() > f32::EPSILON,
+                None => true,
+            };
+            if changed {
+                out.push((*node, index, value));
+            }
+        }
+    }
+    out
 }
 
 // SAFETY: `param_map` returns one entry per `FloatParam` owned by `self.bound`; the
@@ -323,7 +391,12 @@ impl Plugin for VstBomb {
         let _ = &async_executor;
         #[cfg(feature = "gui")]
         {
-            editor::create(self.editor_state.clone(), self.doc.clone(), async_executor)
+            editor::create(
+                self.editor_state.clone(),
+                self.params.clone(),
+                self.doc.clone(),
+                async_executor,
+            )
         }
         #[cfg(not(feature = "gui"))]
         {
@@ -871,6 +944,125 @@ mod tests {
         assert!(
             (quiet - loud * 0.25).abs() < 1e-3,
             "automated gain reaches the processor: {loud} vs {quiet}"
+        );
+    }
+
+    #[test]
+    fn changed_values_reports_only_the_moved_knob() {
+        let node = NodeId(7);
+        let prev = HashMap::from([(node, vec![1.0, 2.0, 3.0])]);
+        let next = HashMap::from([(node, vec![1.0, 9.0, 3.0])]);
+        assert_eq!(changed_values(&prev, &next), vec![(node, 1, 9.0)]);
+    }
+
+    #[test]
+    fn changed_values_is_empty_when_nothing_moved() {
+        let snap = HashMap::from([(NodeId(1), vec![0.5, 0.6]), (NodeId(2), vec![1.0])]);
+        assert!(changed_values(&snap, &snap).is_empty());
+    }
+
+    #[test]
+    fn changed_values_treats_a_new_value_as_changed() {
+        let node = NodeId(3);
+        let prev = HashMap::new();
+        let next = HashMap::from([(node, vec![0.25])]);
+        assert_eq!(changed_values(&prev, &next), vec![(node, 0, 0.25)]);
+    }
+
+    #[test]
+    fn bound_index_routes_each_node_param_to_its_own_binding() {
+        let registry = Registry::with_builtins();
+        let doc = sample_voice_doc(&registry);
+        let params = VstBombParams::for_doc(&doc, &registry);
+
+        // The ADSR carries four params (a, d, s, r): each index must resolve to a distinct
+        // binding that belongs to that node, and an out-of-range index resolves to nothing.
+        let adsr = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "adsr")
+            .map(|e| e.id)
+            .expect("sample voice has an adsr");
+        let mut seen = Vec::new();
+        for index in 0..4 {
+            let bi = params
+                .bound_index_of(adsr, index)
+                .expect("adsr param is automatable");
+            assert_eq!(params.bound[bi].node, adsr, "binding belongs to the node");
+            seen.push(bi);
+        }
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(seen.len(), 4, "four distinct bindings for four params");
+        assert_eq!(
+            params.bound_index_of(adsr, 4),
+            None,
+            "index past the last param"
+        );
+        assert_eq!(
+            params.bound_index_of(NodeId(9_999), 0),
+            None,
+            "unknown node"
+        );
+    }
+
+    #[test]
+    fn an_editor_knob_edit_reaches_the_rebuilt_engine() {
+        // The exact bug the user hit: dragging a knob in the editor changed the document but
+        // the rebuild override (the host-param snapshot) reverted it. The fix pushes the edit
+        // into the host param so the snapshot — and the rebuilt engine — carry it. Here we
+        // stand in for the ParamSetter by applying `changed_values` straight into the snapshot,
+        // proving the reconciliation the write-through relies on actually moves the sound.
+        let registry = Registry::with_builtins();
+        let mut graph = vb_core::Graph::new();
+        let osc = graph.add_node(registry.graph_node("oscillator").unwrap());
+        let amp = graph.add_node(registry.graph_node("gain").unwrap());
+        graph
+            .connect(osc, vb_core::PortId(0), amp, vb_core::PortId(0))
+            .unwrap();
+        let doc = ProjectDoc::from_graph(&graph);
+        let ctx = BuildContext::default();
+        let params = VstBombParams::for_doc(&doc, &registry);
+        let gain = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "gain")
+            .map(|e| e.id)
+            .unwrap();
+
+        // Snapshot before the edit is the host-param default (gain = 1.0).
+        let before = params.values_by_node();
+        // The editor drags gain down to 0.25: `to_doc` would produce this snapshot.
+        let mut edited = before.clone();
+        *edited.get_mut(&gain).unwrap().get_mut(0).unwrap() = 0.25;
+
+        // Only the gain knob is reported as moved.
+        let moved = changed_values(&before, &edited);
+        assert_eq!(moved, vec![(gain, 0, 0.25)]);
+
+        // Apply the move into the rebuild override (what set_bound achieves via the host
+        // param) and rebuild: the engine now runs at the edited gain, not the stale default.
+        let mut snapshot = before.clone();
+        for (node, index, value) in moved {
+            snapshot.get_mut(&node).unwrap()[index] = value;
+        }
+        let (mut engine, sink) =
+            engine_from_doc_with_values(&doc, &registry, &ctx, 256, &snapshot).unwrap();
+        let sink = sink.unwrap();
+        engine.process(&vb_core::ProcessContext {
+            sample_rate: 48_000.0,
+            frames: 256,
+        });
+        let peak = engine
+            .node_output(sink)
+            .unwrap()
+            .channel(0)
+            .unwrap()
+            .iter()
+            .fold(0.0_f32, |m, s| m.max(s.abs()));
+        assert!(
+            peak <= 0.26,
+            "edited gain applied, not reverted: peak {peak}"
         );
     }
 
