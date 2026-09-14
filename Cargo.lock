@@ -4211,7 +4211,7 @@ dependencies = [
 
 [[package]]
 name = "vb-ai"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "keyring",
  "reqwest",
@@ -4225,14 +4225,14 @@ dependencies = [
 
 [[package]]
 name = "vb-core"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "vb-editor"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "console_error_panic_hook",
  "eframe",
@@ -4250,7 +4250,7 @@ dependencies = [
 
 [[package]]
 name = "vb-engine"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "vb-core",
  "vb-nodes",
@@ -4261,7 +4261,7 @@ dependencies = [
 
 [[package]]
 name = "vb-library"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "drevo",
  "serde_json",
@@ -4272,14 +4272,14 @@ dependencies = [
 
 [[package]]
 name = "vb-nodes"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "vb-core",
 ]
 
 [[package]]
 name = "vb-plugin"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "libc",
  "nih_plug",
@@ -4295,7 +4295,7 @@ dependencies = [
 
 [[package]]
 name = "vb-project"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "ron",
  "serde",
@@ -4304,7 +4304,7 @@ dependencies = [
 
 [[package]]
 name = "vb-runtime"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "criterion",
  "vb-core",
@@ -4313,7 +4313,7 @@ dependencies = [
 
 [[package]]
 name = "vb-standalone"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "cpal",
  "eframe",
@@ -5333,7 +5333,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.0.0"
+version = "0.0.1"
 dependencies = [
  "nih_plug_xtask",
  "vb-nodes",

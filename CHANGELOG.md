@@ -8,10 +8,10 @@ All notable changes to VST_bomb are documented here. The format follows
 Two independent version numbers matter in this project:
 
 - **Crate / release version** — a single workspace-wide version (`version.workspace` in the
-  root `Cargo.toml`), currently **0.0.0**. The project is **pre-1.0**: it has not cut a
-  release yet, so everything to date lives under _Unreleased_ below. Once releases begin,
-  this version follows [Semantic Versioning](https://semver.org/) — MAJOR.MINOR.PATCH — and
-  each release moves the accumulated _Unreleased_ notes under a dated heading.
+  root `Cargo.toml`), currently **0.0.1** — the first cut release. The project is **pre-1.0**,
+  so the API and patch format may still change between releases. This version follows
+  [Semantic Versioning](https://semver.org/) — MAJOR.MINOR.PATCH — and each release moves the
+  accumulated _Unreleased_ notes under a dated heading.
 - **Project format version** — the on-disk `.ron` patch format has its own version
   (`vb_project::FORMAT_VERSION`), currently **1**, with backward loading supported down to
   `MIN_SUPPORTED_VERSION` via the migration path. This number changes only when the patch
@@ -20,8 +20,12 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
-The first development cycle, building the engine, node library, editor, plugin export, and
-the AI assistant from the ground up. Highlights by area:
+_Nothing yet._
+
+## [0.0.1] - 2026-09-14
+
+The first cut release. The first development cycle, building the engine, node library,
+editor, plugin export, and the AI assistant from the ground up. Highlights by area:
 
 ### Added
 
