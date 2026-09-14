@@ -22,12 +22,16 @@ pub enum WidgetKind {
     Switch,
     /// A 2-D pad binding this parameter (X) to the next one (Y).
     XyPad,
+    /// A vertical fader — the console/synth control, and the natural shape for an envelope
+    /// segment (attack/decay/sustain/release read as a stack of faders).
+    Fader,
 }
 
 impl WidgetKind {
     /// The widget kinds in a stable order, for building a picker.
-    pub const ALL: [WidgetKind; 4] = [
+    pub const ALL: [WidgetKind; 5] = [
         WidgetKind::Knob,
+        WidgetKind::Fader,
         WidgetKind::Slider,
         WidgetKind::Switch,
         WidgetKind::XyPad,
@@ -41,6 +45,7 @@ impl WidgetKind {
             WidgetKind::Knob => "knob",
             WidgetKind::Switch => "switch",
             WidgetKind::XyPad => "xy-pad",
+            WidgetKind::Fader => "fader",
         }
     }
 
@@ -53,12 +58,25 @@ impl WidgetKind {
     }
 }
 
-/// Widget a freshly added parameter gets. Everything defaults to a knob — a
-/// predictable choice that never misreads a continuous range as an enum (only the
-/// registry truly knows which parameters are discrete). Users retype it per parameter.
+/// Widget a freshly added parameter gets. Envelope segments default to a **fader** — an
+/// attack/decay/sustain/release stack reads far more naturally as faders than as dials, which
+/// is how hardware and most soft-synths draw them. Everything else defaults to a **knob**, a
+/// predictable choice that never misreads a continuous range as an enum (only the registry truly
+/// knows which parameters are discrete). Users retype any of it per parameter.
 #[must_use]
-pub fn default_widget(_param: &Parameter) -> WidgetKind {
-    WidgetKind::Knob
+pub fn default_widget(param: &Parameter) -> WidgetKind {
+    if is_envelope_param(&param.name) {
+        WidgetKind::Fader
+    } else {
+        WidgetKind::Knob
+    }
+}
+
+/// Whether a parameter name reads as an envelope segment (a `*_s` time — attack/decay/release —
+/// or the `sustain` level), so it should default to a fader.
+#[must_use]
+fn is_envelope_param(name: &str) -> bool {
+    name.ends_with("_s") || name == "sustain"
 }
 
 /// Vertical drag, in screen pixels, that sweeps a knob across its whole range.
@@ -168,6 +186,27 @@ mod tests {
         assert_eq!(default_widget(&cont()), WidgetKind::Knob);
         assert_eq!(default_widget(&enum4()), WidgetKind::Knob);
         assert_eq!(WidgetKind::default(), WidgetKind::Knob);
+    }
+
+    #[test]
+    fn envelope_segments_default_to_a_fader() {
+        for name in ["attack_s", "decay_s", "release_s", "sustain"] {
+            let p = Parameter::new(name, 0.0, 1.0, 0.0);
+            assert_eq!(
+                default_widget(&p),
+                WidgetKind::Fader,
+                "{name} should be a fader"
+            );
+        }
+        // A non-envelope parameter (even one in seconds-adjacent naming) stays a knob.
+        assert_eq!(
+            default_widget(&Parameter::new("glide_ms", 0.0, 5000.0, 50.0)),
+            WidgetKind::Knob
+        );
+        assert_eq!(
+            default_widget(&Parameter::new("freq_hz", 20.0, 20000.0, 440.0)),
+            WidgetKind::Knob
+        );
     }
 
     #[test]

@@ -48,6 +48,10 @@ Two independent version numbers matter in this project:
 - **Editor (`vb-editor`) / Project (`vb-project`)** — panel modules can be given an **accent
   colour** (right-click a module's title). The accent frames the module and tints its title, and
   is saved with the patch via a new optional `NodeEntry.panel_color` (`#rrggbb`) field.
+- **Editor (`vb-editor`)** — a new **vertical fader** control type (`WidgetKind::Fader`), offered
+  in the right-click menu and rendered by the panel and the inspector. Envelope segments (`*_s`
+  times, `sustain`) now default to a fader, so an ADSR reads as a fader stack rather than a row of
+  dials. The choice persists with the patch.
 
 ### Fixed
 
