@@ -55,6 +55,11 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Editor (`vb-editor`)** — the Panel view no longer hides most modules. `horizontal_wrapped`
+  does not wrap framed blocks, so the modules ran off the right edge in a single row and vanished;
+  the panel now computes the column count from the available width (`panel_column_count`) and lays
+  un-placed modules out row by row, so every module is visible and wraps into a grid. Verified in
+  the browser (WASM) build.
 - **Engine / Plugin editor (`vb-plugin`)** — turning a knob **in the plugin editor** during
   playback no longer clicks. The live-update path landed first, but the embedded editor still
   kicked a full engine rebuild on every audible edit — including a plain knob move — and that
