@@ -240,14 +240,45 @@ pub struct PanelBinding {
 
 /// One panel module's footprint (width 232 + frame margin + inter-column gap), used to decide how
 /// many module columns fit across the panel.
-const MODULE_CELL: f32 = 252.0;
-
-/// How many module columns fit in `available_width`, at least one. The panel lays un-placed
-/// modules out row by row using this — `horizontal_wrapped` does not wrap framed blocks, so the
-/// wrap is computed explicitly here (and is unit-testable, unlike the egui rendering).
+/// Estimated on-screen width, in panel points, of a module with `controls` controls. Modules are
+/// **not** uniform: a one-knob `glide` is a third the width of a four-fader `adsr`, so packing them
+/// as if every module were one fixed cell overflowed a row of wide modules off the right edge (the
+/// bug where the `lfo` module's later controls vanished). Each control column is ~72 pt plus
+/// spacing; this is a deliberate slight over-estimate (frame margins + a little slack) so a packed
+/// row never exceeds the width egui actually lays it out at — over-estimating only wraps a touch
+/// early, which is safe, whereas under-estimating clips.
 #[must_use]
-fn panel_column_count(available_width: f32) -> usize {
-    ((available_width / MODULE_CELL).floor() as usize).max(1)
+fn module_est_width(controls: usize) -> f32 {
+    let n = controls.max(1) as f32;
+    24.0 + n * 84.0
+}
+
+/// Greedily packs modules of the given estimated `widths` into rows that each fit within
+/// `available_width`, returning the module count per row. A row always holds at least one module
+/// (a single module wider than the whole panel gets its own row rather than none). This replaces a
+/// fixed column count so a row of wide modules wraps before it runs off the edge, while narrow
+/// modules still share a row. Pure and unit-tested, unlike the egui rendering it drives.
+#[must_use]
+fn pack_row_counts(widths: &[f32], available_width: f32) -> Vec<usize> {
+    const SPACING: f32 = 8.0;
+    let mut rows = Vec::new();
+    let mut count = 0usize;
+    let mut used = 0.0;
+    for &w in widths {
+        let add = if count == 0 { w } else { SPACING + w };
+        if count > 0 && used + add > available_width {
+            rows.push(count);
+            count = 1;
+            used = w;
+        } else {
+            count += 1;
+            used += add;
+        }
+    }
+    if count > 0 {
+        rows.push(count);
+    }
+    rows
 }
 
 /// Columns the panel auto-grid flows unplaced modules into before the user drags them.
@@ -1997,21 +2028,30 @@ impl EditorApp {
         //   colliding with it — the bug the fixed-height auto-grid caused.
         // - A module the user has dragged floats as a free-positioned area on top, anywhere.
         // Dragging an un-placed module's title lifts it out of the flow into the placed layer.
-        // Manual wrapping into a fixed number of columns. `horizontal_wrapped` does NOT wrap
-        // `Frame::group` items (a framed block does not report its width up front, so the flow
-        // just runs them off the right edge and they vanish) — so compute the column count from
-        // the available width and lay the un-placed modules out row by row. Each row is a
+        // Manual, width-aware wrapping. `horizontal_wrapped` does NOT wrap `Frame::group` items (a
+        // framed block does not report its width up front, so the flow just runs them off the right
+        // edge and they vanish). Modules are also not uniform width — a four-fader `adsr` is far
+        // wider than a one-knob `glide` — so a fixed column count overflowed a row of wide modules
+        // (the `lfo`'s controls ran off-screen). Instead, estimate each module's width from its
+        // control count and greedily pack rows that fit the available width. Each row is a
         // top-aligned horizontal strip; rows stack in the vertical scroll area, so a tall module
         // never overlaps the row below.
         let unplaced: Vec<&PanelModule> = modules
             .iter()
             .filter(|m| self.patch.panel_position(m.node).is_none())
             .collect();
-        let cols = panel_column_count(ui.available_width());
+        let widths: Vec<f32> = unplaced
+            .iter()
+            .map(|m| module_est_width(m.bindings.len()))
+            .collect();
+        let row_counts = pack_row_counts(&widths, ui.available_width());
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
-                for row in unplaced.chunks(cols) {
+                let mut start = 0usize;
+                for count in row_counts {
+                    let row = &unplaced[start..start + count];
+                    start += count;
                     ui.horizontal_top(|ui| {
                         for module in row {
                             self.panel_module_ui(ui, &theme, module, None, origin);
@@ -2367,14 +2407,32 @@ mod tests {
     }
 
     #[test]
-    fn panel_column_count_scales_with_width_and_is_at_least_one() {
-        // Even a sliver of width shows one column (never zero — that would hide every module).
-        assert_eq!(panel_column_count(0.0), 1);
-        assert_eq!(panel_column_count(100.0), 1);
-        // Width grows the column count by whole modules.
-        assert_eq!(panel_column_count(MODULE_CELL), 1);
-        assert_eq!(panel_column_count(MODULE_CELL * 2.0), 2);
-        assert_eq!(panel_column_count(MODULE_CELL * 4.5), 4);
+    fn module_width_grows_with_control_count() {
+        // A wide (four-fader) module is estimated far wider than a one-knob one, so packing can
+        // tell them apart. Monotonic in the control count, and a zero-control module still has a
+        // sane positive width (never packs infinitely many into a row).
+        assert!(module_est_width(1) < module_est_width(3));
+        assert!(module_est_width(3) < module_est_width(4));
+        assert_eq!(module_est_width(0), module_est_width(1));
+        assert!(module_est_width(4) > 300.0);
+    }
+
+    #[test]
+    fn packing_wraps_rows_by_real_width_never_overflowing() {
+        // Four equal modules that fit three-to-a-row wrap 3 + 1, not 4 in one overflowing row.
+        let w = 250.0;
+        assert_eq!(pack_row_counts(&[w, w, w, w], 800.0), vec![3, 1]);
+        // Mixed widths: two wide modules fill a row, a narrow one starts the next.
+        assert_eq!(pack_row_counts(&[360.0, 360.0, 108.0], 800.0), vec![2, 1]);
+        // A single module wider than the whole panel still gets its own row (never zero rows).
+        assert_eq!(pack_row_counts(&[999.0], 300.0), vec![1]);
+        assert_eq!(pack_row_counts(&[999.0, 100.0], 300.0), vec![1, 1]);
+        // No modules → no rows.
+        assert_eq!(pack_row_counts(&[], 800.0), Vec::<usize>::new());
+        // The packed rows never lose or duplicate a module.
+        let ws = [360.0, 108.0, 276.0, 192.0, 360.0];
+        let total: usize = pack_row_counts(&ws, 800.0).iter().sum();
+        assert_eq!(total, ws.len());
     }
 
     #[test]
