@@ -1735,46 +1735,59 @@ impl EditorApp {
     /// directly inside its own egui context — one editor, drawn the same everywhere, no
     /// `eframe::Frame` required.
     pub fn render(&mut self, ctx: &egui::Context) {
+        // The standalone/browser own the whole context: host the editor in one root central
+        // panel, then draw the editor's own panels inside it via [`render_inside`]. The plugin
+        // instead calls `render_inside` within a resizable window (a drag corner), so the same
+        // panel layout serves both — nested panels (`show_inside`) never conflict with a wrapper.
+        egui::CentralPanel::default()
+            .frame(egui::Frame::NONE)
+            .show(ctx, |ui| self.render_inside(ui));
+    }
+
+    /// Draws the whole editor **inside** a given [`Ui`] using `show_inside` panels, so it can live
+    /// either in the standalone's root panel or inside the plugin's resizable window without a
+    /// central-panel clash. Kept public so the plugin editor can host it in a `ResizableWindow`.
+    pub fn render_inside(&mut self, ui: &mut Ui) {
         // Consume any assistant proposal a worker finished since the last frame, and keep the
         // UI ticking while one is still running so the poll actually fires.
         #[cfg(feature = "assistant")]
         {
             self.poll_assistant();
             if self.assistant.in_flight() {
-                ctx.request_repaint();
+                ui.ctx().request_repaint();
             }
         }
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
         if self.visuals_dirty {
-            ctx.set_visuals(self.theme.egui_visuals());
+            ui.ctx().set_visuals(self.theme.egui_visuals());
             self.visuals_dirty = false;
         }
-        self.toolbar_ui(ctx);
+        self.toolbar_ui(ui);
         match self.view_mode {
             // The node graph: palette + inspector side panels around the canvas.
             ViewMode::Structure => {
                 egui::SidePanel::left("palette")
                     .resizable(true)
-                    .show(ctx, |ui| self.palette_ui(ui));
+                    .show_inside(ui, |ui| self.palette_ui(ui));
                 egui::SidePanel::right("inspector")
                     .resizable(true)
-                    .show(ctx, |ui| self.inspector_ui(ui));
+                    .show_inside(ui, |ui| self.inspector_ui(ui));
                 egui::CentralPanel::default()
                     .frame(egui::Frame::NONE)
-                    .show(ctx, |ui| self.canvas_ui(ui));
+                    .show_inside(ui, |ui| self.canvas_ui(ui));
             }
             // The control panel: one live-bound widget per node parameter, no wiring.
             ViewMode::Panel => {
-                egui::CentralPanel::default().show(ctx, |ui| self.panel_ui(ui));
+                egui::CentralPanel::default().show_inside(ui, |ui| self.panel_ui(ui));
             }
         }
     }
 
     /// The top toolbar: the **Blocks / Panel** view switch first, then the macro breadcrumbs,
     /// view controls (zoom, snap, theme), and undo/redo. Shared by both view modes.
-    fn toolbar_ui(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
+    fn toolbar_ui(&mut self, parent: &mut Ui) {
+        egui::TopBottomPanel::top("toolbar").show_inside(parent, |ui| {
             ui.horizontal(|ui| {
                 // Switch between the node graph and the control panel.
                 ui.selectable_value(&mut self.view_mode, ViewMode::Structure, "Blocks");
