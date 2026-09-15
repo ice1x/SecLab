@@ -73,6 +73,14 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Editor (`vb-editor`)** — the Panel view no longer clips wide modules off the right edge.
+  Modules are not uniform width — a four-fader `adsr` is far wider than a one-knob `glide` — so
+  laying them out as a fixed number of equal columns overflowed a row of wide modules and cut off
+  the last one (the `lfo`'s later controls vanished). The panel now estimates each module's width
+  from its control count (`module_est_width`) and greedily packs rows that fit the available width
+  (`pack_row_counts`), so a row wraps before it runs off the edge and every control stays visible.
+  Verified in the browser (WASM) at 760 px and 1200 px — the `lfo`'s five controls render in full
+  at both widths.
 - **Plugin window (`vb-plugin`)** — reverted the drag-corner resize (000191). On the AU surface
   the `ResizableWindow` path left the plugin **unclickable** after the drag was released: the host
   grew the window frame but the clap-wrapper→baseview egui surface did not follow, so input
