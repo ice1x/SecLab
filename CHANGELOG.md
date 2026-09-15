@@ -29,7 +29,12 @@ Two independent version numbers matter in this project:
   browser/WASM build). Levels (`sustain`, `resonance`), gains (`_db`) and bipolar ranges
   (`detune_semitones`) stay linear. Knobs got a longer full-sweep travel (`KNOB_RANGE_PX` 200 → 320)
   for finer control, and holding **Shift** while turning a knob trims at a quarter speed
-  (`KNOB_FINE_FACTOR`).
+  (`KNOB_FINE_FACTOR`). Logarithmic faders/sliders whose range starts at zero (envelope times) now
+  set a 1 ms floor (`widgets::LOG_SMALLEST_POSITIVE`): egui's `1e-6` default handed the bottom
+  ~45 % of the travel to sub-millisecond times nobody dials and snapped a downward drag to `0.000`
+  (the "adsr decay won't leave zero" complaint); with the floor the bottom reaches ~1 ms and small
+  decays like 0.01–0.1 s are easy to grab (verified in the browser/WASM build — a drag near the
+  bottom lands 0.003 s → 0.010 s cleanly instead of collapsing to zero).
 
 ### Added
 
