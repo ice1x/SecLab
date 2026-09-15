@@ -79,6 +79,10 @@ pub(crate) fn create(
 ) -> Option<Box<dyn Editor>> {
     // Seed the editor with the patch this instance is playing, not the demo.
     let mut app = EditorApp::new();
+    // Point the library at the shared per-user modules folder. The default is a *relative*
+    // `modules`, which in a plugin resolves against the host DAW's working directory — so without
+    // this the library browser could never find the user's saved macro modules.
+    app.set_modules_dir(vb_editor::user_modules_dir());
     if let Ok(current) = doc.lock() {
         app.load_doc(&current);
     }

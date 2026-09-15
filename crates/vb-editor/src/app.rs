@@ -1339,6 +1339,17 @@ impl EditorApp {
         }
     }
 
+    /// Points the library browser (and macro export/import) at `dir` — the folder saved macro
+    /// modules are read from and written to. The standalone app and the plugin both call this with
+    /// [`user_modules_dir`](crate::user_modules_dir) so they share one per-user folder; a plugin
+    /// left on the default relative `modules` would resolve it against the host DAW's working
+    /// directory and never find the user's modules. The next library display reloads from the new
+    /// directory.
+    pub fn set_modules_dir(&mut self, dir: impl Into<std::path::PathBuf>) {
+        self.modules_dir = dir.into();
+        self.library_loaded = false;
+    }
+
     /// Reloads the library's items from [`Self::modules_dir`], keeping the current search
     /// query and tag facets. Called on the first library render, by the refresh button, and
     /// after a macro is exported (so the new module appears).

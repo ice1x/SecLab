@@ -162,6 +162,62 @@ pub fn list_modules(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
+/// The per-user directory where saved macro modules live, shared by the standalone app and the
+/// plugin so a module saved in one is browsable in the other. Resolves to the platform data root
+/// plus `VST_bomb/modules`:
+/// - macOS: `$HOME/Library/Application Support/VST_bomb/modules`
+/// - Windows: `%APPDATA%\VST_bomb\modules`
+/// - other Unix: `$XDG_DATA_HOME/VST_bomb/modules`, else `$HOME/.local/share/VST_bomb/modules`
+///
+/// When no data root can be resolved (WASM, or a sandbox with no env), it falls back to the
+/// relative `modules`. The default `EditorApp` keeps that relative path (so tests stay isolated);
+/// the real apps call this and [`EditorApp::set_modules_dir`](crate::EditorApp::set_modules_dir),
+/// because a plugin's working directory is the host DAW's — a relative `modules` there would never
+/// find the user's saved modules.
+#[must_use]
+pub fn user_modules_dir() -> PathBuf {
+    modules_dir_from(data_root())
+}
+
+/// Composes the modules directory from an optional data `root` — `root/VST_bomb/modules`, or the
+/// relative `modules` when there is no root. Split out from [`user_modules_dir`] so the mapping is
+/// unit-tested without touching the process environment.
+#[must_use]
+fn modules_dir_from(root: Option<PathBuf>) -> PathBuf {
+    match root {
+        Some(root) => root.join("VST_bomb").join("modules"),
+        None => PathBuf::from("modules"),
+    }
+}
+
+/// The platform's per-user data root, or `None` on WASM / when the environment does not reveal one.
+#[must_use]
+fn data_root() -> Option<PathBuf> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "macos"))]
+    {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
+    }
+    #[cfg(all(not(target_arch = "wasm32"), target_os = "windows"))]
+    {
+        std::env::var_os("APPDATA").map(PathBuf::from)
+    }
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        not(target_os = "macos"),
+        not(target_os = "windows")
+    ))]
+    {
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share")))
+    }
+}
+
 /// Makes `name` safe as a file stem: keeps alphanumerics, `-` and `_`; the rest become
 /// `-`. Empty input becomes `"module"`.
 fn sanitize(name: &str) -> String {
@@ -186,6 +242,26 @@ fn sanitize(name: &str) -> String {
 mod tests {
     use super::*;
     use vb_core::{Port, PortId, SignalType};
+
+    #[test]
+    fn modules_dir_is_placed_under_a_data_root_or_falls_back_relative() {
+        // A resolved data root nests the app's modules folder under it.
+        let dir = modules_dir_from(Some(PathBuf::from("/data/root")));
+        assert!(dir.is_absolute());
+        assert!(dir.ends_with("VST_bomb/modules"), "got {dir:?}");
+        assert_eq!(dir, PathBuf::from("/data/root/VST_bomb/modules"));
+
+        // No data root (WASM / no env) → the relative fallback so a project-root launch still works.
+        assert_eq!(modules_dir_from(None), PathBuf::from("modules"));
+    }
+
+    #[test]
+    fn user_modules_dir_ends_in_the_app_modules_folder() {
+        // On a normal dev/CI host (HOME set) it resolves an absolute per-user path; regardless, it
+        // always ends in the app's modules folder so both apps and the library agree on the name.
+        let dir = user_modules_dir();
+        assert!(dir.ends_with("modules"), "got {dir:?}");
+    }
 
     fn sample_module() -> MacroModule {
         let gain = GraphNode::new(
