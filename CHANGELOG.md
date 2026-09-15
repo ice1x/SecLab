@@ -62,6 +62,12 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Plugin window (`vb-plugin`)** — reverted the drag-corner resize (000191). On the AU surface
+  the `ResizableWindow` path left the plugin **unclickable** after the drag was released: the host
+  grew the window frame but the clap-wrapper→baseview egui surface did not follow, so input
+  hit-testing desynced and the window went dead. That resize path is outside our layout and has no
+  headless test to catch the regression, so we no longer ship it. The window returns to its working
+  fixed size; the harmless `render_inside` refactor stays (standalone/browser render through it).
 - **Editor (`vb-editor`)** — the Panel view no longer hides most modules. `horizontal_wrapped`
   does not wrap framed blocks, so the modules ran off the right edge in a single row and vanished;
   the panel now computes the column count from the available width (`panel_column_count`) and lays

@@ -21,7 +21,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use nih_plug::prelude::{AsyncExecutor, Editor};
-use nih_plug_egui::resizable_window::ResizableWindow;
 use nih_plug_egui::{create_egui_editor, EguiState};
 use vb_core::{Edge, NodeId};
 use vb_editor::EditorApp;
@@ -90,10 +89,6 @@ pub(crate) fn create(
     // edit diffs against what the host actually holds and only real knob moves are pushed.
     let last_values = params.values_by_node();
 
-    // A clone for the render closure: `ResizableWindow` needs the state to store the size the
-    // drag corner requests, which `create_egui_editor`'s own loop then asks the host to apply.
-    let resize_state = egui_state.clone();
-
     create_egui_editor(
         egui_state,
         EditorHost {
@@ -105,16 +100,15 @@ pub(crate) fn create(
         },
         |_ctx, _state| {},
         move |ctx, setter, state| {
-            // Host a **resizable** window: `ResizableWindow` adds a drag corner that stores the
-            // requested size, and `create_egui_editor`'s loop then asks the host to apply it via
-            // the *implemented* `request_resize` path (unlike host-frame-drag, which routes through
-            // nih-plug's still-`TODO` `ext_gui_set_size` and would leave the surface black). The
-            // editor draws INSIDE the window's `ui` via `render_inside`, so its own side/central
-            // panels no longer clash with the wrapper's — the layout conflict behind the earlier
-            // black-window revert (000178→000180).
-            ResizableWindow::new("vb-resizable-window")
-                .min_size((640.0, 480.0))
-                .show(ctx, &resize_state, |ui| state.app.render_inside(ui));
+            // Draw the editor at the window's **fixed** size. A drag-corner `ResizableWindow`
+            // (000191) was tried so the user could grow the window like other synths, but on the
+            // AU surface the clap-wrapper→baseview resize path leaves the plugin unclickable after
+            // the drag is released (window frame grows, egui surface does not follow, hit-testing
+            // desyncs). That resize path is outside our layout and has no headless test, so we
+            // don't ship it — see the "don't ship unverifiable plugin-window features" note. The
+            // editor still renders through the same `render_inside` refactor, just wrapped in the
+            // standalone `render(ctx)` root panel instead of the resizable wrapper.
+            state.app.render(ctx);
 
             // Two edit streams reach the document: audible edits (a knob move, a wire, an added
             // node) bump the patch revision and need an engine rebuild; view-only edits (a panel
