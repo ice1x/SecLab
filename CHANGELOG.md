@@ -20,6 +20,17 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Changed
+
+- **Editor (`vb-editor`)** — control precision. Time (`_s`, `_ms`) and frequency (`_hz`) sliders
+  and faders now read on a **logarithmic** scale (`widgets::param_is_log`), so the musically useful
+  low end has real travel: on a linear 0–5 s decay fader, 0.03 s and 0.15 s were a couple of pixels
+  apart and unreachable; on the log scale a small drag moves cleanly between them (verified in the
+  browser/WASM build). Levels (`sustain`, `resonance`), gains (`_db`) and bipolar ranges
+  (`detune_semitones`) stay linear. Knobs got a longer full-sweep travel (`KNOB_RANGE_PX` 200 → 320)
+  for finer control, and holding **Shift** while turning a knob trims at a quarter speed
+  (`KNOB_FINE_FACTOR`).
+
 ### Added
 
 - **Editor (`vb-editor`)** — the **Panel** view is now a rack of titled modules instead of a
