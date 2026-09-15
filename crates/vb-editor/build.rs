@@ -21,10 +21,21 @@ fn git(args: &[&str]) -> Option<String> {
 }
 
 fn main() {
-    // Short commit SHA, marked `+` when the working tree has uncommitted changes — so a locally
-    // tweaked build is never mistaken for the committed one.
+    // Short commit SHA, marked `+` when the working tree has uncommitted **source** changes — so a
+    // locally tweaked build is never mistaken for the committed one. `Cargo.lock` is excluded from
+    // the dirty check: a release build routinely re-resolves and rewrites it (an absolute-path dep
+    // in this workspace churns it every build), so counting it would stamp every committed build
+    // `+` and make the marker meaningless.
     let mut sha = git(&["rev-parse", "--short", "HEAD"]).unwrap_or_else(|| "unknown".to_string());
-    if git(&["status", "--porcelain"]).is_some_and(|s| !s.is_empty()) {
+    let dirty = git(&["status", "--porcelain"]).is_some_and(|s| {
+        s.lines().any(|line| {
+            // A porcelain line is "XY PATH" (PATH last, even for a rename's "old -> new"); the path
+            // is the tail, so a change to anything but Cargo.lock leaves a line not ending in it.
+            let line = line.trim();
+            !line.is_empty() && !line.ends_with("Cargo.lock")
+        })
+    });
+    if dirty {
         sha.push('+');
     }
     // The commit's date (YYYY-MM-DD) — stable across rebuilds of the same commit, unlike a build
