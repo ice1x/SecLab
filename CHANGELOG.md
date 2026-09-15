@@ -90,6 +90,15 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Library (`vb-editor` / `vb-plugin` / `vb-standalone`)** — the library browser now reads and
+  writes saved macro modules in a **stable per-user folder** instead of a relative `modules` path.
+  The relative default resolves against the process working directory, which in a plugin is the
+  host DAW's — so the browser could never find the user's saved modules and exports landed in an
+  unpredictable spot. `module::user_modules_dir()` resolves the platform data folder
+  (`~/Library/Application Support/VST_bomb/modules` on macOS, `%APPDATA%\VST_bomb\modules` on
+  Windows, `$XDG_DATA_HOME`/`~/.local/share/VST_bomb/modules` elsewhere; relative fallback on WASM),
+  and both the plugin and the standalone app point the editor at it via the new
+  `EditorApp::set_modules_dir`, so a macro saved in one is browsable in the other.
 - **Editor (`vb-editor`)** — the Panel view no longer clips wide modules off the right edge.
   Modules are not uniform width — a four-fader `adsr` is far wider than a one-knob `glide` — so
   laying them out as a fixed number of equal columns overflowed a row of wide modules and cut off

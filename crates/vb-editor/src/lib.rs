@@ -39,7 +39,7 @@ pub use library::{
     library_from_module_dir, library_items_from_module_dir, LibraryBrowser, LibraryItem,
 };
 pub use library_panel::library_browser_ui;
-pub use module::{list_modules, MacroModule, ModuleError};
+pub use module::{list_modules, user_modules_dir, MacroModule, ModuleError};
 pub use palette::{palette_entries, PaletteEntry};
 pub use patch::PatchView;
 pub use preset::{Preset, PresetBank, PresetError, PresetValue, PRESET_VERSION};

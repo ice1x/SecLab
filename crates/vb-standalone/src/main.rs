@@ -452,7 +452,10 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     let sel_rate = device.default_output_config()?.sample_rate();
     let rates = supported_rates(device);
 
-    let editor = EditorApp::new();
+    let mut editor = EditorApp::new();
+    // Share the per-user modules folder with the plugin so a macro saved in either is browsable in
+    // both (the default is a relative `modules`, tied to the launch directory).
+    editor.set_modules_dir(vb_editor::user_modules_dir());
     let registry = Registry::with_builtins();
     let build_ctx = BuildContext::default();
     let stack = start_stack(
