@@ -504,14 +504,27 @@ fn knob_widget(
 ) -> (egui::Response, Option<f32>) {
     const DIAMETER: f32 = 44.0;
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(DIAMETER), Sense::drag());
-    let norm = param.normalize(value);
+    // Frequency/time knobs read logarithmically, matching their faders: a 200 Hz cutoff must sit a
+    // third of the way round, not pinned to the minimum as a linear knob parks it (the ladder
+    // "knob at the extreme though the filter is open" bug). Bipolar ranges (amount_hz) keep min<0
+    // and stay linear.
+    let log = widgets::param_is_log(&param.name) && param.min >= 0.0;
+    let norm = if log {
+        widgets::log_normalize(param, value)
+    } else {
+        param.normalize(value)
+    };
 
     let changed = response.dragged().then(|| {
         // Shift trims: the same drag covers a quarter of the range, for precise values.
         let fine = ui.input(|i| i.modifiers.shift);
         let dy = response.drag_delta().y * if fine { widgets::KNOB_FINE_FACTOR } else { 1.0 };
         let new_norm = widgets::knob_drag(norm, dy);
-        param.denormalize(new_norm)
+        if log {
+            widgets::log_denormalize(param, new_norm)
+        } else {
+            param.denormalize(new_norm)
+        }
     });
 
     let painter = ui.painter_at(rect);

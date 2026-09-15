@@ -35,6 +35,13 @@ Two independent version numbers matter in this project:
   (the "adsr decay won't leave zero" complaint); with the floor the bottom reaches ~1 ms and small
   decays like 0.01–0.1 s are easy to grab (verified in the browser/WASM build — a drag near the
   bottom lands 0.003 s → 0.010 s cleanly instead of collapsing to zero).
+- **Editor (`vb-editor`)** — frequency/time **knobs** now read logarithmically too
+  (`widgets::log_normalize` / `log_denormalize`), matching their faders. A 200 Hz ladder cutoff sat
+  pinned to the far-left minimum on a linear knob (0.9 % of the sweep) even though the filter was
+  wide open; on the log scale it sits ~a third of the way round, where it belongs. Bipolar ranges
+  (`amount_hz`, min < 0) stay linear. Verified in the browser/WASM build.
+- **Release** — the workspace version now bumps every merge (starting **0.0.2**) so the on-screen
+  version moves build to build, instead of staying frozen at `0.0.1` between releases.
 
 ### Added
 

@@ -79,6 +79,52 @@ fn is_envelope_param(name: &str) -> bool {
     name.ends_with("_s") || name == "sustain"
 }
 
+/// Log-scale endpoints (base-10) for a `param` whose range starts at or above zero: the low end is
+/// the range minimum, or the [`LOG_SMALLEST_POSITIVE`] floor when the minimum is exactly zero (so a
+/// `0 s` envelope time still has a finite low anchor). Mirrors the mapping an egui logarithmic
+/// slider uses, so a parameter drawn as a knob and one drawn as a fader read the same curve.
+fn log_endpoints(param: &Parameter) -> (f32, f32) {
+    let min_log = if param.min <= 0.0 {
+        (LOG_SMALLEST_POSITIVE as f32).log10()
+    } else {
+        param.min.log10()
+    };
+    (min_log, param.max.log10())
+}
+
+/// Maps a plain `value` to `[0, 1]` on a **logarithmic** scale (see [`param_is_log`]). Only valid
+/// for a non-negative range (`param.min >= 0.0`, `param.max > 0.0`); callers gate on that. A filter
+/// cutoff of 200 Hz in a 20–20 000 Hz range lands near a third of the way up instead of pinned to
+/// the far left, where a linear knob would wrongly park a perfectly open filter.
+#[must_use]
+pub fn log_normalize(param: &Parameter, value: f32) -> f32 {
+    if value <= param.min {
+        return 0.0;
+    }
+    if value >= param.max {
+        return 1.0;
+    }
+    let (min_log, max_log) = log_endpoints(param);
+    if max_log <= min_log {
+        return 0.0;
+    }
+    ((value.log10() - min_log) / (max_log - min_log)).clamp(0.0, 1.0)
+}
+
+/// Inverse of [`log_normalize`]: a normalized `t` in `[0, 1]` back to a plain value, on the log
+/// scale. The endpoints return the exact range bounds (so `t = 0` gives `min`, including `0.0`).
+#[must_use]
+pub fn log_denormalize(param: &Parameter, t: f32) -> f32 {
+    if t <= 0.0 {
+        return param.min;
+    }
+    if t >= 1.0 {
+        return param.max;
+    }
+    let (min_log, max_log) = log_endpoints(param);
+    10.0_f32.powf(min_log + t * (max_log - min_log))
+}
+
 /// Vertical drag, in screen pixels, that sweeps a knob across its whole range. Deliberately
 /// generous: a full sweep should take a real gesture, so small moves give fine control (the
 /// "no room to pick a value precisely" complaint was a too-short sweep).
@@ -283,6 +329,43 @@ mod tests {
         let q = fractional();
         assert_eq!(switch_step(&q, 0.1, true), 10.0);
         assert_eq!(switch_step(&q, 10.0, true), 0.1);
+    }
+
+    #[test]
+    fn log_normalize_places_a_cutoff_sensibly_and_round_trips() {
+        // A 200 Hz cutoff in a 20–20 000 Hz range sits ~1/3 up on a log scale — not pinned to the
+        // far left as a linear knob would park it (0.9%). This is the ladder "knob at the extreme
+        // though the filter is open" fix.
+        let cutoff = Parameter::new("base_hz", 20.0, 20_000.0, 200.0);
+        let lin = cutoff.normalize(200.0);
+        assert!(lin < 0.01, "linear parks it at the extreme, got {lin}");
+        let log = log_normalize(&cutoff, 200.0);
+        assert!(
+            (log - 1.0 / 3.0).abs() < 0.01,
+            "log lands ~1/3 up, got {log}"
+        );
+
+        // Endpoints are exact and the mapping round-trips through denormalize.
+        assert_eq!(log_normalize(&cutoff, 20.0), 0.0);
+        assert_eq!(log_normalize(&cutoff, 20_000.0), 1.0);
+        assert!((log_denormalize(&cutoff, 0.0) - 20.0).abs() < 1e-3);
+        assert!((log_denormalize(&cutoff, 1.0) - 20_000.0).abs() < 1e-1);
+        let back = log_denormalize(&cutoff, log_normalize(&cutoff, 200.0));
+        assert!((back - 200.0).abs() < 0.5, "round-trip 200 Hz, got {back}");
+    }
+
+    #[test]
+    fn log_denormalize_handles_a_zero_minimum() {
+        // An envelope time bottoming at 0 s: t=0 is exactly 0, and just above it the floor kicks in
+        // (~1 ms) rather than a negative-infinity log blowup.
+        let decay = Parameter::new("decay_s", 0.0, 5.0, 0.1);
+        assert_eq!(log_denormalize(&decay, 0.0), 0.0);
+        assert_eq!(log_normalize(&decay, 0.0), 0.0);
+        let small = log_denormalize(&decay, 0.001);
+        assert!(
+            small > 0.0 && small < 0.01,
+            "just above zero is tiny, got {small}"
+        );
     }
 
     #[test]
