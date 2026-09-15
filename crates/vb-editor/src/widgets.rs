@@ -79,8 +79,25 @@ fn is_envelope_param(name: &str) -> bool {
     name.ends_with("_s") || name == "sustain"
 }
 
-/// Vertical drag, in screen pixels, that sweeps a knob across its whole range.
-pub const KNOB_RANGE_PX: f32 = 200.0;
+/// Vertical drag, in screen pixels, that sweeps a knob across its whole range. Deliberately
+/// generous: a full sweep should take a real gesture, so small moves give fine control (the
+/// "no room to pick a value precisely" complaint was a too-short sweep).
+pub const KNOB_RANGE_PX: f32 = 320.0;
+
+/// Multiplier applied to a knob's drag distance while a fine-drag modifier (Shift) is held, so
+/// the same pointer motion covers a quarter of the range — precise trimming on demand.
+pub const KNOB_FINE_FACTOR: f32 = 0.25;
+
+/// Whether a parameter reads on a **logarithmic** scale — a time (`_s`, `_ms`) or frequency
+/// (`_hz`) control, where the musically useful detail lives at the low end. Drawn on a linear
+/// slider, 0.01 s and 0.3 s are a few pixels apart while 3–5 s eat most of the travel; a log
+/// scale spreads the low end out so those values are actually reachable. Levels (`sustain`,
+/// `resonance`), gains (`_db`, already log-domain) and bipolar ranges (`detune_semitones`) stay
+/// linear.
+#[must_use]
+pub fn param_is_log(name: &str) -> bool {
+    name.ends_with("_hz") || name.ends_with("_ms") || name.ends_with("_s")
+}
 
 /// New normalized knob value after dragging `dy` screen pixels from `norm`.
 ///
@@ -257,6 +274,35 @@ mod tests {
         let q = fractional();
         assert_eq!(switch_step(&q, 0.1, true), 10.0);
         assert_eq!(switch_step(&q, 10.0, true), 0.1);
+    }
+
+    #[test]
+    fn log_scale_covers_time_and_frequency_but_not_levels_or_bipolar() {
+        // Time and frequency controls read logarithmically.
+        for name in [
+            "attack_s",
+            "decay_s",
+            "release_s",
+            "glide_ms",
+            "base_hz",
+            "cutoff_hz",
+            "amount_hz",
+            "freq_hz",
+        ] {
+            assert!(param_is_log(name), "{name} should be logarithmic");
+        }
+        // Levels, unitless amounts, gains and bipolar ranges stay linear.
+        for name in [
+            "sustain",
+            "resonance",
+            "mix",
+            "bias",
+            "threshold_db",
+            "detune_semitones",
+            "bpm",
+        ] {
+            assert!(!param_is_log(name), "{name} should stay linear");
+        }
     }
 
     #[test]

@@ -476,7 +476,10 @@ fn knob_widget(
     let norm = param.normalize(value);
 
     let changed = response.dragged().then(|| {
-        let new_norm = widgets::knob_drag(norm, response.drag_delta().y);
+        // Shift trims: the same drag covers a quarter of the range, for precise values.
+        let fine = ui.input(|i| i.modifiers.shift);
+        let dy = response.drag_delta().y * if fine { widgets::KNOB_FINE_FACTOR } else { 1.0 };
+        let new_norm = widgets::knob_drag(norm, dy);
         param.denormalize(new_norm)
     });
 
@@ -1085,7 +1088,8 @@ impl EditorApp {
             WidgetKind::Slider => {
                 let mut value = slot.value;
                 let range = slot.param.min..=slot.param.max;
-                let response = ui.add(egui::Slider::new(&mut value, range));
+                let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                let response = ui.add(egui::Slider::new(&mut value, range).logarithmic(log));
                 if response.changed() {
                     self.patch.set_param(id, i, value);
                 }
@@ -1097,7 +1101,12 @@ impl EditorApp {
             WidgetKind::Fader => {
                 let mut value = slot.value;
                 let range = slot.param.min..=slot.param.max;
-                let response = ui.add(egui::Slider::new(&mut value, range).vertical());
+                let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                let response = ui.add(
+                    egui::Slider::new(&mut value, range)
+                        .vertical()
+                        .logarithmic(log),
+                );
                 if response.changed() {
                     self.patch.set_param(id, i, value);
                 }
@@ -2121,10 +2130,11 @@ impl EditorApp {
             let response = match slot.widget {
                 WidgetKind::Slider => {
                     let mut value = slot.value;
-                    let r = ui.add(egui::Slider::new(
-                        &mut value,
-                        slot.param.min..=slot.param.max,
-                    ));
+                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                    let r = ui.add(
+                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                            .logarithmic(log),
+                    );
                     if r.changed() {
                         self.patch.set_param(node, index, value);
                     }
@@ -2135,9 +2145,11 @@ impl EditorApp {
                 }
                 WidgetKind::Fader => {
                     let mut value = slot.value;
+                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
                     let r = ui.add(
                         egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
                             .vertical()
+                            .logarithmic(log)
                             .show_value(false),
                     );
                     if r.changed() {
