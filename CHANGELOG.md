@@ -53,6 +53,13 @@ Two independent version numbers matter in this project:
   times, `sustain`) now default to a fader, so an ADSR reads as a fader stack rather than a row of
   dials. The choice persists with the patch.
 
+- **Plugin (`vb-plugin`)** — the plugin window is **resizable** again: a drag corner
+  (`ResizableWindow`) lets you size the editor, using nih-plug's implemented `request_resize`
+  path. The editor now draws inside the window's `ui` (`EditorApp::render_inside`, `show_inside`
+  panels), fixing the layout clash that blacked out the earlier attempt. Host-frame-drag resize
+  stays blocked (nih-plug's `ext_gui_set_size` is still a TODO); this is the plugin-initiated
+  path other nih-plug plugins use.
+
 ### Fixed
 
 - **Editor (`vb-editor`)** — the Panel view no longer hides most modules. `horizontal_wrapped`
