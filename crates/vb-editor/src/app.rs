@@ -1838,10 +1838,20 @@ impl EditorApp {
                 ui.selectable_value(&mut self.view_mode, ViewMode::Structure, "Blocks");
                 ui.selectable_value(&mut self.view_mode, ViewMode::Panel, "Panel");
                 ui.separator();
-                // Name + version, so the build in the host window is always identifiable.
+                // Name + version + build stamp, so the build in the host window is always
+                // identifiable. The crate version is frozen pre-1.0, so the git SHA (with a `+`
+                // when the tree is dirty) is what actually changes build-to-build — it tells you at
+                // a glance whether the freshly-installed bundle is really the one running.
                 ui.label("VST_bomb");
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
                     .on_hover_text("VST_bomb version (crate version)");
+                ui.weak(concat!("· ", env!("VB_GIT_SHA")))
+                    .on_hover_text(concat!(
+                        "build ",
+                        env!("VB_GIT_SHA"),
+                        " · ",
+                        env!("VB_BUILD_DATE")
+                    ));
                 ui.separator();
                 // Breadcrumbs: root / macro#n / … — click any level to jump back.
                 let depth = self.stack.len();

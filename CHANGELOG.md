@@ -38,6 +38,11 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Editor (`vb-editor`)** — a **build stamp** next to the version in the toolbar: the short git
+  SHA (with a `+` when the working tree is dirty) and the commit date, baked in at compile time by a
+  dependency-free `build.rs`. The crate version is frozen at `0.0.1` pre-1.0 and never moves between
+  changes, so it could not tell two builds apart — the SHA does, confirming at a glance that a
+  freshly-installed bundle is the one actually running. Falls back to `unknown` off a git checkout.
 - **Editor (`vb-editor`)** — the **Panel** view is now a rack of titled modules instead of a
   flat list of sliders. `EditorApp::panel_modules` groups the controls by node (one framed block
   per param-bearing node), numbering repeated kinds (`pitch-osc 1/2/3`) while leaving once-only
