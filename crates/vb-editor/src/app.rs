@@ -1120,7 +1120,11 @@ impl EditorApp {
                 let mut value = slot.value;
                 let range = slot.param.min..=slot.param.max;
                 let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
-                let response = ui.add(egui::Slider::new(&mut value, range).logarithmic(log));
+                let response = ui.add(
+                    egui::Slider::new(&mut value, range)
+                        .logarithmic(log)
+                        .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
+                );
                 if response.changed() {
                     self.patch.set_param(id, i, value);
                 }
@@ -1136,7 +1140,8 @@ impl EditorApp {
                 let response = ui.add(
                     egui::Slider::new(&mut value, range)
                         .vertical()
-                        .logarithmic(log),
+                        .logarithmic(log)
+                        .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
                 );
                 if response.changed() {
                     self.patch.set_param(id, i, value);
@@ -2173,7 +2178,8 @@ impl EditorApp {
                     let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
                     let r = ui.add(
                         egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
-                            .logarithmic(log),
+                            .logarithmic(log)
+                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
                     );
                     if r.changed() {
                         self.patch.set_param(node, index, value);
@@ -2190,6 +2196,7 @@ impl EditorApp {
                         egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
                             .vertical()
                             .logarithmic(log)
+                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE)
                             .show_value(false),
                     );
                     if r.changed() {

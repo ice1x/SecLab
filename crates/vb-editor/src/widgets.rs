@@ -99,6 +99,15 @@ pub fn param_is_log(name: &str) -> bool {
     name.ends_with("_hz") || name.ends_with("_ms") || name.ends_with("_s")
 }
 
+/// Smallest positive value a logarithmic slider spreads travel down to when its range starts at
+/// zero (`egui::Slider::smallest_positive`). egui's default is `1e-6`, which for a `0..5 s`
+/// envelope hands the bottom ~45% of the fader to sub-millisecond times nobody dials and crams the
+/// useful 0.01–1 s into the top — so dragging down falls into a dead zone that snaps to `0.000`
+/// (the "adsr decay won't leave zero" complaint). A 1 ms floor drops that dead zone: 0.001 s is
+/// the practical minimum, and 0.01–1 s then occupies the lower-middle of the travel where it is
+/// easy to grab.
+pub const LOG_SMALLEST_POSITIVE: f64 = 0.001;
+
 /// New normalized knob value after dragging `dy` screen pixels from `norm`.
 ///
 /// Screen Y grows downward, so dragging **up** (negative `dy`) raises the value —
