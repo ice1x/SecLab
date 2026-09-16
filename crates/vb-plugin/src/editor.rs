@@ -190,7 +190,7 @@ mod tests {
             .find(|e| e.node.kind == "ladder")
             .map(|e| e.id)
             .expect("default patch has a ladder");
-        assert!(retuned.set_node_values(ladder, vec![500.0, 0.5, 2_000.0]));
+        assert!(retuned.set_node_values(ladder, vec![500.0, 0.5, 3.0]));
         assert_eq!(
             structure_of(&doc),
             structure_of(&retuned),

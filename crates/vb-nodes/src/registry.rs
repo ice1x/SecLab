@@ -1214,19 +1214,22 @@ fn builtins() -> Vec<NodeDescriptor> {
                     vec![audio_out("out")],
                 )
             },
-            || Box::new(Ladder::new(1_000.0, 0.3, 4_000.0)),
+            || Box::new(Ladder::new(1_000.0, 0.3, 3.0)),
             || {
                 vec![
                     Parameter::new("base_hz", 20.0, 20_000.0, 1_000.0),
                     Parameter::new("resonance", 0.0, 1.0, 0.3),
-                    Parameter::new("amount_hz", -20_000.0, 20_000.0, 4_000.0),
+                    // Bi-polar octave depth of the cutoff sweep per unit of control, matching
+                    // the "Envelope Amount" knob on a real Moog ladder (unit-less, ± reverses)
+                    // and the vco's amount_oct. ±8 octaves ≈ the full 20 Hz–20 kHz range.
+                    Parameter::new("amount_oct", -8.0, 8.0, 3.0),
                 ]
             },
             |_, v| {
                 Box::new(Ladder::new(
                     arg(v, 0, 1_000.0),
                     arg(v, 1, 0.3),
-                    arg(v, 2, 4_000.0),
+                    arg(v, 2, 3.0),
                 ))
             },
         ),

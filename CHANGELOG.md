@@ -22,6 +22,19 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **DSP (`vb-nodes`) / filter (`ladder`)** — the ladder's cutoff modulation is now **exponential
+  (per-octave)** instead of linear in Hz. The control-input parameter `amount_hz` (Hz of swing per
+  unit CV) is replaced by **`amount_oct`** (octaves of swing per unit CV, bi-polar −8…+8, default 3),
+  so `cutoff = clamp(base_hz · 2^(amount_oct · cv))`. This matches how real Moog ladders work — the
+  panel control on the **Minitaur** and **Grandmother** is a bi-polar, unit-less **"Envelope Amount"**
+  (negative reverses the sweep), and the envelope reaches the cutoff through the filter's exponential
+  (~1 V/octave) converter — so a fixed amount moves the cutoff by a fixed number of octaves and sounds
+  even across the range instead of collapsing at the low end. It also aligns the ladder with the
+  existing `vco` `amount_oct` law. **Breaking (patch format):** the third ladder value is now octaves;
+  the built-in default patch and every factory `examples/*.ron` preset were migrated (each amount
+  converted to preserve its envelope-peak cutoff, `oct = log2(clamp(base+amount,20,20000)/base)`).
+  Hand-saved patches from before will read their old Hz number as octaves for that one knob and clamp
+  wide open until re-dialed. Sources: Moog Minitaur & Grandmother manuals (Filter → Envelope Amount).
 - **Editor (`vb-editor`)** — control precision. Time (`_s`, `_ms`) and frequency (`_hz`) sliders
   and faders now read on a **logarithmic** scale (`widgets::param_is_log`), so the musically useful
   low end has real travel: on a linear 0–5 s decay fader, 0.03 s and 0.15 s were a couple of pixels
@@ -39,7 +52,7 @@ Two independent version numbers matter in this project:
   (`widgets::log_normalize` / `log_denormalize`), matching their faders. A 200 Hz ladder cutoff sat
   pinned to the far-left minimum on a linear knob (0.9 % of the sweep) even though the filter was
   wide open; on the log scale it sits ~a third of the way round, where it belongs. Bipolar ranges
-  (`amount_hz`, min < 0) stay linear. Verified in the browser/WASM build.
+  (`amount_oct`, min < 0) stay linear. Verified in the browser/WASM build.
 - **Release** — the workspace version now bumps every merge (starting **0.0.2**) so the on-screen
   version moves build to build, instead of staying frozen at `0.0.1` between releases.
 
