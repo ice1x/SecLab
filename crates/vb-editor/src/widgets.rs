@@ -378,7 +378,6 @@ mod tests {
             "glide_ms",
             "base_hz",
             "cutoff_hz",
-            "amount_hz",
             "freq_hz",
         ] {
             assert!(param_is_log(name), "{name} should be logarithmic");

@@ -1186,13 +1186,15 @@ fn builtins() -> Vec<NodeDescriptor> {
                     vec![audio_out("out")],
                 )
             },
-            || Box::new(Vcf::new(FilterKind::LowPass, 1_000.0, 0.707, 4_000.0)),
+            || Box::new(Vcf::new(FilterKind::LowPass, 1_000.0, 0.707, 3.0)),
             || {
                 vec![
                     Parameter::new("kind", 0.0, 3.0, 0.0),
                     Parameter::new("base_hz", 20.0, 20_000.0, 1_000.0),
                     Parameter::new("q", 0.1, 10.0, 0.707),
-                    Parameter::new("amount_hz", -20_000.0, 20_000.0, 4_000.0),
+                    // Bi-polar octave depth of the cutoff sweep per unit of control (± reverses),
+                    // matching the ladder / vco amount_oct law. ±8 octaves ≈ the full audio range.
+                    Parameter::new("amount_oct", -8.0, 8.0, 3.0),
                 ]
             },
             |_, v| {
@@ -1200,7 +1202,7 @@ fn builtins() -> Vec<NodeDescriptor> {
                     filter_kind_from(arg(v, 0, 0.0)),
                     arg(v, 1, 1_000.0),
                     arg(v, 2, 0.707),
-                    arg(v, 3, 4_000.0),
+                    arg(v, 3, 3.0),
                 ))
             },
         ),
