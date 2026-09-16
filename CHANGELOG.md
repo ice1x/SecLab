@@ -22,6 +22,14 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **DSP (`vb-nodes`) / filter (`vcf`)** — the same **exponential (per-octave)** cutoff-modulation
+  fix applied to the ladder now covers the multi-mode biquad `vcf`: its control parameter
+  `amount_hz` becomes **`amount_oct`** (octaves of swing per unit CV, bi-polar −8…+8, default 3), so
+  `cutoff = clamp(base_hz · 2^(amount_oct · cv))`. This makes every filter's cutoff modulation
+  consistent (ladder + vcf + vco all speak octaves) and even across the range, and retires the last
+  use of `amount_hz`. **Breaking (patch format):** the 4th `vcf` value is now octaves; the two factory
+  presets with an explicit `vcf` amount (`auto_wah`, `neutron`) were migrated to preserve their
+  envelope-peak cutoff.
 - **DSP (`vb-nodes`) / filter (`ladder`)** — the ladder's cutoff modulation is now **exponential
   (per-octave)** instead of linear in Hz. The control-input parameter `amount_hz` (Hz of swing per
   unit CV) is replaced by **`amount_oct`** (octaves of swing per unit CV, bi-polar −8…+8, default 3),

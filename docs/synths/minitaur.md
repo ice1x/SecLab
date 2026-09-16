@@ -65,8 +65,9 @@ test.
 The faithful voice — `vb_engine::minitaur_patch()`, from which `examples/minitaur.ron` is
 generated — closes gaps 1 and 3:
 
-- **Two envelopes:** a filter `adsr` → `ladder.cutoff` (scaled by the ladder's `amount_hz`)
-  and a separate amp `adsr` → `vca.cv`. No more shared contour.
+- **Two envelopes:** a filter `adsr` → `ladder.cutoff` (scaled by the ladder's `amount_oct`,
+  the bi-polar per-octave "Envelope Amount") and a separate amp `adsr` → `vca.cv`. No more
+  shared contour.
 - **Leveled oscillator mix:** each oscillator through its own `attenuvert` (osc1 = 1.0,
   osc2 = 0.8, sub = 0.7) before the `add` sum.
 - Glide, silent-until-note (VCA `bias = 0`) preserved.

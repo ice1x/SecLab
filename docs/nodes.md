@@ -253,7 +253,7 @@ Auto-generated from the registry — do not edit by hand.
   - `kind` — range 0..3, default 0
   - `base_hz` — range 20..20000, default 1000
   - `q` — range 0.1..10, default 0.707
-  - `amount_hz` — range -20000..20000, default 4000
+  - `amount_oct` — range -8..8, default 3
 
 ## generator
 
