@@ -218,7 +218,7 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `base_hz` — range 20..20000, default 1000
   - `resonance` — range 0..1, default 0.3
-  - `amount_hz` — range -20000..20000, default 4000
+  - `amount_oct` — range -8..8, default 3
 
 ### resonator
 

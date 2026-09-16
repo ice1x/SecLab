@@ -203,9 +203,9 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         .expect("ladder → vca.in");
     // Filter path: the ladder cutoff CV is (filter envelope + LFO·depth), summed through the
     // control-rate `cv-add` (the audio `add` can't carry CV). The filter EG is a SEPARATE
-    // contour from the amp — the Minitaur has two envelopes; the ladder's `amount_hz` scales
-    // the sweep. The LFO's depth is off by default (a clean bass); the routing lets the user
-    // dial in a filter wobble.
+    // contour from the amp — the Minitaur has two envelopes; the ladder's `amount_oct` scales
+    // the sweep in octaves. The LFO's depth is off by default (a clean bass); the routing lets
+    // the user dial in a filter wobble.
     g.connect(midi, PortId(0), filt_eg, PortId(0))
         .expect("gate → filtEG");
     g.connect(filt_eg, PortId(0), cv_mix, PortId(0))
@@ -230,7 +230,7 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     doc.set_node_values(lvl1, vec![1.0, 0.0]);
     doc.set_node_values(lvl2, vec![0.8, 0.0]);
     doc.set_node_values(lvls, vec![0.7, 0.0]); // sub a touch under the mains
-    doc.set_node_values(ladder, vec![200.0, 0.6, 3000.0]); // low, resonant, EG-swept
+    doc.set_node_values(ladder, vec![200.0, 0.6, 4.0]); // low, resonant, EG-swept 4 octaves
     doc.set_node_values(filt_eg, vec![0.005, 0.15, 0.3, 0.2]); // a "ping" that decays
     doc.set_node_values(amp_eg, vec![0.005, 0.10, 0.8, 0.2]); // sustained while held
     doc.set_node_values(lfo, vec![3.0, 0.0, 5.0, 120.0, 2.0]); // triangle ~5 Hz

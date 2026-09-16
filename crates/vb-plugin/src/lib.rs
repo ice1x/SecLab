@@ -1159,7 +1159,7 @@ mod tests {
             .map(|e| e.id)
             .expect("default patch has a ladder");
         assert!(
-            engine.set_doc_params(ladder, &[500.0, 0.5, 2_000.0]),
+            engine.set_doc_params(ladder, &[500.0, 0.5, 3.0]),
             "the ladder retunes live by its document id"
         );
 

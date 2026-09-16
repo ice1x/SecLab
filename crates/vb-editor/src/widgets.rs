@@ -383,7 +383,7 @@ mod tests {
         ] {
             assert!(param_is_log(name), "{name} should be logarithmic");
         }
-        // Levels, unitless amounts, gains and bipolar ranges stay linear.
+        // Levels, unitless amounts, octave depths, gains and bipolar ranges stay linear.
         for name in [
             "sustain",
             "resonance",
@@ -391,6 +391,7 @@ mod tests {
             "bias",
             "threshold_db",
             "detune_semitones",
+            "amount_oct",
             "bpm",
         ] {
             assert!(!param_is_log(name), "{name} should stay linear");

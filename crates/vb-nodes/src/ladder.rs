@@ -3,10 +3,18 @@
 //! The characteristic Moog voice: four cascaded one-pole low-pass stages with a global
 //! resonance feedback path, giving a steeper roll-off than the two-pole [`crate::Svf`] /
 //! [`crate::Biquad`] and the singing resonance a ladder is known for. Like the
-//! [`crate::Vcf`] it is control-swept — a control input retunes the cutoff once per block
-//! (`cutoff = clamp(base_hz + amount_hz * cv)`) — so it drops straight into a synth voice
-//! with an envelope or LFO on the cutoff. With the control input unconnected it sits at
-//! `base_hz`.
+//! [`crate::Vcf`] it is control-swept — a control input retunes the cutoff once per block —
+//! so it drops straight into a synth voice with an envelope or LFO on the cutoff. With the
+//! control input unconnected it sits at `base_hz`.
+//!
+//! **Modulation is exponential (per-octave), not linear in Hz** — `cutoff = clamp(base_hz *
+//! 2^(amount_oct * cv))`. This mirrors the [`crate::Vco`]'s `amount_oct` pitch law and the
+//! way real Moog ladders behave: the panel "Envelope Amount" control on the Minitaur and
+//! Grandmother is a **bi-polar, unit-less depth** (negative reverses the sweep), and the
+//! envelope reaches the cutoff through the filter's exponential (≈1 V/octave) converter — so
+//! a fixed amount moves the cutoff by a fixed number of *octaves*, sounding even across the
+//! range instead of collapsing at the low end the way a linear `base_hz + amount_hz·cv` map
+//! did. `amount_oct` is that depth in octaves of cutoff swing per unit of control signal.
 //!
 //! The DSP is a linear four-pole ladder built from topology-preserving-transform (TPT)
 //! one-pole low-pass stages — the same `tan`-prewarped integrator the [`crate::Svf`] uses,
@@ -23,14 +31,15 @@ use vb_core::{ProcessContext, Processor};
 const MIN_CUTOFF_HZ: f32 = 20.0;
 const MAX_CUTOFF_HZ: f32 = 20_000.0;
 
-/// A control-swept four-pole ladder low-pass: `cutoff = clamp(base_hz + amount_hz * cv)`,
+/// A control-swept four-pole ladder low-pass: `cutoff = clamp(base_hz * 2^(amount_oct * cv))`,
 /// retuned per block.
 #[derive(Debug, Clone)]
 pub struct Ladder {
     /// Cutoff (Hz) when the control signal is zero.
     base_hz: f32,
-    /// Hz of cutoff swing per unit of control signal (may be negative to invert).
-    amount_hz: f32,
+    /// Octaves of cutoff swing per unit of control signal (bi-polar: negative reverses the
+    /// sweep, like the "Envelope Amount" knob on a real Moog ladder).
+    amount_oct: f32,
     /// Resonance / feedback amount, `0..1` (higher approaches self-oscillation).
     resonance: f32,
     /// Cutoff the filter is currently tuned to (Hz).
@@ -41,12 +50,12 @@ pub struct Ladder {
 
 impl Ladder {
     /// Creates a ladder centred at `base_hz` with `resonance` (`0..1`), sweeping
-    /// `amount_hz` Hz of cutoff per unit of control input.
+    /// `amount_oct` octaves of cutoff per unit of control input.
     #[must_use]
-    pub fn new(base_hz: f32, resonance: f32, amount_hz: f32) -> Self {
+    pub fn new(base_hz: f32, resonance: f32, amount_oct: f32) -> Self {
         Self {
             base_hz,
-            amount_hz,
+            amount_oct,
             resonance: resonance.clamp(0.0, 1.0),
             cutoff_hz: base_hz,
             z: [0.0; 4],
@@ -81,7 +90,10 @@ impl Processor for Ladder {
             .and_then(|c| c.first())
             .copied()
             .unwrap_or(0.0);
-        self.cutoff_hz = (self.base_hz + self.amount_hz * cv).clamp(MIN_CUTOFF_HZ, MAX_CUTOFF_HZ);
+        // Exponential (per-octave) modulation: a unit of control shifts the cutoff by
+        // `amount_oct` octaves, so the sweep sounds even across the range (see module docs).
+        self.cutoff_hz =
+            (self.base_hz * 2.0_f32.powf(self.amount_oct * cv)).clamp(MIN_CUTOFF_HZ, MAX_CUTOFF_HZ);
 
         // TPT one-pole coefficient. The `tan` prewarp tunes accurately, and the ZDF
         // ladder's resonant peak lands right on `cutoff_hz`, so no fudge factor is needed.
@@ -128,7 +140,7 @@ impl Processor for Ladder {
         self.z = [0.0; 4];
     }
 
-    /// Live-updates `base_hz`, `resonance`, `amount_hz` (registry order) without touching the
+    /// Live-updates `base_hz`, `resonance`, `amount_oct` (registry order) without touching the
     /// integrator states `z`, so turning a cutoff/resonance knob retunes the running filter
     /// smoothly instead of rebuilding it (which would clear its memory and click).
     fn set_params(&mut self, values: &[f32]) -> bool {
@@ -139,7 +151,7 @@ impl Processor for Ladder {
             self.resonance = v.clamp(0.0, 1.0);
         }
         if let Some(&v) = values.get(2) {
-            self.amount_hz = v;
+            self.amount_oct = v;
         }
         true
     }
@@ -253,7 +265,7 @@ mod tests {
             .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
             .collect();
         let run = |cv: f32| {
-            let mut f = Ladder::new(300.0, 0.2, 15_000.0);
+            let mut f = Ladder::new(300.0, 0.2, 3.0);
             let ctx = ProcessContext {
                 sample_rate: SR,
                 frames: bright.len(),
@@ -279,7 +291,7 @@ mod tests {
 
     #[test]
     fn cutoff_is_clamped_to_the_audio_range() {
-        // Drive the cutoff via the control input (base + amount·cv), since the sweep
+        // Drive the cutoff via the control input (base · 2^(amount·cv)), since the sweep
         // only applies when a control signal is present.
         let sweep = |amount: f32, cv: f32| {
             let mut f = Ladder::new(1_000.0, 0.2, amount);
@@ -296,12 +308,67 @@ mod tests {
             f.cutoff_hz()
         };
         assert!(
-            (sweep(1_000_000.0, 1.0) - MAX_CUTOFF_HZ).abs() < 1e-3,
-            "clamped to max"
+            (sweep(20.0, 1.0) - MAX_CUTOFF_HZ).abs() < 1e-3,
+            "a large positive octave amount clamps to max"
         );
         assert!(
-            (sweep(-1_000_000.0, 1.0) - MIN_CUTOFF_HZ).abs() < 1e-3,
-            "clamped to min"
+            (sweep(-20.0, 1.0) - MIN_CUTOFF_HZ).abs() < 1e-3,
+            "a large negative octave amount clamps to min"
+        );
+    }
+
+    #[test]
+    fn amount_oct_sweeps_the_cutoff_exponentially() {
+        // A unit of control moves the cutoff by `amount_oct` octaves (base · 2^(amount·cv)),
+        // and a negative amount reverses the sweep — matching the bi-polar "Envelope Amount"
+        // knob on a real Moog ladder (Minitaur / Grandmother) and the vco's amount_oct law.
+        let cutoff = |amount: f32, cv: f32| {
+            let mut f = Ladder::new(1_000.0, 0.2, amount);
+            let ctx = ProcessContext {
+                sample_rate: SR,
+                frames: 8,
+            };
+            let audio = [0.0_f32; 8];
+            let mut out = [0.0_f32; 8];
+            f.process(&ctx, &[&audio, &[cv; 8]], &mut [&mut out[..]]);
+            f.cutoff_hz()
+        };
+        // +1 octave up and down from a 1 kHz base.
+        assert!((cutoff(1.0, 1.0) - 2_000.0).abs() < 1.0, "one octave up");
+        assert!((cutoff(1.0, -1.0) - 500.0).abs() < 1.0, "one octave down");
+        // Two octaves.
+        assert!((cutoff(2.0, 1.0) - 4_000.0).abs() < 1.0, "two octaves up");
+        // A negative amount inverts the direction: +cv now closes the filter.
+        assert!(
+            (cutoff(-1.0, 1.0) - 500.0).abs() < 1.0,
+            "negative amount reverses the sweep"
+        );
+    }
+
+    #[test]
+    fn zero_amount_or_no_control_sits_at_base_hz() {
+        // With amount 0 the control input has no effect, and with no control wired the cutoff
+        // rests at base_hz — an unconnected "Envelope Amount" leaves the filter static.
+        let ctx = ProcessContext {
+            sample_rate: SR,
+            frames: 8,
+        };
+        let audio = [0.0_f32; 8];
+
+        let mut zero_amount = Ladder::new(800.0, 0.2, 0.0);
+        let mut out = [0.0_f32; 8];
+        zero_amount.process(&ctx, &[&audio, &[1.0; 8]], &mut [&mut out[..]]);
+        assert!(
+            (zero_amount.cutoff_hz() - 800.0).abs() < 1e-3,
+            "amount 0 ignores the control signal"
+        );
+
+        let mut no_control = Ladder::new(800.0, 0.2, 4.0);
+        let mut out2 = [0.0_f32; 8];
+        no_control.process(&ctx, &[&audio], &mut [&mut out2[..]]);
+        assert!(
+            (no_control.cutoff_hz() - 800.0).abs() < 1e-3,
+            "no control input rests at base_hz"
         );
     }
 

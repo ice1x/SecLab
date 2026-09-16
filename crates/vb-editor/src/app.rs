@@ -506,7 +506,7 @@ fn knob_widget(
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(DIAMETER), Sense::drag());
     // Frequency/time knobs read logarithmically, matching their faders: a 200 Hz cutoff must sit a
     // third of the way round, not pinned to the minimum as a linear knob parks it (the ladder
-    // "knob at the extreme though the filter is open" bug). Bipolar ranges (amount_hz) keep min<0
+    // "knob at the extreme though the filter is open" bug). Bipolar ranges (amount_oct) keep min<0
     // and stay linear.
     let log = widgets::param_is_log(&param.name) && param.min >= 0.0;
     let norm = if log {
