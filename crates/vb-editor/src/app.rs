@@ -198,6 +198,9 @@ pub struct EditorApp {
     project_status: Option<String>,
     /// Which surface is shown: the node graph (Blocks) or the control panel (Panel).
     view_mode: ViewMode,
+    /// On the Panel surface, whether the controls are live (Use) or the layout is being edited
+    /// (Edit) — the Reaktor-style split so playing and building the UI never interfere.
+    panel_mode: PanelMode,
     /// The native AI assistant panel and its live edit session (backlog 000108). Behind the
     /// `assistant` feature so the provider/HTTP stack never reaches the wasm or plugin builds.
     #[cfg(feature = "assistant")]
@@ -214,6 +217,22 @@ pub enum ViewMode {
     Structure,
     /// The auto-generated control panel.
     Panel,
+}
+
+/// How the [`ViewMode::Panel`] surface behaves — a Reaktor-style split between building the
+/// interface and using it, so the two never interfere:
+/// - **Use** (default): the controls are live — you play the instrument, and the layout is
+///   locked so a stray drag can't rearrange it.
+/// - **Edit**: the layout is editable — drag module titles to arrange, right-click a control to
+///   change its type or a title to recolour — and the controls are inert, so laying out the
+///   panel can't accidentally change the sound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PanelMode {
+    /// Play the panel; layout locked.
+    #[default]
+    Use,
+    /// Arrange/retype the panel; controls inert.
+    Edit,
 }
 
 /// One control on the [`ViewMode::Panel`] surface: a node parameter to show and edit, resolved
@@ -338,6 +357,7 @@ impl Default for EditorApp {
             project_ron: String::new(),
             project_status: None,
             view_mode: ViewMode::default(),
+            panel_mode: PanelMode::default(),
             #[cfg(feature = "assistant")]
             assistant: AssistantHost::new(),
         }
@@ -515,7 +535,10 @@ fn knob_widget(
         param.normalize(value)
     };
 
-    let changed = response.dragged().then(|| {
+    // Only a PRIMARY (left) drag turns the knob — a right-click must not move the value (it is
+    // reserved for the panel's control-type menu in Edit mode; without this guard a right-click on
+    // a live knob in Use mode jumps its value).
+    let changed = response.dragged_by(egui::PointerButton::Primary).then(|| {
         // Shift trims: the same drag covers a quarter of the range, for precise values.
         let fine = ui.input(|i| i.modifiers.shift);
         let dy = response.drag_delta().y * if fine { widgets::KNOB_FINE_FACTOR } else { 1.0 };
@@ -1861,6 +1884,26 @@ impl EditorApp {
                 // Switch between the node graph and the control panel.
                 ui.selectable_value(&mut self.view_mode, ViewMode::Structure, "Blocks");
                 ui.selectable_value(&mut self.view_mode, ViewMode::Panel, "Panel");
+                // On the Panel surface, a Reaktor-style lock: toggle between playing the controls
+                // (Use) and editing the layout (Edit). Highlighted while editing.
+                if self.view_mode == ViewMode::Panel {
+                    let editing = self.panel_mode == PanelMode::Edit;
+                    if ui
+                        .selectable_label(editing, "✎ edit UI")
+                        .on_hover_text(if editing {
+                            "editing the panel layout — controls are inert; click to play"
+                        } else {
+                            "playing — layout locked; click to arrange the panel"
+                        })
+                        .clicked()
+                    {
+                        self.panel_mode = if editing {
+                            PanelMode::Use
+                        } else {
+                            PanelMode::Edit
+                        };
+                    }
+                }
                 ui.separator();
                 // Name + version + build stamp, so the build in the host window is always
                 // identifiable. The crate version is frozen pre-1.0, so the git SHA (with a `+`
@@ -1944,6 +1987,26 @@ impl EditorApp {
     /// Switches the view surface (Blocks vs Panel).
     pub fn set_view_mode(&mut self, mode: ViewMode) {
         self.view_mode = mode;
+    }
+
+    /// The current panel behaviour (Use vs Edit).
+    #[must_use]
+    pub fn panel_mode(&self) -> PanelMode {
+        self.panel_mode
+    }
+
+    /// Switches the panel between playing (Use) and laying out (Edit).
+    pub fn set_panel_mode(&mut self, mode: PanelMode) {
+        self.panel_mode = mode;
+    }
+
+    /// Whether the panel layout may be edited right now — true only on the Panel surface in Edit
+    /// mode. This is the single gate the panel rendering consults: when false the controls are
+    /// live and titles/menus are locked (Use); when true the controls are inert and the layout is
+    /// editable (Edit).
+    #[must_use]
+    pub fn panel_layout_editable(&self) -> bool {
+        self.view_mode == ViewMode::Panel && self.panel_mode == PanelMode::Edit
     }
 
     /// The control-panel bindings for the **active** patch: one [`PanelBinding`] per parameter
@@ -2047,9 +2110,14 @@ impl EditorApp {
     /// control is bound live to [`PatchView::set_param`], so a tweak here edits the same value the
     /// inspector and the audio engine see.
     fn panel_ui(&mut self, ui: &mut Ui) {
+        let editable = self.panel_layout_editable();
         ui.horizontal(|ui| {
             ui.heading("panel");
-            ui.weak("· drag a module's title to arrange · right-click a control for its type");
+            ui.weak(if editable {
+                "· edit mode · drag a module's title to arrange · right-click a control for its type"
+            } else {
+                "· play mode · controls are live · switch to “edit UI” to rearrange"
+            });
         });
         let layout = self.panel_layout();
         if layout.is_empty() {
@@ -2093,7 +2161,7 @@ impl EditorApp {
                     start += count;
                     ui.horizontal_top(|ui| {
                         for module in row {
-                            self.panel_module_ui(ui, &theme, module, None, origin);
+                            self.panel_module_ui(ui, &theme, module, None, origin, editable);
                         }
                     });
                 }
@@ -2106,7 +2174,7 @@ impl EditorApp {
                     .movable(false)
                     .constrain_to(region)
                     .show(ui.ctx(), |ui| {
-                        self.panel_module_ui(ui, &theme, module, Some(pos), origin);
+                        self.panel_module_ui(ui, &theme, module, Some(pos), origin, editable);
                     });
             }
         }
@@ -2124,6 +2192,7 @@ impl EditorApp {
         module: &PanelModule,
         placed_pos: Option<Pos2>,
         origin: Pos2,
+        editable: bool,
     ) {
         const MODULE_WIDTH: f32 = 232.0;
         // The controls need the live `Parameter` (range + normalize); take an owned copy so the
@@ -2138,52 +2207,58 @@ impl EditorApp {
         frame.show(ui, |ui| {
             ui.set_width(MODULE_WIDTH);
             ui.vertical(|ui| {
-                // Title doubles as the move handle: a grabbed title drags the whole module.
+                // In Edit mode the title doubles as the move handle and a recolour menu; in Use
+                // mode it is a plain label so the layout can't be disturbed while playing.
                 let title_text = egui::RichText::new(&module.title).strong();
                 let title_text = match accent {
                     Some(color) => title_text.color(color),
                     None => title_text,
                 };
-                let title = ui.add(egui::Label::new(title_text).sense(Sense::drag()));
-                if title.dragged() {
-                    // A placed module moves from its known spot; an un-placed one lifts out of the
-                    // flow from where it currently sits (its title, in panel-relative coordinates).
-                    let base = placed_pos.unwrap_or_else(|| (title.rect.min - origin).to_pos2());
-                    self.patch
-                        .set_panel_position(module.node, base + title.drag_delta());
-                }
-                if title.hovered() {
-                    ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
-                }
-                // Right-click the title to recolour (or drag it to move) the module.
                 let node = module.node;
-                title.context_menu(|ui| {
-                    ui.label("module accent");
-                    ui.horizontal(|ui| {
-                        for (name, color) in PANEL_ACCENTS {
-                            let selected = accent == Some(color);
-                            if ui
-                                .add(egui::Button::new("  ").fill(color).selected(selected))
-                                .on_hover_text(name)
-                                .clicked()
-                            {
-                                self.patch.set_panel_color(node, Some(color));
-                                ui.close_menu();
+                if editable {
+                    let title = ui.add(egui::Label::new(title_text).sense(Sense::drag()));
+                    if title.dragged() {
+                        // A placed module moves from its known spot; an un-placed one lifts out of
+                        // the flow from where it sits (its title, in panel-relative coordinates).
+                        let base =
+                            placed_pos.unwrap_or_else(|| (title.rect.min - origin).to_pos2());
+                        self.patch
+                            .set_panel_position(module.node, base + title.drag_delta());
+                    }
+                    if title.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                    }
+                    // Right-click the title to recolour the module.
+                    title.context_menu(|ui| {
+                        ui.label("module accent");
+                        ui.horizontal(|ui| {
+                            for (name, color) in PANEL_ACCENTS {
+                                let selected = accent == Some(color);
+                                if ui
+                                    .add(egui::Button::new("  ").fill(color).selected(selected))
+                                    .on_hover_text(name)
+                                    .clicked()
+                                {
+                                    self.patch.set_panel_color(node, Some(color));
+                                    ui.close_menu();
+                                }
                             }
+                        });
+                        if ui.button("default").clicked() {
+                            self.patch.set_panel_color(node, None);
+                            ui.close_menu();
                         }
                     });
-                    if ui.button("default").clicked() {
-                        self.patch.set_panel_color(node, None);
-                        ui.close_menu();
-                    }
-                });
+                } else {
+                    ui.add(egui::Label::new(title_text));
+                }
                 ui.add_space(4.0);
                 ui.horizontal_wrapped(|ui| {
                     for b in &module.bindings {
                         let Some(slot) = slots.get(b.index) else {
                             continue;
                         };
-                        self.panel_control_ui(ui, theme, b.node, b.index, slot);
+                        self.panel_control_ui(ui, theme, b.node, b.index, slot, editable);
                     }
                 });
             });
@@ -2191,9 +2266,10 @@ impl EditorApp {
     }
 
     /// Renders one panel control (a single parameter) as its [`WidgetKind`], with a name/value
-    /// caption and a right-click menu to switch the control type. Edits go through
-    /// [`PatchView::set_param`] (value) and [`PatchView::set_widget`] (type), the same paths the
-    /// inspector uses, so the two surfaces stay in lock-step.
+    /// caption. In **Use** mode the control is live — edits go through [`PatchView::set_param`]
+    /// (value), the same path the inspector uses. In **Edit** mode (`editable`) the control is
+    /// drawn inert (disabled) so laying out the panel can't change the sound, and a right-click
+    /// menu switches the control type via [`PatchView::set_widget`].
     fn panel_control_ui(
         &mut self,
         ui: &mut Ui,
@@ -2201,69 +2277,73 @@ impl EditorApp {
         node: vb_core::NodeId,
         index: usize,
         slot: &crate::patch::ParamSlot,
+        editable: bool,
     ) {
         ui.vertical(|ui| {
             ui.set_width(72.0);
             // Draw the control the widget kind selects; every arm reports the response so the
-            // right-click type menu can hang off the same rect.
-            let response = match slot.widget {
-                WidgetKind::Slider => {
-                    let mut value = slot.value;
-                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
-                    let r = ui.add(
-                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
-                            .logarithmic(log)
-                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
-                    );
-                    if r.changed() {
-                        self.patch.set_param(node, index, value);
-                    }
-                    if r.drag_stopped() || r.lost_focus() {
-                        self.patch.end_gesture();
-                    }
-                    r
-                }
-                WidgetKind::Fader => {
-                    let mut value = slot.value;
-                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
-                    let r = ui.add(
-                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
-                            .vertical()
-                            .logarithmic(log)
-                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE)
-                            .show_value(false),
-                    );
-                    if r.changed() {
-                        self.patch.set_param(node, index, value);
-                    }
-                    if r.drag_stopped() || r.lost_focus() {
-                        self.patch.end_gesture();
-                    }
-                    r
-                }
-                WidgetKind::Switch => {
-                    let before = slot.value;
-                    ui.scope(|ui| {
-                        if let Some(v) = switch_widget(ui, &slot.param, before) {
-                            self.patch.set_param(node, index, v);
+            // right-click type menu can hang off the same rect. In Edit mode the control is
+            // disabled (inert + greyed) so arranging the panel never moves a value.
+            let response = ui
+                .add_enabled_ui(!editable, |ui| match slot.widget {
+                    WidgetKind::Slider => {
+                        let mut value = slot.value;
+                        let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                        let r = ui.add(
+                            egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                                .logarithmic(log)
+                                .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
+                        );
+                        if r.changed() {
+                            self.patch.set_param(node, index, value);
+                        }
+                        if r.drag_stopped() || r.lost_focus() {
                             self.patch.end_gesture();
                         }
-                    })
-                    .response
-                }
-                // Knob is the default; an XY-pad has no compact panel form yet, so it also
-                // falls back to a knob here (the inspector remains the place to drive a pad).
-                WidgetKind::Knob | WidgetKind::XyPad => {
-                    let (r, changed) = knob_widget(ui, theme, &slot.param, slot.value);
-                    if let Some(v) = changed {
-                        self.patch.set_param(node, index, v);
+                        r
                     }
-                    if r.drag_stopped() {
-                        self.patch.end_gesture();
+                    WidgetKind::Fader => {
+                        let mut value = slot.value;
+                        let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                        let r = ui.add(
+                            egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                                .vertical()
+                                .logarithmic(log)
+                                .smallest_positive(widgets::LOG_SMALLEST_POSITIVE)
+                                .show_value(false),
+                        );
+                        if r.changed() {
+                            self.patch.set_param(node, index, value);
+                        }
+                        if r.drag_stopped() || r.lost_focus() {
+                            self.patch.end_gesture();
+                        }
+                        r
                     }
-                    r
-                }
-            };
+                    WidgetKind::Switch => {
+                        let before = slot.value;
+                        ui.scope(|ui| {
+                            if let Some(v) = switch_widget(ui, &slot.param, before) {
+                                self.patch.set_param(node, index, v);
+                                self.patch.end_gesture();
+                            }
+                        })
+                        .response
+                    }
+                    // Knob is the default; an XY-pad has no compact panel form yet, so it also
+                    // falls back to a knob here (the inspector remains the place to drive a pad).
+                    WidgetKind::Knob | WidgetKind::XyPad => {
+                        let (r, changed) = knob_widget(ui, theme, &slot.param, slot.value);
+                        if let Some(v) = changed {
+                            self.patch.set_param(node, index, v);
+                        }
+                        if r.drag_stopped() {
+                            self.patch.end_gesture();
+                        }
+                        r
+                    }
+                })
+                .inner;
 
             let unit = param_unit(&slot.param.name);
             ui.small(if unit.is_empty() {
@@ -2274,18 +2354,27 @@ impl EditorApp {
             ui.weak(format!("{:.3}", self.patch.params(node)[index].value));
 
             // Right-click any control to rebuild it as a different type — the constructor gesture.
-            response.context_menu(|ui| {
-                ui.label("control type");
-                for kind in WidgetKind::ALL {
-                    if ui
-                        .selectable_label(slot.widget == kind, kind.label())
-                        .clicked()
-                    {
-                        self.patch.set_widget(node, index, kind);
-                        ui.close_menu();
+            // Only in Edit mode, and via an overlay click-sensing area, since the disabled widget
+            // itself won't sense a secondary click.
+            if editable {
+                let cell = ui.interact(
+                    response.rect,
+                    ui.make_persistent_id(("panel-control-type", node, index)),
+                    Sense::click(),
+                );
+                cell.context_menu(|ui| {
+                    ui.label("control type");
+                    for kind in WidgetKind::ALL {
+                        if ui
+                            .selectable_label(slot.widget == kind, kind.label())
+                            .clicked()
+                        {
+                            self.patch.set_widget(node, index, kind);
+                            ui.close_menu();
+                        }
                     }
-                }
-            });
+                });
+            }
         });
     }
 }
@@ -2380,6 +2469,39 @@ mod tests {
         assert_eq!(app.view_mode(), ViewMode::Panel);
         app.set_view_mode(ViewMode::Structure);
         assert_eq!(app.view_mode(), ViewMode::Structure);
+    }
+
+    #[test]
+    fn the_panel_starts_in_use_mode_so_a_loaded_plugin_plays() {
+        // Reaktor-style split: a freshly opened editor is in Use — controls live, layout locked —
+        // so a plugin dropped into a DAW is immediately playable, not in an edit mode.
+        let app = EditorApp::new();
+        assert_eq!(app.panel_mode(), PanelMode::Use);
+    }
+
+    #[test]
+    fn panel_layout_is_editable_only_on_the_panel_surface_in_edit_mode() {
+        let mut app = EditorApp::new();
+        // On Blocks, the panel mode is irrelevant — layout editing is a Panel concept.
+        app.set_view_mode(ViewMode::Structure);
+        app.set_panel_mode(PanelMode::Edit);
+        assert!(
+            !app.panel_layout_editable(),
+            "Blocks surface is never a panel-layout editor"
+        );
+
+        // On Panel, Use keeps the layout locked (playing) and Edit unlocks it.
+        app.set_view_mode(ViewMode::Panel);
+        app.set_panel_mode(PanelMode::Use);
+        assert!(
+            !app.panel_layout_editable(),
+            "Use mode locks the layout so playing can't disturb it"
+        );
+        app.set_panel_mode(PanelMode::Edit);
+        assert!(
+            app.panel_layout_editable(),
+            "Edit mode on the Panel surface unlocks the layout"
+        );
     }
 
     #[test]

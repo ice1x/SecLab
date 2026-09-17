@@ -20,6 +20,25 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **Editor (`vb-editor`)** — a Reaktor-style **Edit / Use split** on the Panel surface. The panel
+  used to conflate building and playing — you could drag a module and turn a knob in the same view.
+  Now an **“edit UI”** toggle in the toolbar (shown on the Panel surface) switches between two modes:
+  in **Use** (the default, so a plugin loads ready to play) the controls are live and the layout is
+  locked so a stray drag can't rearrange it; in **Edit** the controls are drawn inert (disabled) so
+  laying out the panel can't change the sound, module titles drag to arrange, and right-clicking a
+  control opens its type menu / a title its accent-colour menu. New `EditorApp::panel_mode` /
+  `set_panel_mode` / `panel_layout_editable` and the `PanelMode` enum; verified in the browser/WASM
+  build (mode toggle, inert-vs-live controls, locked layout).
+
+### Fixed
+
+- **Editor (`vb-editor`)** — a **right-click on a panel knob no longer moves its value**. The custom
+  knob reacted to any drag; with the panel's right-click now reserved for the control-type menu (and
+  absent in Use mode), a secondary click on a live knob jumped its value. The knob now turns only on
+  a **primary (left) drag** (`dragged_by(PointerButton::Primary)`).
+
 ### Changed
 
 - **DSP (`vb-nodes`) / filter (`vcf`)** — the same **exponential (per-octave)** cutoff-modulation
