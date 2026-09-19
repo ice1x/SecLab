@@ -201,6 +201,10 @@ pub struct EditorApp {
     /// On the Panel surface, whether the controls are live (Use) or the layout is being edited
     /// (Edit) — the Reaktor-style split so playing and building the UI never interfere.
     panel_mode: PanelMode,
+    /// The module drag in progress on the Panel surface (edit mode), if any. Tracked centrally so
+    /// the drag is driven by the global pointer rather than a single widget's response, which lets
+    /// it survive the module migrating between the flow and floating-Area layers mid-gesture.
+    panel_drag: Option<PanelDrag>,
     /// The native AI assistant panel and its live edit session (backlog 000108). Behind the
     /// `assistant` feature so the provider/HTTP stack never reaches the wasm or plugin builds.
     #[cfg(feature = "assistant")]
@@ -233,6 +237,18 @@ pub enum PanelMode {
     Use,
     /// Arrange/retype the panel; controls inert.
     Edit,
+}
+
+/// An in-progress module drag on the Panel surface. The move is driven from the global pointer in
+/// [`EditorApp::panel_ui`] (not from the dragged title's own response) so it survives the module
+/// re-parenting from the flow layer into a floating `Area` the moment the drag places it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct PanelDrag {
+    /// The module (node) being dragged.
+    node: vb_core::NodeId,
+    /// Panel-space offset from the module's origin to the pointer at grab time, so the module
+    /// follows the pointer without jumping to it.
+    grab_offset: egui::Vec2,
 }
 
 /// One control on the [`ViewMode::Panel`] surface: a node parameter to show and edit, resolved
@@ -358,6 +374,7 @@ impl Default for EditorApp {
             project_status: None,
             view_mode: ViewMode::default(),
             panel_mode: PanelMode::default(),
+            panel_drag: None,
             #[cfg(feature = "assistant")]
             assistant: AssistantHost::new(),
         }
@@ -2129,6 +2146,28 @@ impl EditorApp {
         let origin = ui.cursor().min;
         let modules = self.panel_modules();
 
+        // Drive an in-progress module drag centrally from the global pointer, BEFORE any module is
+        // drawn, so the module lays out at its new spot this frame. A title only *starts* the drag
+        // (records `panel_drag`); doing the move here — off the pointer, not off any one widget's
+        // response — is what lets a drag survive the module migrating between the flow and Area
+        // layers mid-gesture (a per-widget drag cannot cross layers). While the primary button is
+        // held, the module's origin tracks the pointer minus the grab offset; on release we let go.
+        if !editable {
+            // Leaving edit mode (even mid-gesture) drops any drag — Use mode never rearranges.
+            self.panel_drag = None;
+        } else if let Some(drag) = self.panel_drag {
+            let (pointer, down) = ui
+                .ctx()
+                .input(|i| (i.pointer.interact_pos(), i.pointer.primary_down()));
+            match (pointer, down) {
+                (Some(p), true) => {
+                    let pos = ((p - origin) - drag.grab_offset).to_pos2();
+                    self.patch.set_panel_position(drag.node, pos);
+                }
+                _ => self.panel_drag = None,
+            }
+        }
+
         // Two-layer layout so modules never overlap:
         // - Un-placed modules flow in a normal wrapping row. egui measures each module's real
         //   height, so a tall block (a 5-knob envelope) pushes the next row down instead of
@@ -2154,6 +2193,10 @@ impl EditorApp {
         let row_counts = pack_row_counts(&widths, ui.available_width());
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
+            // Never drag-to-scroll: on this layout surface a drag must move a module, not scroll
+            // the rack. Dragging the background to scroll would otherwise compete with (and on the
+            // press frame steal) a module title's drag. The wheel and scrollbar still scroll.
+            .drag_to_scroll(false)
             .show(ui, |ui| {
                 let mut start = 0usize;
                 for count in row_counts {
@@ -2216,14 +2259,55 @@ impl EditorApp {
                 };
                 let node = module.node;
                 if editable {
-                    let title = ui.add(egui::Label::new(title_text).sense(Sense::drag()));
+                    // The title is a drag handle, but the drag must NOT be driven by this widget's
+                    // own response. An un-placed module lives in the wrapping flow (the Background
+                    // layer); the instant a drag places it, it re-renders inside a floating `Area`
+                    // (a Middle layer). egui forbids one widget id from crossing layers (it panics
+                    // in debug and silently drops the interaction in release), so tracking the drag
+                    // through the title's `dragged()` breaks the moment the module migrates — the
+                    // module nudged one frame and then froze, which read as "edit mode is dead".
+                    //
+                    // Instead the handle only DETECTS the grab (`drag_started`); the move itself is
+                    // driven centrally in `panel_ui` from the global pointer (see `panel_drag`), so
+                    // it is immune to the layer handoff. Give the handle a per-ui id so the flow and
+                    // Area copies stay in their own layers. `click_and_drag` keeps the recolour menu.
+                    // Keying the id on whether the module is placed keeps the flow copy (Background
+                    // layer, un-placed) and the Area copy (Middle layer, placed) as *distinct* ids —
+                    // so neither ever crosses layers (egui panics in debug / drops the drag in
+                    // release if one does). It also stays deterministic, so tests can find the handle.
+                    let label = ui.add(egui::Label::new(title_text));
+                    let title = ui.interact(
+                        label.rect,
+                        egui::Id::new(("panel-title", node, placed_pos.is_some())),
+                        Sense::click_and_drag(),
+                    );
+                    if title.drag_started() {
+                        // Record where inside the module the pointer grabbed, in panel space, so the
+                        // module tracks the pointer without jumping. Origin of the module is its
+                        // placed spot, or — while still un-placed — where its title sits in the flow.
+                        let module_origin =
+                            placed_pos.unwrap_or_else(|| (label.rect.min - origin).to_pos2());
+                        let pointer = title.interact_pointer_pos().unwrap_or(label.rect.min);
+                        self.panel_drag = Some(PanelDrag {
+                            node,
+                            grab_offset: (pointer - origin) - module_origin.to_vec2(),
+                        });
+                    }
+                    // Also move on the SAME frame the grab starts (the module is still in the flow
+                    // here), so even a fast drag whose press and travel land in one frame follows the
+                    // pointer — the central `panel_ui` handler only takes over from the next frame,
+                    // once the module has migrated into its floating Area.
                     if title.dragged() {
-                        // A placed module moves from its known spot; an un-placed one lifts out of
-                        // the flow from where it sits (its title, in panel-relative coordinates).
-                        let base =
-                            placed_pos.unwrap_or_else(|| (title.rect.min - origin).to_pos2());
-                        self.patch
-                            .set_panel_position(module.node, base + title.drag_delta());
+                        if let Some(drag) = self.panel_drag {
+                            if drag.node == node {
+                                if let Some(p) = title.interact_pointer_pos() {
+                                    self.patch.set_panel_position(
+                                        node,
+                                        ((p - origin) - drag.grab_offset).to_pos2(),
+                                    );
+                                }
+                            }
+                        }
                     }
                     if title.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
@@ -2633,6 +2717,78 @@ mod tests {
             app.patch().revision(),
             r,
             "moving a panel module is not audible"
+        );
+    }
+
+    #[test]
+    fn dragging_a_title_in_edit_mode_moves_the_module_across_the_flow_to_area_handoff() {
+        // Regression: in Panel edit mode, dragging a module's title must move it. An un-placed
+        // module renders in the wrapping flow, but the first drag frame *places* it, and from
+        // then on it renders inside a floating `Area` — a different parent Ui. With an
+        // auto-generated widget id the in-flight drag was dropped at that flow→Area handoff, so
+        // the module only nudged one frame's worth and then refused to follow the pointer (the
+        // user saw edit mode as "not operable"). A stable per-node id keeps the one drag alive.
+        //
+        // This is a full egui-driven interaction test: it reuses ONE `Context` across frames so
+        // the drag state persists, presses on the real title rect, and moves the pointer in
+        // steps. On the buggy code the module lands a few pixels from its origin (or the stable
+        // id is absent entirely); on the fix it follows the pointer the whole way.
+        let mut app = EditorApp::new();
+        app.set_view_mode(ViewMode::Panel);
+        app.set_panel_mode(PanelMode::Edit);
+
+        let size = egui::vec2(1400.0, 1000.0);
+        let ctx = egui::Context::default();
+        let run = |app: &mut EditorApp, events: Vec<egui::Event>| {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                events,
+                ..Default::default()
+            };
+            let _ = ctx.run(input, |ctx| app.render(ctx));
+        };
+        let press = |pos: Pos2, pressed: bool| egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::default(),
+        };
+
+        // Target the first module; it starts un-placed (flowed onto the auto-grid).
+        let node = app.panel_modules()[0].node;
+        assert!(app.patch().panel_position(node).is_none());
+
+        // Lay out one frame so the title's rect is known, then read it by its stable id.
+        run(&mut app, vec![]);
+        // The module starts un-placed, so its title handle carries the `false` (flow-layer) id.
+        let start = ctx
+            .read_response(egui::Id::new(("panel-title", node, false)))
+            .expect("the title is a stable, interactable drag handle")
+            .rect
+            .center();
+
+        // Press on the title, drag the pointer across the surface in steps, then release.
+        run(
+            &mut app,
+            vec![egui::Event::PointerMoved(start), press(start, true)],
+        );
+        let delta = egui::vec2(240.0, 300.0);
+        for i in 1..=8 {
+            let p = start + delta * (i as f32 / 8.0);
+            run(&mut app, vec![egui::Event::PointerMoved(p)]);
+        }
+        run(&mut app, vec![press(start + delta, false)]);
+
+        // The drag stored a position offset from the module's origin by roughly `delta` — proof it
+        // followed the pointer through the flow→Area handoff rather than snapping back after one
+        // frame. (A one-frame drop would leave it within ~40px of the origin.)
+        let placed = app
+            .patch()
+            .panel_position(node)
+            .expect("the drag placed the module");
+        assert!(
+            placed.x > 150.0 && placed.y > 180.0,
+            "module followed the pointer across the flow→Area handoff, got {placed:?}"
         );
     }
 
