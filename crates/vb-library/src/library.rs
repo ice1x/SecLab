@@ -95,7 +95,11 @@ pub(crate) fn new_edge(from_id: u64, to_id: u64, edge_kind: &str) -> NewEdge {
     }
 }
 
-/// The patch/preset library, backed by an embedded drevo store.
+/// The patch/preset library, backed by an embedded in-memory drevo store.
+///
+/// drevo retired its redb on-disk backend (drevo epic #444), so the embedded `Drevo` handle
+/// is in-memory only. Durable persistence would go through a separate WAL-backed
+/// `drevo::native_service::NativeService` — not yet wired here.
 pub struct Library {
     db: Drevo,
 }
@@ -108,16 +112,6 @@ impl Library {
     pub fn open_in_memory() -> Result<Self> {
         Ok(Self {
             db: Drevo::open_in_memory()?,
-        })
-    }
-
-    /// Opens (creating if needed) a persistent library at `path`.
-    ///
-    /// # Errors
-    /// Propagates any drevo error from opening the store.
-    pub fn open(path: &std::path::Path) -> Result<Self> {
-        Ok(Self {
-            db: Drevo::open(path)?,
         })
     }
 
