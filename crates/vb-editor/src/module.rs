@@ -29,6 +29,16 @@ pub struct ModuleParam {
     pub value: f32,
     /// Which inspector control this parameter uses.
     pub widget: WidgetKind,
+    /// Whether the parameter is shown on the panel. Defaults to visible so modules written before
+    /// panel visibility existed load with every control shown.
+    #[serde(default = "visible_by_default")]
+    pub panel_visible: bool,
+}
+
+/// Serde default for [`ModuleParam::panel_visible`] — a parameter is shown on the panel unless the
+/// module explicitly hid it.
+fn visible_by_default() -> bool {
+    true
 }
 
 /// One node of a module: its structural definition, canvas position, and parameters.
@@ -281,6 +291,7 @@ mod tests {
                     param: Parameter::new("gain", 0.0, 2.0, 1.0),
                     value: 0.7,
                     widget: WidgetKind::Knob,
+                    panel_visible: true,
                 }],
             }],
             edges: vec![Edge {

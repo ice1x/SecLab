@@ -156,6 +156,10 @@ pub struct ParamSlot {
     pub value: f32,
     /// Which control the inspector renders (knob, slider, switch, XY-pad).
     pub widget: WidgetKind,
+    /// Whether this parameter is shown on the **panel** surface. The inspector always lists every
+    /// parameter; unchecking "show on panel" hides just the panel control (Reaktor-style: choose in
+    /// the structure what the panel exposes). Defaults to visible; purely presentational.
+    pub panel_visible: bool,
 }
 
 /// Editor-side view of a patch: graph + positions + selection.
@@ -227,6 +231,17 @@ impl PatchView {
                         slots.iter().map(|s| s.widget.label().to_owned()).collect();
                     if slots.iter().any(|s| s.widget != WidgetKind::default()) {
                         doc.set_node_widgets(id, widgets);
+                    }
+                    // Persist which controls the user hid from the panel; an all-visible module
+                    // (the default) stores nothing, keeping default patches clean.
+                    let hidden: Vec<usize> = slots
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, s)| !s.panel_visible)
+                        .map(|(i, _)| i)
+                        .collect();
+                    if !hidden.is_empty() {
+                        doc.set_node_panel_hidden(id, hidden);
                     }
                 }
             }
@@ -437,6 +452,8 @@ impl PatchView {
                         .get(i)
                         .and_then(|label| WidgetKind::from_label(label))
                         .unwrap_or_else(|| default_widget(&param)),
+                    // A parameter is visible on the panel unless the document lists it as hidden.
+                    panel_visible: !entry.panel_hidden.contains(&i),
                     param,
                 })
                 .collect();
@@ -481,6 +498,7 @@ impl PatchView {
                                 param: s.param.clone(),
                                 value: s.value,
                                 widget: s.widget,
+                                panel_visible: s.panel_visible,
                             })
                             .collect()
                     })
@@ -519,6 +537,7 @@ impl PatchView {
             for (i, p) in mn.params.iter().enumerate() {
                 patch.set_param(new_id, i, p.value);
                 patch.set_widget(new_id, i, p.widget);
+                patch.set_panel_visible(new_id, i, p.panel_visible);
             }
             remap.insert(mn.id, new_id);
         }
@@ -612,6 +631,7 @@ impl PatchView {
             .map(|param| ParamSlot {
                 value: param.default,
                 widget: default_widget(&param),
+                panel_visible: true,
                 param,
             })
             .collect();
@@ -702,6 +722,21 @@ impl PatchView {
         match self.params.get_mut(&id).and_then(|s| s.get_mut(index)) {
             Some(slot) => {
                 slot.widget = widget;
+                self.touch_view();
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Shows or hides parameter `index` of `id` on the **panel** surface. Like a widget choice this
+    /// is a view-only mapping — it changes nothing audible and is not an undo step — so it bumps the
+    /// [`view_revision`](Self::view_revision) (an embedder re-persists it) but never the audio
+    /// revision. Returns `false` for an unknown node/index.
+    pub fn set_panel_visible(&mut self, id: NodeId, index: usize, visible: bool) -> bool {
+        match self.params.get_mut(&id).and_then(|s| s.get_mut(index)) {
+            Some(slot) => {
+                slot.panel_visible = visible;
                 self.touch_view();
                 true
             }

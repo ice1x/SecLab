@@ -1115,6 +1115,26 @@ impl EditorApp {
             .node(id)
             .map_or_else(|| "?".to_owned(), |n| n.kind.clone());
         ui.label(kind);
+
+        // Module accent colour — the panel is layout-only, so appearance lives here in Properties
+        // (Reaktor-style). Colours the module's frame on the panel; "default" clears it.
+        let accent = self.patch.panel_color(id);
+        ui.horizontal(|ui| {
+            ui.weak("panel accent");
+            for (name, color) in PANEL_ACCENTS {
+                let selected = accent == Some(color);
+                if ui
+                    .add(egui::Button::new("  ").fill(color).selected(selected))
+                    .on_hover_text(name)
+                    .clicked()
+                {
+                    self.patch.set_panel_color(id, Some(color));
+                }
+            }
+            if ui.button("default").clicked() {
+                self.patch.set_panel_color(id, None);
+            }
+        });
         ui.separator();
 
         if self.patch.params(id).is_empty() {
@@ -1147,6 +1167,7 @@ impl EditorApp {
         // Header: parameter name (+ unit) + its range + the widget-type picker, so a knob
         // reads as "what it controls, in what unit, over what range" rather than a bare dial.
         let mut widget = slot.widget;
+        let mut visible = slot.panel_visible;
         ui.horizontal(|ui| {
             let unit = param_unit(&slot.param.name);
             if unit.is_empty() {
@@ -1163,9 +1184,16 @@ impl EditorApp {
                         ui.selectable_value(&mut widget, kind, kind.label());
                     }
                 });
+            // Reaktor-style: the structure chooses what the panel exposes. Unchecking this hides
+            // just this parameter's control on the panel (the inspector still lists it).
+            ui.add(egui::Checkbox::new(&mut visible, "on panel"))
+                .on_hover_text("show this control on the panel");
         });
         if widget != slot.widget {
             self.patch.set_widget(id, i, widget);
+        }
+        if visible != slot.panel_visible {
+            self.patch.set_panel_visible(id, i, visible);
         }
 
         match widget {
@@ -2034,6 +2062,11 @@ impl EditorApp {
         let mut out = Vec::new();
         for (id, node, _) in self.patch.draw_order() {
             for (index, slot) in self.patch.params(id).iter().enumerate() {
+                // Only controls the user kept visible reach the panel; the index stays the true
+                // parameter index so edits still address the right slot.
+                if !slot.panel_visible {
+                    continue;
+                }
                 out.push(PanelBinding {
                     node: id,
                     index,
@@ -2057,9 +2090,13 @@ impl EditorApp {
     pub fn panel_modules(&self) -> Vec<PanelModule> {
         // First pass: how many param-bearing nodes share each kind, so a kind seen once stays
         // un-numbered while a repeated kind gets 1-based ordinals.
+        // A node contributes a module only if it has at least one control the user kept visible, so
+        // both the numbering and the display count the same set (hiding every control of a module
+        // removes it from the panel entirely).
+        let has_visible = |id| self.patch.params(id).iter().any(|s| s.panel_visible);
         let mut totals: HashMap<&str, usize> = HashMap::new();
         for (id, node, _) in self.patch.draw_order() {
-            if !self.patch.params(id).is_empty() {
+            if has_visible(id) {
                 *totals.entry(node.kind.as_str()).or_default() += 1;
             }
         }
@@ -2068,7 +2105,7 @@ impl EditorApp {
         let mut out = Vec::new();
         for (id, node, _) in self.patch.draw_order() {
             let slots = self.patch.params(id);
-            if slots.is_empty() {
+            if !has_visible(id) {
                 continue;
             }
             let kind = node.kind.as_str();
@@ -2082,6 +2119,7 @@ impl EditorApp {
             let bindings = slots
                 .iter()
                 .enumerate()
+                .filter(|(_, slot)| slot.panel_visible)
                 .map(|(index, slot)| PanelBinding {
                     node: id,
                     index,
@@ -2131,7 +2169,7 @@ impl EditorApp {
         ui.horizontal(|ui| {
             ui.heading("panel");
             ui.weak(if editable {
-                "· edit mode · drag a module's title to arrange · right-click a control for its type"
+                "· edit mode · drag a module's title to arrange · set control type / visibility in the inspector"
             } else {
                 "· play mode · controls are live · switch to “edit UI” to rearrange"
             });
@@ -2269,17 +2307,17 @@ impl EditorApp {
                     //
                     // Instead the handle only DETECTS the grab (`drag_started`); the move itself is
                     // driven centrally in `panel_ui` from the global pointer (see `panel_drag`), so
-                    // it is immune to the layer handoff. Give the handle a per-ui id so the flow and
-                    // Area copies stay in their own layers. `click_and_drag` keeps the recolour menu.
-                    // Keying the id on whether the module is placed keeps the flow copy (Background
-                    // layer, un-placed) and the Area copy (Middle layer, placed) as *distinct* ids —
-                    // so neither ever crosses layers (egui panics in debug / drops the drag in
-                    // release if one does). It also stays deterministic, so tests can find the handle.
+                    // it is immune to the layer handoff. Keying the id on whether the module is
+                    // placed keeps the flow copy (Background layer, un-placed) and the Area copy
+                    // (Middle layer, placed) as *distinct* ids — so neither ever crosses layers (egui
+                    // panics in debug / drops the drag in release if one does). It also stays
+                    // deterministic, so tests can find the handle. The panel is layout-only now:
+                    // appearance (control type, module colour) is set in the structure inspector.
                     let label = ui.add(egui::Label::new(title_text));
                     let title = ui.interact(
                         label.rect,
                         egui::Id::new(("panel-title", node, placed_pos.is_some())),
-                        Sense::click_and_drag(),
+                        Sense::drag(),
                     );
                     if title.drag_started() {
                         // Record where inside the module the pointer grabbed, in panel space, so the
@@ -2312,27 +2350,6 @@ impl EditorApp {
                     if title.hovered() {
                         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
                     }
-                    // Right-click the title to recolour the module.
-                    title.context_menu(|ui| {
-                        ui.label("module accent");
-                        ui.horizontal(|ui| {
-                            for (name, color) in PANEL_ACCENTS {
-                                let selected = accent == Some(color);
-                                if ui
-                                    .add(egui::Button::new("  ").fill(color).selected(selected))
-                                    .on_hover_text(name)
-                                    .clicked()
-                                {
-                                    self.patch.set_panel_color(node, Some(color));
-                                    ui.close_menu();
-                                }
-                            }
-                        });
-                        if ui.button("default").clicked() {
-                            self.patch.set_panel_color(node, None);
-                            ui.close_menu();
-                        }
-                    });
                 } else {
                     ui.add(egui::Label::new(title_text));
                 }
@@ -2352,8 +2369,8 @@ impl EditorApp {
     /// Renders one panel control (a single parameter) as its [`WidgetKind`], with a name/value
     /// caption. In **Use** mode the control is live — edits go through [`PatchView::set_param`]
     /// (value), the same path the inspector uses. In **Edit** mode (`editable`) the control is
-    /// drawn inert (disabled) so laying out the panel can't change the sound, and a right-click
-    /// menu switches the control type via [`PatchView::set_widget`].
+    /// drawn inert (disabled) so laying out the panel can't change the sound. The panel is
+    /// layout-only: the control *type* and visibility are chosen in the structure inspector.
     fn panel_control_ui(
         &mut self,
         ui: &mut Ui,
@@ -2365,69 +2382,66 @@ impl EditorApp {
     ) {
         ui.vertical(|ui| {
             ui.set_width(72.0);
-            // Draw the control the widget kind selects; every arm reports the response so the
-            // right-click type menu can hang off the same rect. In Edit mode the control is
-            // disabled (inert + greyed) so arranging the panel never moves a value.
-            let response = ui
-                .add_enabled_ui(!editable, |ui| match slot.widget {
-                    WidgetKind::Slider => {
-                        let mut value = slot.value;
-                        let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
-                        let r = ui.add(
-                            egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
-                                .logarithmic(log)
-                                .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
-                        );
-                        if r.changed() {
-                            self.patch.set_param(node, index, value);
-                        }
-                        if r.drag_stopped() || r.lost_focus() {
-                            self.patch.end_gesture();
-                        }
-                        r
+            // Draw the control the widget kind selects. In Edit mode the control is disabled (inert
+            // + greyed) so arranging the panel never moves a value.
+            ui.add_enabled_ui(!editable, |ui| match slot.widget {
+                WidgetKind::Slider => {
+                    let mut value = slot.value;
+                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                    let r = ui.add(
+                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                            .logarithmic(log)
+                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE),
+                    );
+                    if r.changed() {
+                        self.patch.set_param(node, index, value);
                     }
-                    WidgetKind::Fader => {
-                        let mut value = slot.value;
-                        let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
-                        let r = ui.add(
-                            egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
-                                .vertical()
-                                .logarithmic(log)
-                                .smallest_positive(widgets::LOG_SMALLEST_POSITIVE)
-                                .show_value(false),
-                        );
-                        if r.changed() {
-                            self.patch.set_param(node, index, value);
-                        }
-                        if r.drag_stopped() || r.lost_focus() {
-                            self.patch.end_gesture();
-                        }
-                        r
+                    if r.drag_stopped() || r.lost_focus() {
+                        self.patch.end_gesture();
                     }
-                    WidgetKind::Switch => {
-                        let before = slot.value;
-                        ui.scope(|ui| {
-                            if let Some(v) = switch_widget(ui, &slot.param, before) {
-                                self.patch.set_param(node, index, v);
-                                self.patch.end_gesture();
-                            }
-                        })
-                        .response
+                    r
+                }
+                WidgetKind::Fader => {
+                    let mut value = slot.value;
+                    let log = widgets::param_is_log(&slot.param.name) && slot.param.min >= 0.0;
+                    let r = ui.add(
+                        egui::Slider::new(&mut value, slot.param.min..=slot.param.max)
+                            .vertical()
+                            .logarithmic(log)
+                            .smallest_positive(widgets::LOG_SMALLEST_POSITIVE)
+                            .show_value(false),
+                    );
+                    if r.changed() {
+                        self.patch.set_param(node, index, value);
                     }
-                    // Knob is the default; an XY-pad has no compact panel form yet, so it also
-                    // falls back to a knob here (the inspector remains the place to drive a pad).
-                    WidgetKind::Knob | WidgetKind::XyPad => {
-                        let (r, changed) = knob_widget(ui, theme, &slot.param, slot.value);
-                        if let Some(v) = changed {
+                    if r.drag_stopped() || r.lost_focus() {
+                        self.patch.end_gesture();
+                    }
+                    r
+                }
+                WidgetKind::Switch => {
+                    let before = slot.value;
+                    ui.scope(|ui| {
+                        if let Some(v) = switch_widget(ui, &slot.param, before) {
                             self.patch.set_param(node, index, v);
-                        }
-                        if r.drag_stopped() {
                             self.patch.end_gesture();
                         }
-                        r
+                    })
+                    .response
+                }
+                // Knob is the default; an XY-pad has no compact panel form yet, so it also
+                // falls back to a knob here (the inspector remains the place to drive a pad).
+                WidgetKind::Knob | WidgetKind::XyPad => {
+                    let (r, changed) = knob_widget(ui, theme, &slot.param, slot.value);
+                    if let Some(v) = changed {
+                        self.patch.set_param(node, index, v);
                     }
-                })
-                .inner;
+                    if r.drag_stopped() {
+                        self.patch.end_gesture();
+                    }
+                    r
+                }
+            });
 
             let unit = param_unit(&slot.param.name);
             ui.small(if unit.is_empty() {
@@ -2436,29 +2450,6 @@ impl EditorApp {
                 format!("{} ({unit})", slot.param.name)
             });
             ui.weak(format!("{:.3}", self.patch.params(node)[index].value));
-
-            // Right-click any control to rebuild it as a different type — the constructor gesture.
-            // Only in Edit mode, and via an overlay click-sensing area, since the disabled widget
-            // itself won't sense a secondary click.
-            if editable {
-                let cell = ui.interact(
-                    response.rect,
-                    ui.make_persistent_id(("panel-control-type", node, index)),
-                    Sense::click(),
-                );
-                cell.context_menu(|ui| {
-                    ui.label("control type");
-                    for kind in WidgetKind::ALL {
-                        if ui
-                            .selectable_label(slot.widget == kind, kind.label())
-                            .clicked()
-                        {
-                            self.patch.set_widget(node, index, kind);
-                            ui.close_menu();
-                        }
-                    }
-                });
-            }
         });
     }
 }
@@ -2789,6 +2780,101 @@ mod tests {
         assert!(
             placed.x > 150.0 && placed.y > 180.0,
             "module followed the pointer across the flow→Area handoff, got {placed:?}"
+        );
+    }
+
+    #[test]
+    fn hiding_a_parameter_removes_only_that_control_from_the_panel() {
+        // Reaktor-style: the inspector lists every parameter, but the panel shows only the ones the
+        // user kept visible. Hiding one control drops just that control from the panel; the
+        // inspector (and the audio graph) keep the parameter.
+        let mut app = EditorApp::new();
+        let ladder = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("the default voice has a ladder")
+            .node;
+        let before = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.node == ladder)
+            .unwrap()
+            .bindings
+            .len();
+        assert!(before >= 2, "ladder has several controls");
+
+        assert!(app.patch_mut().set_panel_visible(ladder, 1, false));
+
+        let after = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.node == ladder)
+            .unwrap();
+        assert_eq!(
+            after.bindings.len(),
+            before - 1,
+            "one fewer control on the panel"
+        );
+        assert!(
+            after.bindings.iter().all(|b| b.index != 1),
+            "the hidden parameter index is gone from the panel"
+        );
+        assert!(
+            app.panel_widgets()
+                .iter()
+                .all(|b| !(b.node == ladder && b.index == 1)),
+            "panel_widgets excludes the hidden control too"
+        );
+        assert_eq!(
+            app.patch().params(ladder).len(),
+            before,
+            "the inspector still lists every parameter — visibility is panel-only"
+        );
+    }
+
+    #[test]
+    fn hiding_every_control_removes_the_module_from_the_panel() {
+        let mut app = EditorApp::new();
+        let ladder = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("ladder")
+            .node;
+        let n = app.patch().params(ladder).len();
+        for i in 0..n {
+            assert!(app.patch_mut().set_panel_visible(ladder, i, false));
+        }
+        assert!(
+            app.panel_modules().into_iter().all(|m| m.node != ladder),
+            "a module with every control hidden leaves the panel entirely"
+        );
+    }
+
+    #[test]
+    fn panel_visibility_survives_a_project_round_trip() {
+        let mut app = EditorApp::new();
+        let ladder = app
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("ladder")
+            .node;
+        assert!(app.patch_mut().set_panel_visible(ladder, 1, false));
+
+        let ron = app.export_project_ron().expect("serializes");
+        let mut reopened = EditorApp::new();
+        reopened.import_project_ron(&ron).expect("reimports");
+
+        let restored = reopened
+            .panel_modules()
+            .into_iter()
+            .find(|m| m.title == "ladder")
+            .expect("ladder back");
+        assert!(
+            restored.bindings.iter().all(|b| b.index != 1),
+            "the hidden control stays hidden after a save/load"
         );
     }
 
