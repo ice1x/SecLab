@@ -22,13 +22,22 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Editor (`vb-editor`)** — **choose what the panel exposes, from the structure** (Reaktor-style).
+  The inspector now lists, per parameter, a **“on panel”** checkbox next to the control-type picker,
+  so you pick in the structure which controls the panel shows and which it hides — the inspector
+  always lists every parameter, the panel shows only the visible ones (hiding a module's last visible
+  control removes the module from the panel). Visibility is presentational (no audio revision) and is
+  stored sparsely in the project (`NodeEntry::panel_hidden` = the hidden indices; all-visible stores
+  nothing, and older documents load with every control shown). New `PatchView::set_panel_visible` and
+  `ParamSlot::panel_visible`; verified in the browser/WASM build.
 - **Editor (`vb-editor`)** — a Reaktor-style **Edit / Use split** on the Panel surface. The panel
   used to conflate building and playing — you could drag a module and turn a knob in the same view.
   Now an **“edit UI”** toggle in the toolbar (shown on the Panel surface) switches between two modes:
   in **Use** (the default, so a plugin loads ready to play) the controls are live and the layout is
   locked so a stray drag can't rearrange it; in **Edit** the controls are drawn inert (disabled) so
-  laying out the panel can't change the sound, module titles drag to arrange, and right-clicking a
-  control opens its type menu / a title its accent-colour menu. New `EditorApp::panel_mode` /
+  laying out the panel can't change the sound and module titles drag to arrange. The panel is
+  **layout-only**: a control's type, its “on panel” visibility, and the module's accent colour are
+  all set in the structure inspector (Reaktor-style), not on the panel. New `EditorApp::panel_mode` /
   `set_panel_mode` / `panel_layout_editable` and the `PanelMode` enum; verified in the browser/WASM
   build (mode toggle, inert-vs-live controls, locked layout).
 

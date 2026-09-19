@@ -46,6 +46,12 @@ pub struct NodeEntry {
     /// an unstyled patch stores nothing.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panel_color: Option<String>,
+    /// Indices (registry `params()` order) of parameters **hidden from the panel** — the ones the
+    /// user unchecked in the inspector's "show on panel". Stored sparsely as a hidden-set rather
+    /// than a per-parameter flag so the common case (every control visible) stores nothing and old
+    /// documents load with all controls visible. Purely presentational — it never affects audio.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub panel_hidden: Vec<usize>,
 }
 
 impl NodeEntry {
@@ -59,6 +65,7 @@ impl NodeEntry {
             panel_pos: None,
             widgets: Vec::new(),
             panel_color: None,
+            panel_hidden: Vec::new(),
         }
     }
 
@@ -72,6 +79,7 @@ impl NodeEntry {
             panel_pos: None,
             widgets: Vec::new(),
             panel_color: None,
+            panel_hidden: Vec::new(),
         }
     }
 }
@@ -203,6 +211,28 @@ impl ProjectDoc {
         }
     }
 
+    /// The indices of this node's parameters hidden from the panel (registry `params()` order),
+    /// or an empty slice if the id is unknown or every control is shown.
+    #[must_use]
+    pub fn node_panel_hidden(&self, id: NodeId) -> &[usize] {
+        self.nodes
+            .iter()
+            .find(|e| e.id == id)
+            .map_or(&[], |e| e.panel_hidden.as_slice())
+    }
+
+    /// Records which of a node's parameters are hidden from the panel, replacing any existing set.
+    /// Returns `false` if the id is not present.
+    pub fn set_node_panel_hidden(&mut self, id: NodeId, hidden: Vec<usize>) -> bool {
+        match self.nodes.iter_mut().find(|e| e.id == id) {
+            Some(entry) => {
+                entry.panel_hidden = hidden;
+                true
+            }
+            None => false,
+        }
+    }
+
     /// Rebuilds a runtime [`Graph`] from this document.
     ///
     /// Node ids are reallocated by the graph; edges are remapped accordingly, so the
@@ -315,16 +345,20 @@ mod tests {
         assert!(doc.set_node_panel_pos(id, Some((120.5, 40.0))));
         assert!(doc.set_node_widgets(id, vec!["slider".to_owned()]));
         assert!(doc.set_node_panel_color(id, Some("#ff8800".to_owned())));
+        assert!(doc.set_node_panel_hidden(id, vec![1, 3]));
         let ron = crate::io::to_ron(&doc).expect("serializes");
         let back = crate::io::from_ron(&ron).expect("parses");
         assert_eq!(back.node_panel_pos(id), Some((120.5, 40.0)));
         assert_eq!(back.node_widgets(id), &["slider".to_owned()]);
         assert_eq!(back.node_panel_color(id), Some("#ff8800"));
+        assert_eq!(back.node_panel_hidden(id), &[1, 3]);
         assert_eq!(doc, back);
         // Unknown ids read as absent, and setting on a missing id fails.
         assert_eq!(doc.node_panel_pos(NodeId(9999)), None);
         assert_eq!(doc.node_panel_color(NodeId(9999)), None);
+        assert_eq!(doc.node_panel_hidden(NodeId(9999)), &[] as &[usize]);
         assert!(!doc.set_node_widgets(NodeId(9999), vec!["knob".to_owned()]));
+        assert!(!doc.set_node_panel_hidden(NodeId(9999), vec![0]));
     }
 
     #[test]
@@ -339,6 +373,10 @@ mod tests {
             "no widget overrides to store: {ron}"
         );
         assert!(!ron.contains("panel_color"), "no accent to store: {ron}");
+        assert!(
+            !ron.contains("panel_hidden"),
+            "every control visible stores nothing: {ron}"
+        );
     }
 
     #[test]
