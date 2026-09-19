@@ -34,6 +34,16 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **Editor (`vb-editor`)** — **dragging a module to arrange it in Panel edit mode now works.** Edit
+  mode looked dead: grabbing a module's title barely nudged it and then it froze. An un-placed module
+  renders in the wrapping flow (egui's Background layer), but the first drag frame *places* it, and it
+  then re-renders inside a floating `Area` (a Middle layer). egui forbids a widget id from crossing
+  layers, so a drag tracked through the title's own response was dropped the instant the module
+  migrated. The drag is now driven centrally from the global pointer (a new `panel_drag` grab state):
+  the title only *starts* the gesture, so the move survives the flow→Area handoff. The panel's
+  scroll area also no longer drag-scrolls (a background drag could steal a title's grab). Covered by a
+  new full egui-driven interaction test (multi-frame pointer drag across the handoff) and verified in
+  the browser/WASM build.
 - **Editor (`vb-editor`)** — a **right-click on a panel knob no longer moves its value**. The custom
   knob reacted to any drag; with the panel's right-click now reserved for the control-type menu (and
   absent in Use mode), a secondary click on a live knob jumped its value. The knob now turns only on
