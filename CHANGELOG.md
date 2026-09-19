@@ -20,6 +20,22 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Changed
+
+- **Library (`vb-library`)** — **track drevo's redb-backend removal.** drevo retired its redb
+  on-disk backend (drevo epic #444), so `drevo::db::Drevo::open`, `Drevo::migrate` and
+  `MigrationDirection` no longer exist and the embedded `Drevo` handle is **in-memory only**.
+  This left the whole VST_bomb workspace unable to resolve (Cargo resolves an optional
+  path-dependency's manifest even when its feature is off), which turned **every** required CI
+  check red — `vb-library`'s `drevo` dependency requested the now-missing `redb-backend`
+  feature. Adapted `vb-library` to the current drevo: dropped the `redb-backend` feature
+  request, removed the unused on-disk `Library::open(path)` and `Library::migrate(...)` (both
+  backed by the removed redb API; no caller in the tree used them — every construction is
+  `open_in_memory`), and kept the in-memory store plus JSON export/import as the portable
+  backup path. Durable persistence would now go through drevo's separate WAL-backed
+  `native_service::NativeService` — future work. `cargo test -p vb-library --features library`
+  is green.
+
 ### Added
 
 - **Editor (`vb-editor`)** — **choose what the panel exposes, from the structure** (Reaktor-style).

@@ -22,9 +22,7 @@ authors.workspace = true
 # and the runner (same machine). This is a deliberate, documented single-machine coupling
 # for the Epic 11 assessment; a git dependency can replace it once the integration
 # stabilises. drevo is still only COMPILED under `--features library`.
-drevo = { path = "/Users/cold00n/repo/drevo", default-features = false, features = [
-    "redb-backend",
-], optional = true }
+drevo = { path = "/Users/cold00n/repo/drevo", default-features = false, optional = true }
 # Reading patches to import (000095). vb-project is a light workspace crate; still gated
 # behind `library` so the default build stays untouched.
 vb-project = { workspace = true, optional = true }

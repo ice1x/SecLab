@@ -1,14 +1,15 @@
-//! Library export / backup and schema migrations (backlog 000100).
+//! Library export / backup (backlog 000100).
 //!
 //! The whole library graph round-trips through drevo's JSON dump format: [`Library::export_json`]
 //! writes a portable snapshot, and [`Library::import_json`] merges one back (idempotent —
-//! byte-equal nodes/edges are skipped). drevo owns the on-disk *schema* version and
-//! migrates a store forward automatically when it is opened; [`Library::migrate`] exposes an
-//! explicit up/down migration for a persistent store when you need to force it.
+//! byte-equal nodes/edges are skipped).
+//!
+//! There is no on-disk schema migration here anymore: drevo retired its redb on-disk backend
+//! (drevo epic #444), removing `Drevo::open`/`Drevo::migrate`. The embedded store is in-memory
+//! only, so JSON export/import is the portable backup path.
 
 use std::path::Path;
 
-use drevo::db::{Drevo, MigrationDirection};
 use drevo::dump::ImportReport;
 use drevo::error::Result;
 
@@ -46,16 +47,5 @@ impl Library {
     /// Propagates any drevo error (including I/O).
     pub fn import_json_from_path(&self, path: &Path) -> Result<ImportReport> {
         self.db().import_json_from_path(path)
-    }
-
-    /// Migrates the on-disk schema of a persistent library at `path` up or down, returning
-    /// the number of records rewritten. drevo also migrates forward automatically on open;
-    /// this is the explicit control (e.g. a `Down` migration so an older build can read the
-    /// store). Not applicable to an in-memory library.
-    ///
-    /// # Errors
-    /// Propagates any drevo error.
-    pub fn migrate(path: &Path, direction: MigrationDirection) -> Result<u64> {
-        Drevo::migrate(path, direction)
     }
 }

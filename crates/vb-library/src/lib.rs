@@ -6,9 +6,14 @@
 //! seam between VST_bomb and drevo.
 //!
 //! **drevo is optional.** Everything here lives behind the `library` Cargo feature, which
-//! pulls drevo in via its *direct Rust API* (embedded `redb-backend`, no Bolt server). The
-//! default build — and the required CI gate — does not compile drevo at all, so a checkout
-//! without the sibling `drevo` crate still builds the rest of the workspace.
+//! pulls drevo in via its *direct Rust API* (the embedded in-memory `Drevo` handle, no Bolt
+//! server). The default build — and the required CI gate — does not compile drevo at all, so
+//! a checkout without the sibling `drevo` crate still builds the rest of the workspace.
+//!
+//! drevo retired its redb on-disk backend (drevo epic #444): the embedded `Drevo` handle is
+//! now in-memory only (`Drevo::open_in_memory`), and durable persistence lives in a separate
+//! WAL-backed `drevo::native_service::NativeService`. This crate tracks the embedded handle;
+//! wiring the library to a durable `NativeService` store is future work.
 //!
 //! This is the integration-assessment step (backlog 000093): it opens an embedded store
 //! and proves basic CRUD works. The storage schema (patch / macro-node / preset nodes and
@@ -52,14 +57,15 @@ pub use library::{kind, rel, Library};
 #[cfg(feature = "library")]
 pub use drevo::model::ScoredNode;
 
-/// Backup/migration types (re-exported from drevo).
+/// The import report from merging a JSON backup (re-exported from drevo).
 #[cfg(feature = "library")]
-pub use drevo::{db::MigrationDirection, dump::ImportReport};
+pub use drevo::dump::ImportReport;
 
 /// Opens a fresh in-memory library store (no file, no server) — the embedded direct API.
 ///
-/// Used by the smoke test and handy for transient/testing use; persistent stores open a
-/// path with [`drevo::db::Drevo::open`].
+/// This is the only embedded open path drevo still offers: the redb on-disk backend was
+/// retired (drevo epic #444), so durable persistence would now go through a separate
+/// `drevo::native_service::NativeService` (not yet wired here).
 ///
 /// # Errors
 /// Propagates any [`drevo`] error from opening the store.
