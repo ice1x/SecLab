@@ -2580,19 +2580,31 @@ mod tests {
     }
 
     #[test]
-    fn the_panel_lists_every_node_parameter_of_the_patch() {
+    fn the_panel_lists_every_visible_node_parameter_of_the_patch() {
         let app = EditorApp::new();
         let bindings = app.panel_widgets();
-        // The default Minitaur voice has many parameters; the panel exposes them all, one
-        // widget per parameter, with the "<kind> <param>" labels.
+        // The panel exposes every parameter marked "on panel", one widget per parameter, with
+        // the "<kind> <param>" labels. The default Minitaur voice hides each VCO's `base_hz`
+        // (a resting-only fallback, not a real control), so the panel count is the visible set.
         let expected: usize = app
             .patch()
             .draw_order()
-            .map(|(id, _, _)| app.patch().params(id).len())
+            .map(|(id, _, _)| {
+                app.patch()
+                    .params(id)
+                    .iter()
+                    .filter(|s| s.panel_visible)
+                    .count()
+            })
             .sum();
         assert_eq!(bindings.len(), expected);
         assert!(bindings.iter().any(|b| b.label == "ladder base_hz"));
         assert!(bindings.iter().any(|b| b.label == "vca bias"));
+        // The two VCOs' `base_hz` is hidden, so it is not a panel widget.
+        assert!(
+            !bindings.iter().any(|b| b.label == "pitch-osc base_hz"),
+            "each VCO's base_hz is hidden from the panel"
+        );
     }
 
     #[test]

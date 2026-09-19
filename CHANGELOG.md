@@ -22,6 +22,15 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Factory patch (`vb-engine`) / Minitaur** — the two VCOs now **hide `base_hz` from the
+  panel**. `base_hz` is a `pitch-osc` resting-only fallback (the frequency held when no note
+  plays); a note-gated voice always tracks the played pitch, so the knob did nothing on the
+  panel — and the real Minitaur has no per-oscillator base-frequency control (pitch = note +
+  VCO2 FREQ + fine tune). `minitaur_patch()` marks param index 1 hidden on both oscillators
+  (`NodeEntry::panel_hidden`), so a fresh Minitaur panel shows only real controls (waveform,
+  detune); `base_hz` stays editable in the structure inspector. Existing saved patches keep
+  their layout — reload the factory patch (or uncheck "on panel" in the inspector) to pick it
+  up.
 - **Library (`vb-library`)** — **track drevo's redb-backend removal.** drevo retired its redb
   on-disk backend (drevo epic #444), so `drevo::db::Drevo::open`, `Drevo::migrate` and
   `MigrationDirection` no longer exist and the embedded `Drevo` handle is **in-memory only**.
