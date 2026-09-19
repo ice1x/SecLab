@@ -35,6 +35,16 @@ Two independent version numbers matter in this project:
   backup path. Durable persistence would now go through drevo's separate WAL-backed
   `native_service::NativeService` — future work. `cargo test -p vb-library --features library`
   is green.
+- **Factory patch / default synth (`vb-engine`)** — the **Moog Minitaur** clone is now a
+  **faithful two-VCO voice**. It previously carried **three** oscillators ("two saws plus a
+  square sub"), but the real Minitaur has **exactly two VCOs** (VCO1 + VCO2, each saw or
+  square; the mixer is a VCO1/VCO2 balance) — there is **no separate sub oscillator**
+  (confirmed against Moog's Minitaur / Minitaur Editor manuals). `minitaur_patch()` — which is
+  also the plugin's **default patch** and the generator for `examples/minitaur.ron` — now
+  builds **VCO1 (saw, unison) + VCO2 (square, one octave down)** through a two-channel
+  attenuvert mixer; the octave-down VCO2 reproduces the same fat low end honestly. The
+  ladder / two-envelope / LFO / glide topology and the silent-until-a-note behaviour are
+  unchanged. See `docs/synths/minitaur.md`.
 
 ### Added
 
