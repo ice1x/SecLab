@@ -2622,10 +2622,11 @@ mod tests {
     fn panel_modules_number_only_repeated_kinds() {
         let app = EditorApp::new();
         let titles: Vec<String> = app.panel_modules().into_iter().map(|m| m.title).collect();
-        // The Minitaur voice has three pitch-osc nodes: they must be told apart by ordinal.
+        // The Minitaur voice has two pitch-osc nodes (VCO1 + VCO2): they must be told apart by
+        // ordinal.
         assert!(titles.contains(&"pitch-osc 1".to_owned()));
         assert!(titles.contains(&"pitch-osc 2".to_owned()));
-        assert!(titles.contains(&"pitch-osc 3".to_owned()));
+        assert!(!titles.iter().any(|t| t == "pitch-osc 3"));
         // The single ladder keeps its bare name — no needless "ladder 1".
         assert!(titles.contains(&"ladder".to_owned()));
         assert!(!titles.iter().any(|t| t == "ladder 1"));
@@ -3008,10 +3009,10 @@ mod tests {
     fn the_demo_patch_is_on_the_canvas_and_wired() {
         let app = EditorApp::new();
         // The starting patch is the Minitaur voice (the plugin default): midi-in, glide,
-        // 3 pitch-osc, 3 attenuvert levels, 2 add mixers, ladder, 2 adsr, vca, plus the LFO
-        // cutoff-mod chain (lfo, cv-attenuvert, cv-add) = 17 nodes.
-        assert_eq!(app.patch().graph().node_count(), 17);
-        assert_eq!(app.patch().graph().edges().len(), 20);
+        // 2 pitch-osc (VCO1 + VCO2), 2 attenuvert levels, 1 add mixer, ladder, 2 adsr, vca,
+        // plus the LFO cutoff-mod chain (lfo, cv-attenuvert, cv-add) = 14 nodes.
+        assert_eq!(app.patch().graph().node_count(), 14);
+        assert_eq!(app.patch().graph().edges().len(), 16);
         assert_eq!(app.patch().selected(), None);
     }
 
@@ -3399,7 +3400,7 @@ mod tests {
     #[test]
     fn load_factory_patch_replaces_the_canvas_and_rejects_unknowns() {
         let mut app = EditorApp::new();
-        // The starting canvas is already the Minitaur (17 nodes). Load a different factory
+        // The starting canvas is already the Minitaur (14 nodes). Load a different factory
         // instrument and the whole canvas is replaced.
         assert!(app.load_factory_patch("Behringer Edge"), "Edge loads");
         assert_eq!(

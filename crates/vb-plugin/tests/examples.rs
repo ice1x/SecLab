@@ -459,9 +459,10 @@ fn minimoog_is_a_playable_three_oscillator_voice() {
 
 #[test]
 fn minitaur_is_a_playable_bass_with_glide() {
-    // The Minitaur factory patch: two saws + a sub oscillator through a glide (portamento)
-    // stage into an env-swept ladder and a note-gated VCA. Silent at rest, plays on a note,
-    // tracks pitch, and carries a glide node.
+    // The Minitaur factory patch: two VCOs (VCO1 saw + VCO2 an octave-down square — the real
+    // Minitaur has exactly two oscillators, no separate sub) through a glide (portamento) stage
+    // into an env-swept ladder and a note-gated VCA. Silent at rest, plays on a note, tracks
+    // pitch, and carries a glide node.
     let registry = Registry::with_builtins();
     let ron = include_str!("../../../examples/minitaur.ron");
     let doc = vb_project::open_ron(ron).expect("minitaur loads");
@@ -475,8 +476,8 @@ fn minitaur_is_a_playable_bass_with_glide() {
             .iter()
             .filter(|e| e.node.kind == "pitch-osc")
             .count(),
-        3,
-        "two oscillators plus a sub"
+        2,
+        "two VCOs (no separate sub)"
     );
 
     let render = |note: Option<u8>| {

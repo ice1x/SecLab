@@ -121,12 +121,13 @@ pub fn default_patch(registry: &Registry) -> ProjectDoc {
     minitaur_patch(registry)
 }
 
-/// A faithful Moog Minitaur mono-bass voice (Epic 14 / 000163): two saw oscillators plus a
-/// square sub through a **leveled** mixer (per-oscillator `attenuvert`) into a Moog **ladder**
-/// low-pass, with **separate filter and amp envelopes** and an **LFO** summed into the cutoff
-/// (through the control-rate `cv-attenuvert`/`cv-add`; its depth is off by default for a clean
-/// bass). Glide on the pitch; **silent until a note** (VCA biased shut). See
-/// `docs/synths/minitaur.md`. This is the plugin's default patch (000164).
+/// A faithful Moog Minitaur mono-bass voice (Epic 14 / 000163): **two VCOs** (VCO1 saw + VCO2
+/// an octave-down square — no separate sub, the real Minitaur has exactly two oscillators)
+/// through a **leveled** two-channel mixer (per-oscillator `attenuvert`, VCO1/VCO2 balance)
+/// into a Moog **ladder** low-pass, with **separate filter and amp envelopes** and an **LFO**
+/// summed into the cutoff (through the control-rate `cv-attenuvert`/`cv-add`; its depth is off
+/// by default for a clean bass). Glide on the pitch; **silent until a note** (VCA biased shut).
+/// See `docs/synths/minitaur.md`. This is the plugin's default patch (000164).
 #[must_use]
 pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     use vb_core::PortId;
@@ -138,12 +139,9 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         glide,
         osc1,
         osc2,
-        sub,
         lvl1,
         lvl2,
-        lvls,
-        mix_a,
-        mix_b,
+        mix,
         ladder,
         filt_eg,
         amp_eg,
@@ -158,11 +156,8 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
             add("glide"),
             add("pitch-osc"),
             add("pitch-osc"),
-            add("pitch-osc"),
             add("attenuvert"),
             add("attenuvert"),
-            add("attenuvert"),
-            add("add"),
             add("add"),
             add("ladder"),
             add("adsr"),
@@ -177,27 +172,21 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     // Pitch: note → glide → each oscillator's pitch input.
     g.connect(midi, PortId(1), glide, PortId(0))
         .expect("midi.pitch → glide");
-    for osc in [osc1, osc2, sub] {
+    for osc in [osc1, osc2] {
         g.connect(glide, PortId(0), osc, PortId(0))
             .expect("glide → osc.pitch");
     }
-    // Oscillator mix with per-source levels: each osc · level → summed.
+    // Two-channel VCO mixer: each VCO · its own level → summed (VCO1/VCO2 balance).
     g.connect(osc1, PortId(0), lvl1, PortId(0))
         .expect("osc1 → lvl1");
     g.connect(osc2, PortId(0), lvl2, PortId(0))
         .expect("osc2 → lvl2");
-    g.connect(sub, PortId(0), lvls, PortId(0))
-        .expect("sub → lvlsub");
-    g.connect(lvl1, PortId(0), mix_a, PortId(0))
-        .expect("lvl1 → mixA.a");
-    g.connect(lvl2, PortId(0), mix_a, PortId(1))
-        .expect("lvl2 → mixA.b");
-    g.connect(mix_a, PortId(0), mix_b, PortId(0))
-        .expect("mixA → mixB.a");
-    g.connect(lvls, PortId(0), mix_b, PortId(1))
-        .expect("lvlsub → mixB.b");
+    g.connect(lvl1, PortId(0), mix, PortId(0))
+        .expect("lvl1 → mix.a");
+    g.connect(lvl2, PortId(0), mix, PortId(1))
+        .expect("lvl2 → mix.b");
     // Audio path: mix → ladder low-pass → VCA.
-    g.connect(mix_b, PortId(0), ladder, PortId(0))
+    g.connect(mix, PortId(0), ladder, PortId(0))
         .expect("mix → ladder.in");
     g.connect(ladder, PortId(0), vca, PortId(0))
         .expect("ladder → vca.in");
@@ -223,13 +212,13 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         .expect("ampEG → vca.cv");
 
     let mut doc = ProjectDoc::from_graph(&g);
-    // Pinned voice (000134): a punchy mono bass, silent at rest.
-    doc.set_node_values(osc1, vec![1.0, 55.0, 0.0]); // saw
-    doc.set_node_values(osc2, vec![1.0, 55.0, 0.12]); // saw, slight detune for width
-    doc.set_node_values(sub, vec![2.0, 55.0, -12.0]); // square, one octave down
-    doc.set_node_values(lvl1, vec![1.0, 0.0]);
-    doc.set_node_values(lvl2, vec![0.8, 0.0]);
-    doc.set_node_values(lvls, vec![0.7, 0.0]); // sub a touch under the mains
+    // Pinned voice (000134): a punchy mono bass, silent at rest. Two VCOs — VCO1 a saw at
+    // unison, VCO2 an octave-down square for the classic fat Minitaur low end (VCO2 FREQ is
+    // the user's to retune, ±1 octave / ±12 st on the real panel).
+    doc.set_node_values(osc1, vec![1.0, 55.0, 0.0]); // VCO1: saw, unison
+    doc.set_node_values(osc2, vec![2.0, 55.0, -12.0]); // VCO2: square, one octave down
+    doc.set_node_values(lvl1, vec![0.9, 0.0]); // VCO1 level
+    doc.set_node_values(lvl2, vec![0.8, 0.0]); // VCO2 level
     doc.set_node_values(ladder, vec![200.0, 0.6, 4.0]); // low, resonant, EG-swept 4 octaves
     doc.set_node_values(filt_eg, vec![0.005, 0.15, 0.3, 0.2]); // a "ping" that decays
     doc.set_node_values(amp_eg, vec![0.005, 0.10, 0.8, 0.2]); // sustained while held
@@ -343,6 +332,38 @@ mod tests {
         assert!(
             peak > 0.01,
             "a held note must make the minitaur audible: {peak}"
+        );
+    }
+
+    #[test]
+    fn minitaur_patch_is_a_faithful_two_vco_voice() {
+        // The real Minitaur is TWO VCOs (VCO1 + VCO2), each a saw or square — there is no
+        // separate sub oscillator (confirmed against Moog's Minitaur manual / editor docs:
+        // the mixer is a two-channel VCO1/VCO2 balance). The clone must therefore carry
+        // exactly two `pitch-osc` nodes — one saw (waveform 1.0) and one square (2.0) — and a
+        // single `glide` (mono portamento). See docs/synths/minitaur.md.
+        let registry = Registry::with_builtins();
+        let doc = minitaur_patch(&registry);
+
+        let waveforms: Vec<f32> = doc
+            .nodes
+            .iter()
+            .filter(|e| e.node.kind == "pitch-osc")
+            .map(|e| doc.node_values(e.id)[0])
+            .collect();
+        assert_eq!(
+            waveforms.len(),
+            2,
+            "Minitaur is a two-VCO voice, no separate sub oscillator"
+        );
+        assert!(
+            waveforms.contains(&1.0) && waveforms.contains(&2.0),
+            "VCO1 saw (1.0) and VCO2 square (2.0): got {waveforms:?}"
+        );
+        assert_eq!(
+            doc.nodes.iter().filter(|e| e.node.kind == "glide").count(),
+            1,
+            "mono portamento (one glide)"
         );
     }
 
