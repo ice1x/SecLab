@@ -225,6 +225,14 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     doc.set_node_values(lfo, vec![3.0, 0.0, 5.0, 120.0, 2.0]); // triangle ~5 Hz
     doc.set_node_values(cv_depth, vec![0.0, 0.0]); // LFO depth OFF by default (clean bass)
     doc.set_node_values(vca, vec![0.0, 1.0]); // bias 0 → silent at rest
+
+    // Hide each VCO's `base_hz` (param index 1) from the panel. `base_hz` is a resting-only
+    // fallback — the frequency the oscillator holds when NO note is playing; a note-gated
+    // Minitaur voice always tracks the played pitch, so the knob does nothing here. The real
+    // Minitaur has no per-oscillator base-frequency control either (pitch = note + VCO2 FREQ +
+    // fine tune). It stays editable in the structure inspector, just off the play panel.
+    doc.set_node_panel_hidden(osc1, vec![1]);
+    doc.set_node_panel_hidden(osc2, vec![1]);
     doc
 }
 
@@ -365,6 +373,29 @@ mod tests {
             1,
             "mono portamento (one glide)"
         );
+    }
+
+    #[test]
+    fn minitaur_hides_each_vco_base_hz_from_the_panel() {
+        // `base_hz` (pitch-osc param index 1) is a resting-only fallback: the oscillator holds
+        // it only when no note plays, so a note-gated Minitaur voice never sounds it and the
+        // knob is inert on the panel. The real Minitaur has no per-oscillator base-frequency
+        // control, so it is hidden from the panel (still shown in the structure inspector).
+        let registry = Registry::with_builtins();
+        let doc = minitaur_patch(&registry);
+        let oscs: Vec<_> = doc
+            .nodes
+            .iter()
+            .filter(|e| e.node.kind == "pitch-osc")
+            .collect();
+        assert_eq!(oscs.len(), 2, "two VCOs");
+        for e in oscs {
+            assert_eq!(
+                doc.node_panel_hidden(e.id),
+                &[1],
+                "each VCO hides base_hz (param 1) from the panel"
+            );
+        }
     }
 
     #[test]
