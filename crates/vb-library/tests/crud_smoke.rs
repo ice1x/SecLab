@@ -33,10 +33,7 @@ fn embedded_store_supports_create_read_update_delete() {
     let id = created.id;
 
     // Read.
-    let fetched = db
-        .get_node(id)
-        .expect("read the node")
-        .expect("node exists");
+    let fetched = db.get_node(id).expect("read the node");
     assert_eq!(fetched.id, id);
     assert_eq!(fetched.title, "Fat Bass");
 
@@ -53,17 +50,15 @@ fn embedded_store_supports_create_read_update_delete() {
     assert_eq!(updated.title, "Screaming Lead");
     assert_eq!(updated.kind, "patch", "untouched fields are preserved");
     assert_eq!(
-        db.get_node(id).unwrap().unwrap().title,
+        db.get_node(id).unwrap().title,
         "Screaming Lead",
         "the change persisted"
     );
 
-    // Delete.
+    // Delete. `NativeService::get_node` returns `NodeNotFound` (not `Ok(None)`) for a
+    // missing id, so a read after deletion is an error.
     db.delete_node(id).expect("delete the node");
-    assert!(
-        db.get_node(id).expect("read after delete").is_none(),
-        "the node is gone after deletion"
-    );
+    assert!(db.get_node(id).is_err(), "the node is gone after deletion");
 }
 
 #[test]
@@ -82,7 +77,7 @@ fn stored_properties_round_trip() {
     };
 
     let created = db.create_node(node).expect("create");
-    let fetched = db.get_node(created.id).unwrap().unwrap();
+    let fetched = db.get_node(created.id).unwrap();
     assert_eq!(
         fetched.properties.0.get("author").unwrap(),
         &serde_json::json!("ice")

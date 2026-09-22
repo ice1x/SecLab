@@ -35,6 +35,20 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Library (`vb-library`)** — **track drevo's KV-handle removal (epic #444).** drevo deleted
+  its legacy in-memory KV `Drevo` engine and the whole `drevo::db` module (drevo #517), on top
+  of the earlier redb removal. Its WAL-native **`drevo::native_service::NativeService`** is now
+  the store of record, exposing the same graph CRUD as explicit "parity with `Drevo`" methods.
+  This turned the (non-required) `library / drevo` CI job red — `vb-library` still referenced
+  `drevo::db::Drevo::open_in_memory()`. Re-ported the whole storage seam onto `NativeService`:
+  `Library` now holds a `NativeService` opened with `NativeService::in_memory()`; the calls
+  whose drevo return types changed were adapted — `neighbors` / `search_fts` /
+  `get_node_by_title` now return plain values (not `Result`), and `get_node` now returns
+  `Result<Node>` (a `NodeNotFound` error, not `Ok(None)`); the file backup helpers wrap
+  `export_json` / `import_json` with `std::fs` (I/O → `DrevoError::Io`). No public `vb-library`
+  API changed; the `library` feature stays off by default, so the required workspace gates are
+  untouched. Honors the standing rule to adapt VST_bomb to the current drevo, never to pin an
+  old drevo branch.
 - **Factory patch (`vb-engine`) / Minitaur** — the two VCOs now **hide `base_hz` from the
   panel**. `base_hz` is a `pitch-osc` resting-only fallback (the frequency held when no note
   plays); a note-gated voice always tracks the played pitch, so the knob did nothing on the

@@ -11,9 +11,9 @@
 
 use std::collections::HashMap;
 
-use drevo::db::Drevo;
 use drevo::error::Result;
 use drevo::model::{Direction, Edge, NewEdge, NewNode, Node, Properties, ScoredNode};
+use drevo::native_service::NativeService;
 
 /// Node `kind` values the library stores.
 pub mod kind {
@@ -95,29 +95,30 @@ pub(crate) fn new_edge(from_id: u64, to_id: u64, edge_kind: &str) -> NewEdge {
     }
 }
 
-/// The patch/preset library, backed by an embedded in-memory drevo store.
+/// The patch/preset library, backed by drevo's embedded [`NativeService`] handle.
 ///
-/// drevo retired its redb on-disk backend (drevo epic #444), so the embedded `Drevo` handle
-/// is in-memory only. Durable persistence would go through a separate WAL-backed
-/// `drevo::native_service::NativeService` — not yet wired here.
+/// drevo retired both its redb on-disk backend and its legacy in-memory KV `Drevo` handle
+/// (drevo epic #444); `NativeService` is the WAL-native store of record it now exposes. This
+/// binds to its in-memory mode ([`NativeService::in_memory`]). Durable persistence would use
+/// [`NativeService::open`] with a path — not yet wired here.
 pub struct Library {
-    db: Drevo,
+    db: NativeService,
 }
 
 impl Library {
     /// Opens a transient in-memory library (no file, no server).
     ///
     /// # Errors
-    /// Propagates any drevo error from opening the store.
+    /// Returns a drevo error type for signature stability; the in-memory open is infallible.
     pub fn open_in_memory() -> Result<Self> {
         Ok(Self {
-            db: Drevo::open_in_memory()?,
+            db: NativeService::in_memory(),
         })
     }
 
     /// The underlying drevo store, for queries this typed layer does not yet wrap.
     #[must_use]
-    pub fn db(&self) -> &Drevo {
+    pub fn db(&self) -> &NativeService {
         &self.db
     }
 
@@ -184,8 +185,9 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn macro_nodes_used_by(&self, patch_id: u64) -> Result<Vec<Node>> {
-        self.db
-            .neighbors(patch_id, Direction::Outgoing, Some(rel::USES))
+        Ok(self
+            .db
+            .neighbors(patch_id, Direction::Outgoing, Some(rel::USES)))
     }
 
     /// The items an item was derived from (`item --derived-from--> …`).
@@ -193,8 +195,9 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn originals_of(&self, item_id: u64) -> Result<Vec<Node>> {
-        self.db
-            .neighbors(item_id, Direction::Outgoing, Some(rel::DERIVED_FROM))
+        Ok(self
+            .db
+            .neighbors(item_id, Direction::Outgoing, Some(rel::DERIVED_FROM)))
     }
 
     /// The tags on an item (`item --tagged--> …`).
@@ -202,8 +205,9 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn tags_of(&self, item_id: u64) -> Result<Vec<Node>> {
-        self.db
-            .neighbors(item_id, Direction::Outgoing, Some(rel::TAGGED))
+        Ok(self
+            .db
+            .neighbors(item_id, Direction::Outgoing, Some(rel::TAGGED)))
     }
 
     /// The items carrying a given tag (`… --tagged--> tag`).
@@ -211,8 +215,9 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn items_with_tag(&self, tag_id: u64) -> Result<Vec<Node>> {
-        self.db
-            .neighbors(tag_id, Direction::Incoming, Some(rel::TAGGED))
+        Ok(self
+            .db
+            .neighbors(tag_id, Direction::Incoming, Some(rel::TAGGED)))
     }
 
     /// Full-text search across every library node's name and description, ranked by
@@ -224,7 +229,7 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn search(&self, query: &str, limit: usize) -> Result<Vec<ScoredNode>> {
-        self.db.search_fts(query, limit)
+        Ok(self.db.search_fts(query, limit))
     }
 
     /// Like [`search`](Self::search) but returns only **patch** hits (dropping tag and
@@ -237,7 +242,7 @@ impl Library {
         // Over-fetch (bounded) before filtering to patches, so tag hits don't crowd out
         // real patches within `limit`.
         let over = limit.saturating_mul(4).max(limit).min(1_000);
-        let mut hits = self.db.search_fts(query, over)?;
+        let mut hits = self.db.search_fts(query, over);
         hits.retain(|scored| scored.node.kind == kind::PATCH);
         hits.truncate(limit);
         Ok(hits)

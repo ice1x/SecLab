@@ -6,14 +6,16 @@
 //! seam between VST_bomb and drevo.
 //!
 //! **drevo is optional.** Everything here lives behind the `library` Cargo feature, which
-//! pulls drevo in via its *direct Rust API* (the embedded in-memory `Drevo` handle, no Bolt
-//! server). The default build — and the required CI gate — does not compile drevo at all, so
-//! a checkout without the sibling `drevo` crate still builds the rest of the workspace.
+//! pulls drevo in via its *direct Rust API* (the embedded [`drevo::native_service::NativeService`]
+//! handle, no Bolt server). The default build — and the required CI gate — does not compile
+//! drevo at all, so a checkout without the sibling `drevo` crate still builds the rest of the
+//! workspace.
 //!
-//! drevo retired its redb on-disk backend (drevo epic #444): the embedded `Drevo` handle is
-//! now in-memory only (`Drevo::open_in_memory`), and durable persistence lives in a separate
-//! WAL-backed `drevo::native_service::NativeService`. This crate tracks the embedded handle;
-//! wiring the library to a durable `NativeService` store is future work.
+//! drevo retired both its redb on-disk backend and its legacy in-memory KV `Drevo` handle
+//! (drevo epic #444). Its WAL-native `NativeService` is now the store of record, exposing the
+//! same graph CRUD (`create_node`/`create_edge`/`neighbors`/`search_fts`/`import_json`/…) as
+//! parity methods. This crate binds to `NativeService::in_memory()`; wiring the library to a
+//! durable `NativeService::open(path)` store is future work.
 //!
 //! This is the integration-assessment step (backlog 000093): it opens an embedded store
 //! and proves basic CRUD works. The storage schema (patch / macro-node / preset nodes and
@@ -63,13 +65,14 @@ pub use drevo::dump::ImportReport;
 
 /// Opens a fresh in-memory library store (no file, no server) — the embedded direct API.
 ///
-/// This is the only embedded open path drevo still offers: the redb on-disk backend was
-/// retired (drevo epic #444), so durable persistence would now go through a separate
-/// `drevo::native_service::NativeService` (not yet wired here).
+/// Backed by drevo's WAL-native engine handle [`drevo::native_service::NativeService`] in its
+/// in-memory mode. drevo retired both its redb on-disk backend and the legacy in-memory KV
+/// `Drevo` handle (drevo epic #444); `NativeService` is the store of record it now exposes,
+/// and `NativeService::open(path)` is the durable variant if this is ever wired to disk.
 ///
 /// # Errors
-/// Propagates any [`drevo`] error from opening the store.
+/// Returns a [`drevo`] error type for signature stability; the in-memory open is infallible.
 #[cfg(feature = "library")]
-pub fn open_in_memory() -> drevo::error::Result<drevo::db::Drevo> {
-    drevo::db::Drevo::open_in_memory()
+pub fn open_in_memory() -> drevo::error::Result<drevo::native_service::NativeService> {
+    Ok(drevo::native_service::NativeService::in_memory())
 }
