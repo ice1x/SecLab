@@ -66,7 +66,7 @@ impl Library {
     pub fn presets_for_patch(&self, patch_id: u64) -> Result<Vec<Node>> {
         let mut presets =
             self.db()
-                .neighbors(patch_id, Direction::Incoming, Some(rel::DERIVED_FROM))?;
+                .neighbors(patch_id, Direction::Incoming, Some(rel::DERIVED_FROM));
         presets.retain(|node| node.kind == kind::PRESET);
         Ok(presets)
     }
@@ -78,7 +78,7 @@ impl Library {
     pub fn patch_of_preset(&self, preset_id: u64) -> Result<Option<Node>> {
         let mut patches =
             self.db()
-                .neighbors(preset_id, Direction::Outgoing, Some(rel::DERIVED_FROM))?;
+                .neighbors(preset_id, Direction::Outgoing, Some(rel::DERIVED_FROM));
         patches.retain(|node| node.kind == kind::PATCH);
         Ok(patches.into_iter().next())
     }
@@ -88,7 +88,8 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn presets_in_bank(&self, bank_id: u64) -> Result<Vec<Node>> {
-        self.db()
-            .neighbors(bank_id, Direction::Outgoing, Some(rel::CONTAINS))
+        Ok(self
+            .db()
+            .neighbors(bank_id, Direction::Outgoing, Some(rel::CONTAINS)))
     }
 }

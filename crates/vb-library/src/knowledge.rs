@@ -185,7 +185,7 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn node_kind_entity(&self, kind_name: &str) -> Result<Option<Node>> {
-        self.db().get_node_by_title(&nodekind_title(kind_name))
+        Ok(self.db().get_node_by_title(&nodekind_title(kind_name)))
     }
 
     /// The registry kinds NOT present as `node-kind` entities in this store — the
@@ -213,8 +213,9 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn ports_of_entity(&self, node_kind_id: u64) -> Result<Vec<Node>> {
-        self.db()
-            .neighbors(node_kind_id, Direction::Outgoing, Some(rel::HAS_PORT))
+        Ok(self
+            .db()
+            .neighbors(node_kind_id, Direction::Outgoing, Some(rel::HAS_PORT)))
     }
 
     /// The category of a node-kind entity, if any.
@@ -224,7 +225,7 @@ impl Library {
     pub fn category_of_entity(&self, node_kind_id: u64) -> Result<Option<Node>> {
         Ok(self
             .db()
-            .neighbors(node_kind_id, Direction::Outgoing, Some(rel::IN_CATEGORY))?
+            .neighbors(node_kind_id, Direction::Outgoing, Some(rel::IN_CATEGORY))
             .into_iter()
             .next())
     }
@@ -234,11 +235,11 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error.
     pub fn compatible_inputs(&self, output_port_id: u64) -> Result<Vec<Node>> {
-        self.db().neighbors(
+        Ok(self.db().neighbors(
             output_port_id,
             Direction::Outgoing,
             Some(rel::COMPATIBLE_WITH),
-        )
+        ))
     }
 
     /// Adds an authored concept the assistant can cite.
@@ -353,7 +354,7 @@ impl Library {
         edge_kind: &str,
         out: &mut Vec<u64>,
     ) -> Result<()> {
-        for neighbor in self.db().neighbors(node_id, direction, Some(edge_kind))? {
+        for neighbor in self.db().neighbors(node_id, direction, Some(edge_kind)) {
             out.push(neighbor.id);
         }
         Ok(())
@@ -361,7 +362,9 @@ impl Library {
 
     /// Renders one node-kind entity as a compact card via traversal.
     fn render_node_kind_card(&self, node_kind_id: u64) -> Result<String> {
-        let Some(nk) = self.db().get_node(node_kind_id)? else {
+        // `NativeService::get_node` errors (NodeNotFound) rather than returning `None` for a
+        // missing id; treat an absent entity as an empty card, as before.
+        let Ok(nk) = self.db().get_node(node_kind_id) else {
             return Ok(String::new());
         };
         let category = self
@@ -389,7 +392,7 @@ impl Library {
 
         let params =
             self.db()
-                .neighbors(node_kind_id, Direction::Outgoing, Some(rel::HAS_PARAMETER))?;
+                .neighbors(node_kind_id, Direction::Outgoing, Some(rel::HAS_PARAMETER));
         if !params.is_empty() {
             let rendered: Vec<String> = params
                 .iter()

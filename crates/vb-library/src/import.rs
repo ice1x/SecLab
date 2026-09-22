@@ -36,7 +36,7 @@ fn distinct_kinds(doc: &ProjectDoc) -> Vec<String> {
 /// Gets or creates the `kind:<name>` tag node for a structural node kind.
 fn kind_tag(lib: &Library, node_kind: &str) -> Result<Node> {
     let title = kind_tag_title(node_kind);
-    match lib.db().get_node_by_title(&title)? {
+    match lib.db().get_node_by_title(&title) {
         Some(existing) if existing.kind == kind::TAG => Ok(existing),
         _ => lib.add_tag(&title),
     }
@@ -90,7 +90,7 @@ pub fn import_patch(
 /// Propagates any drevo error.
 pub fn patches_with_node_kind(lib: &Library, node_kind: &str) -> Result<Vec<Node>> {
     let title = kind_tag_title(node_kind);
-    let Some(tag) = lib.db().get_node_by_title(&title)? else {
+    let Some(tag) = lib.db().get_node_by_title(&title) else {
         return Ok(Vec::new());
     };
     let mut patches = lib.items_with_tag(tag.id)?;

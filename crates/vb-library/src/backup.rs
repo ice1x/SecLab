@@ -5,8 +5,10 @@
 //! byte-equal nodes/edges are skipped).
 //!
 //! There is no on-disk schema migration here anymore: drevo retired its redb on-disk backend
-//! (drevo epic #444), removing `Drevo::open`/`Drevo::migrate`. The embedded store is in-memory
-//! only, so JSON export/import is the portable backup path.
+//! and its legacy KV `Drevo` handle (drevo epic #444). The library binds to the in-memory
+//! `NativeService`, so JSON export/import is the portable backup path. `NativeService` exposes
+//! only the string forms (`export_json`/`import_json`); the file variants here wrap them with
+//! `std::fs` (I/O errors convert into `DrevoError::Io`).
 
 use std::path::Path;
 
@@ -29,7 +31,8 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error (including I/O).
     pub fn export_json_to_path(&self, path: &Path) -> Result<()> {
-        self.db().export_json_to_path(path)
+        std::fs::write(path, self.db().export_json()?)?;
+        Ok(())
     }
 
     /// Merges a JSON snapshot into this library. Idempotent: nodes/edges that already
@@ -46,6 +49,7 @@ impl Library {
     /// # Errors
     /// Propagates any drevo error (including I/O).
     pub fn import_json_from_path(&self, path: &Path) -> Result<ImportReport> {
-        self.db().import_json_from_path(path)
+        let raw = std::fs::read_to_string(path)?;
+        self.db().import_json(&raw)
     }
 }
