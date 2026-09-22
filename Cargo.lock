@@ -1008,12 +1008,27 @@ name = "drevo"
 version = "0.0.0"
 dependencies = [
  "bincode",
+ "drevo-core",
  "js-sys",
- "redb",
+ "rayon",
  "serde",
  "serde_json",
  "thiserror 2.0.20",
  "uuid 1.24.1",
+]
+
+[[package]]
+name = "drevo-core"
+version = "0.1.0"
+dependencies = [
+ "bincode",
+ "js-sys",
+ "libc",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "uuid 1.24.1",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3184,15 +3199,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "redb"
-version = "2.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8eca1e9d98d5a7e9002d0013e18d5a9b000aee942eb134883a82f06ebffb6c01"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4211,7 +4217,7 @@ dependencies = [
 
 [[package]]
 name = "vb-ai"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "keyring",
  "reqwest",
@@ -4225,14 +4231,14 @@ dependencies = [
 
 [[package]]
 name = "vb-core"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "vb-editor"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "console_error_panic_hook",
  "eframe",
@@ -4250,7 +4256,7 @@ dependencies = [
 
 [[package]]
 name = "vb-engine"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "vb-core",
  "vb-nodes",
@@ -4261,7 +4267,7 @@ dependencies = [
 
 [[package]]
 name = "vb-library"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "drevo",
  "serde_json",
@@ -4272,14 +4278,14 @@ dependencies = [
 
 [[package]]
 name = "vb-nodes"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "vb-core",
 ]
 
 [[package]]
 name = "vb-plugin"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "libc",
  "nih_plug",
@@ -4295,7 +4301,7 @@ dependencies = [
 
 [[package]]
 name = "vb-project"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "ron",
  "serde",
@@ -4304,7 +4310,7 @@ dependencies = [
 
 [[package]]
 name = "vb-runtime"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "criterion",
  "vb-core",
@@ -4313,7 +4319,7 @@ dependencies = [
 
 [[package]]
 name = "vb-standalone"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "cpal",
  "eframe",
@@ -5333,7 +5339,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.0.1"
+version = "0.0.13"
 dependencies = [
  "nih_plug_xtask",
  "vb-nodes",
