@@ -762,6 +762,13 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   entry. Palette **node-category grouping** was already present (headers per `category`); the
   inspector already labels each parameter by name. Richer per-unit inspector annotations are a
   minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
+- [x] 000202 — **Minitaur LFO → pitch destination** — the hardware LFO has **two** independent
+  destinations, each with its own amount knob (VCO LFO AMOUNT → pitch, VCF LFO AMOUNT → cutoff;
+  per Moog's Minitaur manual), but `minitaur_patch` only wired the cutoff leg (000167). Fanned
+  the one LFO out to a second `cv-attenuvert(pitch-depth) → cv-add ← glide → each VCO.pitch`
+  (control-rate, since the glided pitch is a `Control` signal); **pitch depth 0 by default** so
+  the shipped bass is unchanged, but the panel now has a working vibrato knob. Brings the code
+  up to its own spec in [docs/synths/minitaur.md](docs/synths/minitaur.md) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with

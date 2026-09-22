@@ -20,6 +20,19 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **Factory patch (`vb-engine`) / Minitaur — LFO → pitch destination (000202).** The real Moog
+  Minitaur LFO has **two** independent destinations, each with its own amount knob — **VCO LFO
+  AMOUNT** (pitch, for vibrato) and **VCF LFO AMOUNT** (cutoff) — per Moog's Minitaur manual.
+  `minitaur_patch()` previously wired only the cutoff leg (000167). It now fans the one LFO out
+  to a second control-rate depth+mixer (`cv-attenuvert → cv-add`) summed into the glided note
+  frequency feeding both VCOs. The **pitch depth ships at 0** (no vibrato), so the factory bass
+  is byte-for-byte unchanged in sound; the routing simply gives the panel a working VCO LFO
+  AMOUNT knob, matching the hardware. The Minitaur voice grows from 14 to 16 nodes (a second
+  `cv-attenuvert` + `cv-add`); `examples/minitaur.ron` regenerated from the builder. Brings the
+  code up to its own spec in [docs/synths/minitaur.md](docs/synths/minitaur.md).
+
 ### Changed
 
 - **Factory patch (`vb-engine`) / Minitaur** — the two VCOs now **hide `base_hz` from the

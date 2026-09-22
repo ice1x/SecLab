@@ -60,13 +60,17 @@ Generated from `vb_engine::minitaur_patch()`. Graph (node id → kind, with stor
 | 9 | `adsr` | A .005 D .10 S .8 R .2 | amp EG |
 | 10 | `vca` | bias 0.0, amount 1.0 | note-gated amp |
 | 11 | `lfo` | tri, ~5 Hz | modulation source |
-| 12 | `cv-attenuvert` | depth 0.0 | LFO → cutoff depth (off) |
+| 12 | `cv-attenuvert` | depth 0.0 | VCF LFO AMOUNT → cutoff depth (off) |
 | 13 | `cv-add` | — | sum filter EG + LFO into cutoff |
+| 14 | `cv-attenuvert` | depth 0.0 | VCO LFO AMOUNT → pitch depth (off) |
+| 15 | `cv-add` | — | sum glide + LFO into pitch |
 
-Wiring: `midi.pitch_hz → glide → each VCO.pitch`; `VCO1 → lvl1`, `VCO2 → lvl2`,
-`lvl1,lvl2 → add → ladder.in`; `ladder → vca.in`; `midi.gate → filtEG → cv-add ← lfo·depth`,
-`cv-add → ladder.cutoff`; `midi.gate → ampEG → vca.cv` (two separate envelopes). Silent at
-rest (VCA bias 0), audible on a note — see the
+Wiring: `midi.pitch_hz → glide → pitch cv-add ← lfo·pitch-depth`, `pitch cv-add → each
+VCO.pitch`; `VCO1 → lvl1`, `VCO2 → lvl2`, `lvl1,lvl2 → add → ladder.in`; `ladder → vca.in`;
+`midi.gate → filtEG → cutoff cv-add ← lfo·cutoff-depth`, `cutoff cv-add → ladder.cutoff`;
+`midi.gate → ampEG → vca.cv` (two separate envelopes). The one LFO fans out to both depths —
+its two destinations (VCO LFO AMOUNT / VCF LFO AMOUNT) as on the hardware. Silent at rest
+(VCA bias 0), audible on a note — see the
 `minitaur_is_silent_at_rest_and_sings_on_a_note` test.
 
 ## Faithful topology (000163 + 000201)
@@ -86,17 +90,25 @@ control signal. 000167 added their control-rate twins — **`cv-add`** and **`cv
 `lfo → cv-attenuvert(depth) → cv-add ← filter-EG → ladder.cutoff`. The LFO **depth is 0 by
 default** so the shipped bass is clean, but the routing is there for a filter wobble.
 
+**LFO → pitch (000202):** the Minitaur LFO has a *second* independent destination — **VCO LFO
+AMOUNT** — that modulates oscillator pitch for vibrato (Moog Minitaur manual). The clone fans
+the same LFO out to a second `cv-attenuvert(pitch-depth) → cv-add ← glide → each VCO.pitch`
+(again a control-rate sum, since the glided pitch is a `Control` signal). Like the cutoff
+depth, the **pitch depth ships at 0** (no vibrato) — the routing gives the panel a working
+VCO LFO AMOUNT knob without changing the shipped bass.
+
 000164 points `vb_engine::default_patch` (and the editor's starting patch) at
 `minitaur_patch()`.
 
 ## Target graph
 
 ```
-midi.gate ─┬─ ampEG (adsr) ───────────────── vca.cv
+midi.gate ─┬─ ampEG (adsr) ───────────────────────── vca.cv
            └─ filtEG (adsr) ─ cv-add ─ ladder.cutoff (summed with base)
-lfo ─ cv-attenuvert(depth) ─ cv-add (summed)
-midi.pitch ─ glide ─┬─ VCO1 ─ attenuvert(lvl) ┐
-                    └─ VCO2 ─ attenuvert(lvl) ┴─ add ─ ladder.in ─ vca.in ─ out
+lfo ─┬─ cv-attenuvert(cutoff-depth) ─ cv-add (summed into cutoff)
+     └─ cv-attenuvert(pitch-depth) ─ cv-add (summed into pitch)
+midi.pitch ─ glide ─ cv-add ─┬─ VCO1 ─ attenuvert(lvl) ┐
+                             └─ VCO2 ─ attenuvert(lvl) ┴─ add ─ ladder.in ─ vca.in ─ out
 ```
 
 Pinned values (000134) tune it to a punchy mono bass: low base cutoff with a filter-EG amount

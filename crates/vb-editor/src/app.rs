@@ -3022,9 +3022,10 @@ mod tests {
         let app = EditorApp::new();
         // The starting patch is the Minitaur voice (the plugin default): midi-in, glide,
         // 2 pitch-osc (VCO1 + VCO2), 2 attenuvert levels, 1 add mixer, ladder, 2 adsr, vca,
-        // plus the LFO cutoff-mod chain (lfo, cv-attenuvert, cv-add) = 14 nodes.
-        assert_eq!(app.patch().graph().node_count(), 14);
-        assert_eq!(app.patch().graph().edges().len(), 16);
+        // plus the LFO fanned to two destinations, each with its own cv-attenuvert depth and a
+        // cv-add mixer (VCO LFO AMOUNT → pitch, VCF LFO AMOUNT → cutoff) = 16 nodes.
+        assert_eq!(app.patch().graph().node_count(), 16);
+        assert_eq!(app.patch().graph().edges().len(), 19);
         assert_eq!(app.patch().selected(), None);
     }
 

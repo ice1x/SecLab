@@ -125,8 +125,9 @@ pub fn default_patch(registry: &Registry) -> ProjectDoc {
 /// an octave-down square — no separate sub, the real Minitaur has exactly two oscillators)
 /// through a **leveled** two-channel mixer (per-oscillator `attenuvert`, VCO1/VCO2 balance)
 /// into a Moog **ladder** low-pass, with **separate filter and amp envelopes** and an **LFO**
-/// summed into the cutoff (through the control-rate `cv-attenuvert`/`cv-add`; its depth is off
-/// by default for a clean bass). Glide on the pitch; **silent until a note** (VCA biased shut).
+/// fanned to its **two** hardware destinations — VCF LFO AMOUNT (cutoff) and VCO LFO AMOUNT
+/// (pitch) — each summed through a control-rate `cv-attenuvert`/`cv-add`, both depths off by
+/// default for a clean bass. Glide on the pitch; **silent until a note** (VCA biased shut).
 /// See `docs/synths/minitaur.md`. This is the plugin's default patch (000164).
 #[must_use]
 pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
@@ -149,6 +150,8 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
         lfo,
         cv_depth,
         cv_mix,
+        pitch_depth,
+        pitch_mix,
     ) = {
         let mut add = |kind: &str| g.add_node(registry.graph_node(kind).expect("builtin"));
         (
@@ -166,15 +169,27 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
             add("lfo"),
             add("cv-attenuvert"),
             add("cv-add"),
+            add("cv-attenuvert"),
+            add("cv-add"),
         )
     };
 
-    // Pitch: note → glide → each oscillator's pitch input.
+    // Pitch: note → glide → (glide + LFO·pitch-depth) → each oscillator's pitch input. The
+    // Minitaur's LFO has TWO independent destinations, each with its own amount knob — VCO LFO
+    // AMOUNT (pitch) and VCF LFO AMOUNT (cutoff) (Moog Minitaur manual). The pitch destination
+    // sums the LFO into the glided note frequency through the control-rate `cv-add` (the audio
+    // `add` can't carry CV); the depth is 0 by default so the shipped bass has no vibrato.
     g.connect(midi, PortId(1), glide, PortId(0))
         .expect("midi.pitch → glide");
+    g.connect(glide, PortId(0), pitch_mix, PortId(0))
+        .expect("glide → pitch_mix.a");
+    g.connect(lfo, PortId(0), pitch_depth, PortId(0))
+        .expect("lfo → pitch_depth");
+    g.connect(pitch_depth, PortId(0), pitch_mix, PortId(1))
+        .expect("pitch_depth → pitch_mix.b");
     for osc in [osc1, osc2] {
-        g.connect(glide, PortId(0), osc, PortId(0))
-            .expect("glide → osc.pitch");
+        g.connect(pitch_mix, PortId(0), osc, PortId(0))
+            .expect("pitch_mix → osc.pitch");
     }
     // Two-channel VCO mixer: each VCO · its own level → summed (VCO1/VCO2 balance).
     g.connect(osc1, PortId(0), lvl1, PortId(0))
@@ -223,7 +238,8 @@ pub fn minitaur_patch(registry: &Registry) -> ProjectDoc {
     doc.set_node_values(filt_eg, vec![0.005, 0.15, 0.3, 0.2]); // a "ping" that decays
     doc.set_node_values(amp_eg, vec![0.005, 0.10, 0.8, 0.2]); // sustained while held
     doc.set_node_values(lfo, vec![3.0, 0.0, 5.0, 120.0, 2.0]); // triangle ~5 Hz
-    doc.set_node_values(cv_depth, vec![0.0, 0.0]); // LFO depth OFF by default (clean bass)
+    doc.set_node_values(cv_depth, vec![0.0, 0.0]); // VCF LFO AMOUNT: cutoff depth OFF (clean bass)
+    doc.set_node_values(pitch_depth, vec![0.0, 0.0]); // VCO LFO AMOUNT: pitch depth OFF (no vibrato)
     doc.set_node_values(vca, vec![0.0, 1.0]); // bias 0 → silent at rest
 
     // Hide each VCO's `base_hz` (param index 1) from the panel. `base_hz` is a resting-only
@@ -396,6 +412,105 @@ mod tests {
                 "each VCO hides base_hz (param 1) from the panel"
             );
         }
+    }
+
+    #[test]
+    fn minitaur_lfo_has_a_pitch_destination_off_by_default() {
+        // The real Minitaur LFO has TWO independent destinations, each with its own amount
+        // knob: VCO LFO AMOUNT (pitch) and VCF LFO AMOUNT (cutoff) (Moog Minitaur manual). The
+        // clone routes the one LFO to both, each through its own `cv-attenuvert` depth. Both
+        // depths ship at 0 (clean bass), but turning the pitch depth up must actually vibrato
+        // the note — proven here by rendering with the pitch depth opened and asserting the
+        // audio changes versus the depth-0 default.
+        let registry = Registry::with_builtins();
+
+        // The single LFO fans out to two depth attenuverts (pitch + cutoff).
+        let doc = minitaur_patch(&registry);
+        let lfo = doc
+            .nodes
+            .iter()
+            .find(|e| e.node.kind == "lfo")
+            .expect("lfo node");
+        let lfo_fanout = doc
+            .edges
+            .iter()
+            .filter(|edge| edge.from_node == lfo.id)
+            .count();
+        assert_eq!(lfo_fanout, 2, "LFO drives both a pitch and a cutoff depth");
+
+        // Both LFO depths are 0 by default (no vibrato, no filter wobble).
+        let depths: Vec<_> = doc
+            .nodes
+            .iter()
+            .filter(|e| e.node.kind == "cv-attenuvert")
+            .collect();
+        assert_eq!(depths.len(), 2, "one pitch depth, one cutoff depth");
+        for d in &depths {
+            assert_eq!(
+                doc.node_values(d.id)[0],
+                0.0,
+                "each LFO depth ships at 0 (clean bass)"
+            );
+        }
+
+        // Opening the pitch depth changes the rendered audio: the LFO now reaches the pitch.
+        let render_tail = |doc: &ProjectDoc| -> Vec<f32> {
+            let ctx = BuildContext::default();
+            ctx.notes.note_on(52, 120);
+            let (mut engine, sink) = engine_from_doc(doc, &registry, &ctx, 512).expect("compiles");
+            let sink = sink.expect("sink");
+            let mut last = Vec::new();
+            for _ in 0..12 {
+                last = engine
+                    .node_output(sink)
+                    .and_then(|b| b.channel(0))
+                    .map(<[f32]>::to_vec)
+                    .unwrap_or_default();
+                engine.process(&ProcessContext {
+                    sample_rate: 48_000.0,
+                    frames: 512,
+                });
+            }
+            last
+        };
+
+        let clean = render_tail(&doc);
+        let mut wobbled_doc = minitaur_patch(&registry);
+        // Find the pitch depth: the cv-attenuvert whose output feeds the pitch-line cv-add
+        // that drives the oscillators (as opposed to the cutoff cv-add into the ladder).
+        let osc_ids: Vec<_> = wobbled_doc
+            .nodes
+            .iter()
+            .filter(|e| e.node.kind == "pitch-osc")
+            .map(|e| e.id)
+            .collect();
+        let pitch_mix = wobbled_doc
+            .edges
+            .iter()
+            .find(|edge| osc_ids.contains(&edge.to_node))
+            .map(|edge| edge.from_node)
+            .expect("oscillators are fed by the pitch mixer");
+        let pitch_depth_id = wobbled_doc
+            .edges
+            .iter()
+            .filter(|edge| edge.to_node == pitch_mix)
+            .map(|edge| edge.from_node)
+            .find(|from| {
+                wobbled_doc
+                    .nodes
+                    .iter()
+                    .any(|e| e.id == *from && e.node.kind == "cv-attenuvert")
+            })
+            .expect("pitch mixer is fed by the pitch depth attenuvert");
+        wobbled_doc.set_node_values(pitch_depth_id, vec![2.0, 0.0]); // open VCO LFO AMOUNT
+        let wobbled = render_tail(&wobbled_doc);
+
+        assert_eq!(clean.len(), wobbled.len());
+        let diff: f32 = clean.iter().zip(&wobbled).map(|(a, b)| (a - b).abs()).sum();
+        assert!(
+            diff > 1e-3,
+            "opening the LFO pitch depth must modulate the note (diff {diff})"
+        );
     }
 
     #[test]
