@@ -574,6 +574,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   linear phase+frame interpolation. Closes the "future wavetable oscillator" gap noted for the
   Minilogue's digital engine; unit-tested for audible/finite output, pitch tracking, and that
   higher `position` (and CV) adds harmonics ([#225](https://github.com/ice1x/VST_bomb/issues/225)) 🧪
+- [x] 000203 — 🧩 **Wavetable Pad factory patch** (`examples/wavetable_pad.ron`) — the first
+  instrument to actually **play** the `wavetable` node (000171 shipped the node with only unit
+  tests, no patch used it): two wavetable oscillators (one up-detuned ~10 cents via a
+  control-rate pitch scale) mixed into a gentle ladder low-pass and a note-gated VCA with a
+  **slow pad envelope**, a slow LFO sweeping the **`position` morph** (the wavetable's signature
+  movement), then chorus + reverb. A **digital** timbre among the analog clones; silent-until-
+  note, loadable from the editor's factory palette as "Wavetable Pad". Behavioural test asserts
+  two wavetable nodes, silence at rest, and a bloom once the slow envelope opens 🧪
 - [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
   oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
   noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the
