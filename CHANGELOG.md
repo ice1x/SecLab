@@ -22,6 +22,15 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Factory patch — Wavetable Pad (`examples/wavetable_pad.ron`, 000203).** The first instrument
+  that actually plays the `wavetable` node (added in 000171 with only unit tests — no patch used
+  it). Two wavetable oscillators (one up-detuned ~10 cents through a control-rate pitch scale)
+  → gentle ladder low-pass → note-gated VCA with a slow pad envelope, a slow LFO sweeping the
+  `position` morph (the wavetable's signature timbral movement), then chorus + reverb. A digital
+  timbre among the analog clones; silent-until-note, loadable from the editor's factory palette
+  as "Wavetable Pad". Added to the plugin example manifest and the factory palette with a
+  behavioural test (two wavetable nodes, silent at rest, blooms once the slow envelope opens).
+
 - **Factory patch (`vb-engine`) / Minitaur — LFO → pitch destination (000202).** The real Moog
   Minitaur LFO has **two** independent destinations, each with its own amount knob — **VCO LFO
   AMOUNT** (pitch, for vibrato) and **VCF LFO AMOUNT** (cutoff) — per Moog's Minitaur manual.

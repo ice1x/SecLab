@@ -72,6 +72,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/stereo_lead.ron"),
     ),
     ("pan_perc", include_str!("../../../examples/pan_perc.ron")),
+    (
+        "wavetable_pad",
+        include_str!("../../../examples/wavetable_pad.ron"),
+    ),
 ];
 
 #[test]
@@ -787,6 +791,34 @@ fn fm_ep_is_silent_at_rest_and_rings_on_a_note() {
 }
 
 #[test]
+fn wavetable_pad_is_a_wavetable_voice_silent_at_rest_and_blooms_on_a_note() {
+    let ron = include_str!("../../../examples/wavetable_pad.ron");
+
+    // It actually exercises the `wavetable` node (the point of this patch): two oscillators.
+    let doc = vb_project::open_ron(ron).expect("wavetable_pad loads");
+    let wavetables = doc
+        .nodes
+        .iter()
+        .filter(|e| e.node.kind == "wavetable")
+        .count();
+    assert_eq!(wavetables, 2, "a two-oscillator wavetable voice");
+
+    // Silent until a note (VCA biased shut; reverb of silence is silence).
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "wavetable pad must be silent until a note plays"
+    );
+
+    // A held note blooms in over the slow pad attack (~0.4 s ≈ 75 blocks) — give it time.
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(55, 100); // ~196 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 150) > 0.01,
+        "wavetable pad must sing once the slow envelope opens"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -837,7 +869,8 @@ fn the_example_set_is_the_expected_manifest() {
             "step_lead",
             "auto_pan",
             "stereo_lead",
-            "pan_perc"
+            "pan_perc",
+            "wavetable_pad"
         ]
     );
     // No example is empty.
