@@ -76,6 +76,12 @@ const EXAMPLES: &[(&str, &str)] = &[
         "wavetable_pad",
         include_str!("../../../examples/wavetable_pad.ron"),
     ),
+    (
+        "pluck_string",
+        include_str!("../../../examples/pluck_string.ron"),
+    ),
+    ("sync_lead", include_str!("../../../examples/sync_lead.ron")),
+    ("vowel_pad", include_str!("../../../examples/vowel_pad.ron")),
 ];
 
 #[test]
@@ -819,6 +825,77 @@ fn wavetable_pad_is_a_wavetable_voice_silent_at_rest_and_blooms_on_a_note() {
 }
 
 #[test]
+fn pluck_string_is_a_karplus_voice_silent_until_plucked() {
+    let ron = include_str!("../../../examples/pluck_string.ron");
+
+    // It exercises the `karplus` physical-model node.
+    let doc = vb_project::open_ron(ron).expect("pluck_string loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "karplus"),
+        "the plucked-string voice is built on karplus"
+    );
+
+    // No gate has fired → the string is at rest → silence.
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "an unplucked string is silent"
+    );
+
+    // A note fires the gate → the pluck rings out.
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(57, 110); // ~220 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "a plucked string must ring"
+    );
+}
+
+#[test]
+fn sync_lead_is_a_hard_sync_voice_silent_at_rest_and_bright_on_a_note() {
+    let ron = include_str!("../../../examples/sync_lead.ron");
+
+    let doc = vb_project::open_ron(ron).expect("sync_lead loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "hard-sync"),
+        "the sync lead is built on hard-sync"
+    );
+
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "sync lead must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(48, 110); // ~130 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "sync lead must sound on a note"
+    );
+}
+
+#[test]
+fn vowel_pad_is_a_formant_voice_silent_at_rest_and_speaks_on_a_note() {
+    let ron = include_str!("../../../examples/vowel_pad.ron");
+
+    let doc = vb_project::open_ron(ron).expect("vowel_pad loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "formant"),
+        "the vowel pad is built on the formant filter"
+    );
+
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "vowel pad must be silent until a note plays"
+    );
+    // Pad attack ~0.3 s ≈ 56 blocks — give it time to open.
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(50, 100); // ~147 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 120) > 0.01,
+        "vowel pad must speak once the envelope opens"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -870,7 +947,10 @@ fn the_example_set_is_the_expected_manifest() {
             "auto_pan",
             "stereo_lead",
             "pan_perc",
-            "wavetable_pad"
+            "wavetable_pad",
+            "pluck_string",
+            "sync_lead",
+            "vowel_pad"
         ]
     );
     // No example is empty.

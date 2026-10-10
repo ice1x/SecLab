@@ -582,6 +582,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   movement), then chorus + reverb. A **digital** timbre among the analog clones; silent-until-
   note, loadable from the editor's factory palette as "Wavetable Pad". Behavioural test asserts
   two wavetable nodes, silence at rest, and a bloom once the slow envelope opens 🧪
+- [x] 000204 — 🧩 **Three showcase patches for previously-undemoed nodes** — an audit (`grep -rl
+  'kind: "<k>"' examples/`) found several expressive DSP nodes that no patch actually played, so
+  they were invisible in the factory palette. Added one patch each: **Plucked String**
+  (`examples/pluck_string.ron`, the `karplus` physical model, gated per note → reverb), **Sync
+  Lead** (`examples/sync_lead.ron`, a `hard-sync` oscillator through an envelope-swept `ladder`),
+  and **Vowel Pad** (`examples/vowel_pad.ron`, a saw through the `formant` filter whose vowel a
+  slow LFO morphs a→e→i→o→u). All note-gated / silent-until-note, in the example manifest and the
+  factory palette, each with a behavioural test (contains the target node, silent at rest, sounds
+  on a note) 🧪
 - [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
   oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
   noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the
