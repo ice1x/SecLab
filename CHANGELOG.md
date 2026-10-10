@@ -22,6 +22,15 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Three showcase patches for previously-undemoed nodes (000204).** An audit found several
+  expressive DSP nodes that no example or factory patch actually played — invisible in the
+  palette despite being implemented and unit-tested. Added one patch each, note-gated and
+  silent-until-note, registered in both the plugin example manifest and the editor factory
+  palette, each with a behavioural test (contains the target node, silent at rest, sounds on a
+  note): **Plucked String** (`examples/pluck_string.ron`) — the `karplus` Karplus–Strong physical
+  model gated per note into a reverb; **Sync Lead** (`examples/sync_lead.ron`) — a `hard-sync`
+  oscillator through an envelope-swept `ladder`; **Vowel Pad** (`examples/vowel_pad.ron`) — a saw
+  through the `formant` vowel filter whose vowel a slow LFO morphs a→e→i→o→u.
 - **Factory patch — Wavetable Pad (`examples/wavetable_pad.ron`, 000203).** The first instrument
   that actually plays the `wavetable` node (added in 000171 with only unit tests — no patch used
   it). Two wavetable oscillators (one up-detuned ~10 cents through a control-rate pitch scale)
