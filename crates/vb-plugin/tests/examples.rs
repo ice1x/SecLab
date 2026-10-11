@@ -91,6 +91,18 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/west_coast_fold.ron"),
     ),
     ("ring_bell", include_str!("../../../examples/ring_bell.ron")),
+    (
+        "resonator_pluck",
+        include_str!("../../../examples/resonator_pluck.ron"),
+    ),
+    (
+        "lofi_crush",
+        include_str!("../../../examples/lofi_crush.ron"),
+    ),
+    (
+        "random_steps",
+        include_str!("../../../examples/random_steps.ron"),
+    ),
 ];
 
 #[test]
@@ -965,6 +977,66 @@ fn ring_bell_is_a_ring_mod_voice_silent_at_rest_and_chimes_on_a_note() {
 }
 
 #[test]
+fn resonator_pluck_is_a_resonator_voice_silent_at_rest_and_rings_on_a_note() {
+    let ron = include_str!("../../../examples/resonator_pluck.ron");
+    let doc = vb_project::open_ron(ron).expect("resonator_pluck loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "resonator"),
+        "the voice is built on the resonator"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "struck resonator must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(55, 120);
+    assert!(
+        peak_over(ron, &ctx, 256, 24) > 0.01,
+        "a struck resonator must ring"
+    );
+}
+
+#[test]
+fn lofi_crush_is_a_bitcrusher_voice_silent_at_rest_and_crunchy_on_a_note() {
+    let ron = include_str!("../../../examples/lofi_crush.ron");
+    let doc = vb_project::open_ron(ron).expect("lofi_crush loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "bitcrusher"),
+        "the voice is built on the bitcrusher"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "lo-fi crush must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(48, 110);
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "lo-fi crush must sound on a note"
+    );
+}
+
+#[test]
+fn random_steps_is_a_sample_hold_voice_silent_at_rest_and_burbles_on_a_note() {
+    let ron = include_str!("../../../examples/random_steps.ron");
+    let doc = vb_project::open_ron(ron).expect("random_steps loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "sample-hold"),
+        "the stepped filter is driven by sample-hold"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "random steps must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110);
+    assert!(
+        peak_over(ron, &ctx, 256, 32) > 0.01,
+        "random steps must sound on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -1022,7 +1094,10 @@ fn the_example_set_is_the_expected_manifest() {
             "vowel_pad",
             "granular_cloud",
             "west_coast_fold",
-            "ring_bell"
+            "ring_bell",
+            "resonator_pluck",
+            "lofi_crush",
+            "random_steps"
         ]
     );
     // No example is empty.
