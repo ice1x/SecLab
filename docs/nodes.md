@@ -68,6 +68,16 @@ Auto-generated from the registry — do not edit by hand.
   - `delay_s` — range 0.001..2, default 0.25
   - `feedback` — range 0..0.95, default 0.4
 
+### flanger
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `rate_hz` — range 0.05..5, default 0.5
+  - `depth_ms` — range 0..8, default 3
+  - `feedback` — range -0.95..0.95, default 0.5
+  - `mix` — range 0..1, default 0.5
+
 ### granular
 
 - **Inputs:** `in` (audio), `position` (control)

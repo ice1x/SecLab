@@ -607,6 +607,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000207 — 🧩 **Flanger effect node** (`flanger`) — a short LFO-modulated delay (~1 ms base,
+  swept a few ms) summed with the dry signal into a sweeping comb, with `feedback` regeneration
+  (`-0.95..=0.95`, negative inverts the reflection) that turns the notches into the classic
+  resonant flange. Distinct from `chorus` (longer delay, no feedback → gentle detune). Params
+  `rate_hz`/`depth_ms`/`feedback`/`mix`, `effect` category, ranges from primary-source flanger
+  implementations; `docs/nodes.md` regenerated. Unit-tested 🧪
 - [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
   oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
   noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the
