@@ -69,6 +69,18 @@ pub const FACTORY_PATCHES: &[FactoryPatch] = &[
         ron: include_str!("../../../examples/vowel_pad.ron"),
     },
     FactoryPatch {
+        name: "Granular Cloud",
+        ron: include_str!("../../../examples/granular_cloud.ron"),
+    },
+    FactoryPatch {
+        name: "West-Coast Fold",
+        ron: include_str!("../../../examples/west_coast_fold.ron"),
+    },
+    FactoryPatch {
+        name: "Ring Bell",
+        ron: include_str!("../../../examples/ring_bell.ron"),
+    },
+    FactoryPatch {
         name: "Drum kit",
         ron: include_str!("../../../examples/drumkit.ron"),
     },

@@ -22,6 +22,14 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Three more showcase patches for undemoed nodes (000205).** Continuing the 000204 audit, one
+  patch each for three expressive nodes no patch played, note-gated and registered in the example
+  manifest + factory palette with behavioural tests: **Granular Cloud** (`examples/granular_cloud.ron`)
+  — a saw granulated by `granular`, a slow LFO scanning the grain position (tuned to a short
+  read-back delay so the cloud blooms within a few hundred ms rather than seconds); **West-Coast
+  Fold** (`examples/west_coast_fold.ron`) — a triangle through the `wavefolder` into a gentle
+  `ladder`; **Ring Bell** (`examples/ring_bell.ron`) — a sine `ring-mod`-ulated by a fixed 200 Hz
+  carrier for inharmonic bell partials, with a plucky decay envelope.
 - **Three showcase patches for previously-undemoed nodes (000204).** An audit found several
   expressive DSP nodes that no example or factory patch actually played — invisible in the
   palette despite being implemented and unit-tested. Added one patch each, note-gated and
