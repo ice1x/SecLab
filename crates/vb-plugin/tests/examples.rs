@@ -82,6 +82,15 @@ const EXAMPLES: &[(&str, &str)] = &[
     ),
     ("sync_lead", include_str!("../../../examples/sync_lead.ron")),
     ("vowel_pad", include_str!("../../../examples/vowel_pad.ron")),
+    (
+        "granular_cloud",
+        include_str!("../../../examples/granular_cloud.ron"),
+    ),
+    (
+        "west_coast_fold",
+        include_str!("../../../examples/west_coast_fold.ron"),
+    ),
+    ("ring_bell", include_str!("../../../examples/ring_bell.ron")),
 ];
 
 #[test]
@@ -896,6 +905,66 @@ fn vowel_pad_is_a_formant_voice_silent_at_rest_and_speaks_on_a_note() {
 }
 
 #[test]
+fn granular_cloud_is_a_granular_voice_silent_at_rest_and_clouds_on_a_note() {
+    let ron = include_str!("../../../examples/granular_cloud.ron");
+    let doc = vb_project::open_ron(ron).expect("granular_cloud loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "granular"),
+        "the cloud is built on the granular node"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "granular cloud must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(50, 100);
+    assert!(
+        peak_over(ron, &ctx, 256, 120) > 0.01,
+        "granular cloud must sound once the envelope opens"
+    );
+}
+
+#[test]
+fn west_coast_fold_is_a_wavefolder_voice_silent_at_rest_and_rich_on_a_note() {
+    let ron = include_str!("../../../examples/west_coast_fold.ron");
+    let doc = vb_project::open_ron(ron).expect("west_coast_fold loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "wavefolder"),
+        "the voice is built on the wavefolder"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "west-coast fold must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110);
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "west-coast fold must sound on a note"
+    );
+}
+
+#[test]
+fn ring_bell_is_a_ring_mod_voice_silent_at_rest_and_chimes_on_a_note() {
+    let ron = include_str!("../../../examples/ring_bell.ron");
+    let doc = vb_project::open_ron(ron).expect("ring_bell loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "ring-mod"),
+        "the bell is built on the ring modulator"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "ring bell must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(60, 120);
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "ring bell must chime on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -950,7 +1019,10 @@ fn the_example_set_is_the_expected_manifest() {
             "wavetable_pad",
             "pluck_string",
             "sync_lead",
-            "vowel_pad"
+            "vowel_pad",
+            "granular_cloud",
+            "west_coast_fold",
+            "ring_bell"
         ]
     );
     // No example is empty.

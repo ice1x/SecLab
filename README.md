@@ -591,6 +591,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   slow LFO morphs a→e→i→o→u). All note-gated / silent-until-note, in the example manifest and the
   factory palette, each with a behavioural test (contains the target node, silent at rest, sounds
   on a note) 🧪
+- [x] 000205 — 🧩 **Three more showcase patches for undemoed nodes** — continuing the 000204
+  audit: **Granular Cloud** (`examples/granular_cloud.ron`, a saw granulated by `granular` with a
+  slow LFO scanning the grain position; short read-back so it blooms promptly), **West-Coast
+  Fold** (`examples/west_coast_fold.ron`, a triangle through `wavefolder` → gentle `ladder`), and
+  **Ring Bell** (`examples/ring_bell.ron`, a sine `ring-mod`-ulated by a fixed 200 Hz carrier for
+  inharmonic bell partials, plucky decay). All note-gated, in the example manifest + factory
+  palette, each with a behavioural test (contains the target node, silent at rest, sounds on a
+  note) 🧪
 - [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
   oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
   noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the
