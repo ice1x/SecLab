@@ -599,6 +599,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   inharmonic bell partials, plucky decay). All note-gated, in the example manifest + factory
   palette, each with a behavioural test (contains the target node, silent at rest, sounds on a
   note) 🧪
+- [x] 000206 — 🧩 **Three more showcase patches — resonator, bitcrusher, sample-hold** —
+  completing the undemoed-node audit: **Struck Resonator** (`examples/resonator_pluck.ron`, a
+  short noise burst — gated by a fast `ad` — excites a pitched `resonator` that rings),
+  **Lo-Fi Crush** (`examples/lofi_crush.ron`, a saw through the `bitcrusher` at 4-bit / ÷8),
+  and **Random Steps** (`examples/random_steps.ron`, a `clock` sampling a fast free-running LFO
+  through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
+  burble). All note-gated, in the example manifest + factory palette, each with a behavioural
+  test 🧪
 - [x] 000172 — 🧩 **Karplus–Strong plucked-string node** (`karplus`) — a **gated** physical-model
   oscillator: each rising `gate` edge fills a delay line of length `sample_rate / pitch` with a
   noise burst (the "pluck"), then feeds it back through a two-point averaging low-pass so the

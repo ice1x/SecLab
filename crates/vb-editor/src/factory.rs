@@ -81,6 +81,18 @@ pub const FACTORY_PATCHES: &[FactoryPatch] = &[
         ron: include_str!("../../../examples/ring_bell.ron"),
     },
     FactoryPatch {
+        name: "Struck Resonator",
+        ron: include_str!("../../../examples/resonator_pluck.ron"),
+    },
+    FactoryPatch {
+        name: "Lo-Fi Crush",
+        ron: include_str!("../../../examples/lofi_crush.ron"),
+    },
+    FactoryPatch {
+        name: "Random Steps",
+        ron: include_str!("../../../examples/random_steps.ron"),
+    },
+    FactoryPatch {
         name: "Drum kit",
         ron: include_str!("../../../examples/drumkit.ron"),
     },

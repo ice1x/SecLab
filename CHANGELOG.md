@@ -22,6 +22,13 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Three more showcase patches — resonator, bitcrusher, sample-hold (000206).** Completing the
+  undemoed-node audit, note-gated and registered in the example manifest + factory palette with
+  behavioural tests: **Struck Resonator** (`examples/resonator_pluck.ron`) — a short noise burst
+  (gated by a fast `ad` envelope) excites a pitched `resonator` that rings; **Lo-Fi Crush**
+  (`examples/lofi_crush.ron`) — a saw through the `bitcrusher` (4-bit, ÷8) and a tame low-pass;
+  **Random Steps** (`examples/random_steps.ron`) — a `clock` samples a fast free-running LFO
+  through `sample-hold` into a stepped, pseudo-random `ladder` cutoff (the classic sci-fi burble).
 - **Three more showcase patches for undemoed nodes (000205).** Continuing the 000204 audit, one
   patch each for three expressive nodes no patch played, note-gated and registered in the example
   manifest + factory palette with behavioural tests: **Granular Cloud** (`examples/granular_cloud.ron`)
