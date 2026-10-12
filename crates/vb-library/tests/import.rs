@@ -108,11 +108,16 @@ fn imported_patches_are_queryable_by_contained_node_kind() {
 
 #[test]
 fn a_duplicate_title_is_rejected() {
-    // Titles are the library key; drevo enforces uniqueness.
+    // Titles are the library key. drevo stopped enforcing title uniqueness (#595), so
+    // `import_patch` owns the invariant and must refuse a repeat with DuplicateTitle.
     let lib = Library::open_in_memory().unwrap();
     import_patch(&lib, &synth_doc(), "Unique", "").unwrap();
+    let err = import_patch(&lib, &synth_doc(), "Unique", "")
+        .expect_err("re-importing under the same title is refused");
     assert!(
-        import_patch(&lib, &synth_doc(), "Unique", "").is_err(),
-        "re-importing under the same title is refused"
+        matches!(err, drevo::error::DrevoError::DuplicateTitle(ref t) if t == "Unique"),
+        "the refusal is a DuplicateTitle for the taken title, got {err:?}"
     );
+    // A different title still imports cleanly.
+    import_patch(&lib, &synth_doc(), "Different", "").expect("a fresh title still imports");
 }

@@ -607,6 +607,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000208 — 🛠️ **Library owns the unique patch title (drevo #595 drift)** — drevo stopped
+  enforcing unique titles (`create_node` now accepts a repeat), reddening the non-required
+  `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
+  library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
+  `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
 - [x] 000207 — 🧩 **Flanger effect node** (`flanger`) — a short LFO-modulated delay (~1 ms base,
   swept a few ms) summed with the dry signal into a sweeping comb, with `feedback` regeneration
   (`-0.95..=0.95`, negative inverts the reflection) that turns the notches into the classic
