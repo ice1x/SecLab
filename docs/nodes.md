@@ -4,6 +4,17 @@ Auto-generated from the registry — do not edit by hand.
 
 ## dynamics
 
+### expander
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `threshold_db` — range -80..0, default -40
+  - `ratio` — range 1..20, default 2
+  - `attack_ms` — range 0.1..100, default 5
+  - `release_ms` — range 1..1000, default 50
+  - `range_db` — range 0..80, default 40
+
 ### gate
 
 - **Inputs:** `in` (audio)

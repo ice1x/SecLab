@@ -24,6 +24,7 @@ use crate::delay::{FbDelay, MAX_DELAY_S};
 use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
 use crate::euclid::Euclid;
+use crate::expander::Expander;
 use crate::filter::{Biquad, FilterKind};
 use crate::flanger::Flanger;
 use crate::fm_op::FmOp;
@@ -1208,6 +1209,30 @@ fn builtins() -> Vec<NodeDescriptor> {
             |_, v| Box::new(Gate::new(arg(v, 0, -40.0), arg(v, 1, 1.0), arg(v, 2, 50.0))),
         ),
         NodeDescriptor::new(
+            "expander",
+            "dynamics",
+            || GraphNode::new("expander", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Expander::new(-40.0, 2.0, 5.0, 50.0, 40.0)),
+            || {
+                vec![
+                    Parameter::new("threshold_db", -80.0, 0.0, -40.0),
+                    Parameter::new("ratio", 1.0, 20.0, 2.0),
+                    Parameter::new("attack_ms", 0.1, 100.0, 5.0),
+                    Parameter::new("release_ms", 1.0, 1000.0, 50.0),
+                    Parameter::new("range_db", 0.0, 80.0, 40.0),
+                ]
+            },
+            |_, v| {
+                Box::new(Expander::new(
+                    arg(v, 0, -40.0),
+                    arg(v, 1, 2.0),
+                    arg(v, 2, 5.0),
+                    arg(v, 3, 50.0),
+                    arg(v, 4, 40.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
             "limiter",
             "dynamics",
             || GraphNode::new("limiter", vec![audio_in("in")], vec![audio_out("out")]),
@@ -2125,6 +2150,47 @@ mod tests {
             vec!["ceiling_db", "release_ms"]
         );
         assert!(r.processor("limiter").is_some());
+    }
+
+    #[test]
+    fn expander_is_registered_as_dynamics_and_attenuates_below_threshold() {
+        let r = Registry::with_builtins();
+        let d = r.get("expander").expect("expander is registered");
+        assert_eq!(d.category(), "dynamics");
+        let node = r.graph_node("expander").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "threshold_db",
+                "ratio",
+                "attack_ms",
+                "release_ms",
+                "range_db"
+            ]
+        );
+        // Built from the registry: a -26 dBFS input under a -18 dB / 2:1 expander is pulled
+        // down, while the same input at ratio 1 is left alone.
+        let quiet = vec![0.05_f32; 24_000];
+        let expanded = run_effect(
+            d.processor_with(&BuildContext::default(), &[-18.0, 2.0, 5.0, 50.0, 40.0]),
+            &quiet,
+        );
+        let transparent = run_effect(
+            d.processor_with(&BuildContext::default(), &[-18.0, 1.0, 5.0, 50.0, 40.0]),
+            &quiet,
+        );
+        assert!(
+            expanded[23_000] < 0.045 && (transparent[23_000] - 0.05).abs() < 1e-3,
+            "2:1 attenuates ({}) while 1:1 is transparent ({})",
+            expanded[23_000],
+            transparent[23_000]
+        );
     }
 
     #[test]
