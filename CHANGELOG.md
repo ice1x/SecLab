@@ -32,6 +32,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Shelving EQ node (`shelf-eq`, 000209).** A low- or high-shelf biquad that boosts or cuts one
+  end of the spectrum by a fixed `gain_db`, leaving the other end at unity — the bass/treble
+  controls of a mixing desk, distinct from `biquad`'s band-removing low-/high-pass and `tone`'s
+  single tilt. Parameters `mode` (0 = low shelf, 1 = high shelf), `freq_hz` (corner), `gain_db`
+  (−24..24). Coefficients are the RBJ Audio EQ Cookbook shelving biquads (primary source: the
+  W3C/WebAudio copy) at a fixed maximally-flat slope `S = 1`, run in Direct Form I; at `gain_db = 0`
+  the filter is an exact passthrough (`H(z) = 1`). Unit tests verify the 0 dB passthrough, the
+  A² = 10^(dB/20) DC gain of a low-shelf boost/cut, that a high shelf leaves DC at unity, the
+  treble lift of a high shelf, and bounded output. Registered in the `filter` category;
+  `docs/nodes.md` regenerated from the registry.
 - **Flanger effect node (`flanger`, 000207).** A short LFO-modulated delay (~1 ms base, swept a
   few ms) summed with the dry signal to form a sweeping comb filter, plus `feedback`
   (regeneration, `-0.95..=0.95`) that sharpens the notches into the classic resonant, metallic

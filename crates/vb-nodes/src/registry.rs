@@ -53,6 +53,7 @@ use crate::reverb::Reverb;
 use crate::ring_mod::RingMod;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
+use crate::shelf_eq::{shelf_mode_from, ShelfEq};
 use crate::slew::Slew;
 use crate::step_sequencer::StepSequencer;
 use crate::sub_osc::SubOsc;
@@ -310,6 +311,26 @@ fn builtins() -> Vec<NodeDescriptor> {
                     filter_kind_from(arg(v, 0, 0.0)),
                     arg(v, 1, 1_000.0),
                     arg(v, 2, 0.707),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "shelf-eq",
+            "filter",
+            || GraphNode::new("shelf-eq", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(ShelfEq::new(crate::shelf_eq::ShelfMode::Low, 1_000.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("mode", 0.0, 1.0, 0.0),
+                    Parameter::new("freq_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("gain_db", -24.0, 24.0, 0.0),
+                ]
+            },
+            |_, v| {
+                Box::new(ShelfEq::new(
+                    shelf_mode_from(arg(v, 0, 0.0)),
+                    arg(v, 1, 1_000.0),
+                    arg(v, 2, 0.0),
                 ))
             },
         ),
@@ -2511,6 +2532,35 @@ mod tests {
         // Pure combinators have nothing to edit.
         assert!(r.get("add").unwrap().params().is_empty());
         assert!(r.get("mul").unwrap().params().is_empty());
+    }
+
+    #[test]
+    fn shelf_eq_is_registered_as_a_filter_and_shelves_from_the_registry() {
+        let r = Registry::with_builtins();
+        let d = r.get("shelf-eq").expect("shelf-eq registered");
+        assert_eq!(d.category(), "filter");
+        let node = r.graph_node("shelf-eq").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mode", "freq_hz", "gain_db"]
+        );
+        // A low shelf (mode 0) at +12 dB, built through the registry, boosts DC toward A².
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[0.0, 1_000.0, 12.0]),
+            &vec![1.0_f32; 4_096],
+        );
+        let expected = 10.0_f32.powf(12.0 / 20.0);
+        assert!(
+            (out[4_095] - expected).abs() < expected * 0.05,
+            "registry low-shelf +12 dB DC gain ≈ {expected}, got {}",
+            out[4_095]
+        );
     }
 
     /// Runs a lone source processor for one block and returns its output.
