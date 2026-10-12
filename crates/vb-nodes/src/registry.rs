@@ -25,6 +25,7 @@ use crate::env_follower::EnvFollower;
 use crate::envelope::Adsr;
 use crate::euclid::Euclid;
 use crate::filter::{Biquad, FilterKind};
+use crate::flanger::Flanger;
 use crate::fm_op::FmOp;
 use crate::formant::Formant;
 use crate::gate::Gate;
@@ -887,6 +888,28 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Chorus::new(arg(v, 0, 0.8), arg(v, 1, 4.0), arg(v, 2, 0.5))),
+        ),
+        NodeDescriptor::new(
+            "flanger",
+            "effect",
+            || GraphNode::new("flanger", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Flanger::new(0.5, 3.0, 0.5, 0.5)),
+            || {
+                vec![
+                    Parameter::new("rate_hz", 0.05, 5.0, 0.5),
+                    Parameter::new("depth_ms", 0.0, 8.0, 3.0),
+                    Parameter::new("feedback", -0.95, 0.95, 0.5),
+                    Parameter::new("mix", 0.0, 1.0, 0.5),
+                ]
+            },
+            |_, v| {
+                Box::new(Flanger::new(
+                    arg(v, 0, 0.5),
+                    arg(v, 1, 3.0),
+                    arg(v, 2, 0.5),
+                    arg(v, 3, 0.5),
+                ))
+            },
         ),
         NodeDescriptor::new(
             "compressor",
@@ -1785,6 +1808,35 @@ mod tests {
         assert_eq!(
             ch.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
             vec!["rate_hz", "depth_ms", "mix"]
+        );
+    }
+
+    #[test]
+    fn flanger_is_registered_as_an_effect_with_feedback() {
+        let r = Registry::with_builtins();
+        let d = r.get("flanger").expect("flanger registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("flanger").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert!(r.processor("flanger").is_some());
+        // The feedback parameter is what distinguishes the flanger from the chorus.
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["rate_hz", "depth_ms", "feedback", "mix"]
+        );
+        let feedback = d
+            .params()
+            .into_iter()
+            .find(|p| p.name == "feedback")
+            .unwrap();
+        assert!(
+            feedback.min < 0.0,
+            "feedback allows negative (inverted) regeneration"
         );
     }
 

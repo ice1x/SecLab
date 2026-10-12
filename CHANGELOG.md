@@ -22,6 +22,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Flanger effect node (`flanger`, 000207).** A short LFO-modulated delay (~1 ms base, swept a
+  few ms) summed with the dry signal to form a sweeping comb filter, plus `feedback`
+  (regeneration, `-0.95..=0.95`) that sharpens the notches into the classic resonant, metallic
+  flange — negative feedback inverts the reflection for a hollower character. Distinct from the
+  existing `chorus`, whose longer (~12 ms) delay and absent feedback give a gentle detune rather
+  than a resonant sweep. Parameters `rate_hz` / `depth_ms` / `feedback` / `mix`; registered in the
+  `effect` category with unit tests covering dry passthrough, the delayed-tap onset, feedback
+  lengthening the decay tail, and bounded output under clamped high feedback. Ranges follow common
+  flanger implementations (primary sources: Ableton `abl.dsp.flanger~`, LADSPA dj-flanger,
+  Microsoft DirectX flanger). `docs/nodes.md` regenerated from the registry.
 - **Three more showcase patches — resonator, bitcrusher, sample-hold (000206).** Completing the
   undemoed-node audit, note-gated and registered in the example manifest + factory palette with
   behavioural tests: **Struck Resonator** (`examples/resonator_pluck.ron`) — a short noise burst
