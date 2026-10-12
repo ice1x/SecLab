@@ -612,6 +612,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
   library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
   `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
+- [x] 000209 — 🧩 **Shelving EQ node** (`shelf-eq`) — a low- or high-shelf biquad that lifts or
+  drops one end of the spectrum by `gain_db`, leaving the other end at unity (bass/treble of a
+  mixing desk), distinct from `biquad` (band removal) and `tone` (tilt). Params `mode`/`freq_hz`/
+  `gain_db`; RBJ Audio EQ Cookbook shelving coefficients (primary source), slope `S = 1`, Direct
+  Form I; exact passthrough at 0 dB. `filter` category, `docs/nodes.md` regenerated. Unit-tested
+  against the A² DC-gain law 🧪
 - [x] 000207 — 🧩 **Flanger effect node** (`flanger`) — a short LFO-modulated delay (~1 ms base,
   swept a few ms) summed with the dry signal into a sweeping comb, with `feedback` regeneration
   (`-0.95..=0.95`, negative inverts the reflection) that turns the notches into the classic

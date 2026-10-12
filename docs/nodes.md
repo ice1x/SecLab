@@ -239,6 +239,15 @@ Auto-generated from the registry — do not edit by hand.
   - `decay` — range 0..1, default 0.7
   - `structure` — range 0..1, default 0
 
+### shelf-eq
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `mode` — range 0..1, default 0
+  - `freq_hz` — range 20..20000, default 1000
+  - `gain_db` — range -24..24, default 0
+
 ### svf
 
 - **Inputs:** `in` (audio)
