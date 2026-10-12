@@ -11,7 +11,7 @@
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 
-use drevo::error::Result;
+use drevo::error::{DrevoError, Result};
 use drevo::model::{NewNode, Node, Properties};
 use vb_project::ProjectDoc;
 
@@ -47,17 +47,27 @@ fn kind_tag(lib: &Library, node_kind: &str) -> Result<Node> {
 /// contains. The `title` and `description` are indexed for full-text search
 /// ([`Library::search`](crate::Library::search)).
 ///
-/// The `title` is the library key and must be unique (drevo enforces unique titles);
-/// re-importing under an existing title returns [`drevo::error::DrevoError::DuplicateTitle`].
+/// The `title` is the library key and must be unique. drevo stopped enforcing unique
+/// titles (drevo #595: `create_node` now accepts a repeated title), so the library owns
+/// this invariant: re-importing under a title any node already holds is refused with
+/// [`drevo::error::DrevoError::DuplicateTitle`] and nothing is written.
 ///
 /// # Errors
-/// Propagates any drevo error (including a duplicate title).
+/// Returns [`drevo::error::DrevoError::DuplicateTitle`] if the title is already taken, and
+/// otherwise propagates any drevo error.
 pub fn import_patch(
     lib: &Library,
     doc: &ProjectDoc,
     title: &str,
     description: &str,
 ) -> Result<Node> {
+    // drevo no longer rejects a duplicate title (#595), so guard the library key here —
+    // before any write — rather than relying on the store. Tag nodes are namespaced
+    // (`kind:<name>`), so a user-facing title only ever collides with another patch.
+    if lib.db().get_node_by_title(title).is_some() {
+        return Err(DrevoError::DuplicateTitle(title.to_owned()));
+    }
+
     let kinds = distinct_kinds(doc);
 
     let mut props = HashMap::new();

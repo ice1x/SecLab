@@ -20,6 +20,16 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Library re-port: enforce the unique patch title in `vb-library`, not drevo (000208).** drevo
+  dropped intrinsic title uniqueness (drevo #595: `create_node` now accepts a repeated title), so
+  the `library / drevo` CI job went red on `a_duplicate_title_is_rejected`. The library owns the
+  "title is the key" invariant, so `import_patch` now checks `get_node_by_title` before any write
+  and refuses a taken title with `DrevoError::DuplicateTitle` (the error variant still exists;
+  only the automatic enforcement was removed). Adapted to the actual drevo API rather than pinning
+  an old drevo checkout. The non-required `library / drevo` job is green again.
+
 ### Added
 
 - **Flanger effect node (`flanger`, 000207).** A short LFO-modulated delay (~1 ms base, swept a
