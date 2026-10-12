@@ -43,6 +43,7 @@ use crate::midi::{BuildContext, MidiIn};
 use crate::noise::{Noise, NoiseKind};
 use crate::oscillator::{Oscillator, Waveform};
 use crate::pan::Pan;
+use crate::peak_eq::PeakEq;
 use crate::phaser::Phaser;
 use crate::ping_pong::PingPong;
 use crate::pitch_osc::PitchOsc;
@@ -331,6 +332,26 @@ fn builtins() -> Vec<NodeDescriptor> {
                 Box::new(ShelfEq::new(
                     shelf_mode_from(arg(v, 0, 0.0)),
                     arg(v, 1, 1_000.0),
+                    arg(v, 2, 0.0),
+                ))
+            },
+        ),
+        NodeDescriptor::new(
+            "peak-eq",
+            "filter",
+            || GraphNode::new("peak-eq", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(PeakEq::new(1_000.0, 1.0, 0.0)),
+            || {
+                vec![
+                    Parameter::new("freq_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("q", 0.1, 20.0, 1.0),
+                    Parameter::new("gain_db", -24.0, 24.0, 0.0),
+                ]
+            },
+            |_, v| {
+                Box::new(PeakEq::new(
+                    arg(v, 0, 1_000.0),
+                    arg(v, 1, 1.0),
                     arg(v, 2, 0.0),
                 ))
             },
@@ -2626,6 +2647,40 @@ mod tests {
             (out[4_095] - expected).abs() < expected * 0.05,
             "registry low-shelf +12 dB DC gain ≈ {expected}, got {}",
             out[4_095]
+        );
+    }
+
+    #[test]
+    fn peak_eq_is_registered_as_a_filter_and_boosts_its_centre() {
+        let r = Registry::with_builtins();
+        let d = r.get("peak-eq").expect("peak-eq registered");
+        assert_eq!(d.category(), "filter");
+        let node = r.graph_node("peak-eq").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["freq_hz", "q", "gain_db"]
+        );
+        // A +12 dB band at 1 kHz, built through the registry, lifts a 1 kHz tone toward A².
+        let input: Vec<f32> = (0..8_192)
+            .map(|i| (core::f32::consts::TAU * 1_000.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[1_000.0, 1.0, 12.0]),
+            &input,
+        );
+        let energy_in: f32 = input[4_096..].iter().map(|x| x * x).sum();
+        let energy_out: f32 = out[4_096..].iter().map(|x| x * x).sum();
+        let gain = (energy_out / energy_in).sqrt();
+        let expected = 10.0_f32.powf(12.0 / 20.0);
+        assert!(
+            (gain - expected).abs() < expected * 0.1,
+            "registry peak +12 dB centre gain ≈ {expected}, got {gain}"
         );
     }
 

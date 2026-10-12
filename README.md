@@ -612,6 +612,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
   library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
   `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
+- [x] 000211 — 🧩 **Peaking (bell) EQ node** (`peak-eq`) — a resonant boost/cut of one band around
+  a centre frequency, the parametric mid completing a basic EQ with the low/high `shelf-eq`.
+  Distinct from `biquad`'s notch (band removal). RBJ Audio EQ Cookbook peakingEQ coefficients
+  (primary source), Direct Form I; exact passthrough at 0 dB, DC/Nyquist stay unity, centre gain
+  exactly `A² = 10^(dB/20)`. Params `freq_hz`/`q`/`gain_db`, `filter` category, `docs/nodes.md`
+  regenerated. Unit-tested against the gain law 🧪
 - [x] 000210 — 🧩 **Downward expander node** (`expander`) — the mirror of `compressor`: pushes
   quiet parts quieter (widening dynamic range), but smoothly by `ratio` rather than `gate`'s hard
   cutoff, with a `range_db` floor so it never fully mutes. Static curve `output = T + R·(x−T)`
