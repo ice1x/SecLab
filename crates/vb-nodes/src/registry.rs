@@ -12,6 +12,7 @@ use vb_core::{GraphNode, Parameter, Port, Processor, SignalType};
 use crate::ad_env::AdEnv;
 use crate::additive::Additive;
 use crate::ahr_env::AhrEnv;
+use crate::allpass::Allpass;
 use crate::ar_env::ArEnv;
 use crate::bitcrusher::Bitcrusher;
 use crate::chorus::Chorus;
@@ -315,6 +316,19 @@ fn builtins() -> Vec<NodeDescriptor> {
                     arg(v, 2, 0.707),
                 ))
             },
+        ),
+        NodeDescriptor::new(
+            "allpass",
+            "filter",
+            || GraphNode::new("allpass", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Allpass::new(1_000.0, 0.707)),
+            || {
+                vec![
+                    Parameter::new("freq_hz", 20.0, 20_000.0, 1_000.0),
+                    Parameter::new("q", 0.1, 20.0, 0.707),
+                ]
+            },
+            |_, v| Box::new(Allpass::new(arg(v, 0, 1_000.0), arg(v, 1, 0.707))),
         ),
         NodeDescriptor::new(
             "shelf-eq",
@@ -2681,6 +2695,49 @@ mod tests {
         assert!(
             (gain - expected).abs() < expected * 0.1,
             "registry peak +12 dB centre gain ≈ {expected}, got {gain}"
+        );
+    }
+
+    #[test]
+    fn allpass_is_registered_as_a_filter_and_keeps_magnitude_flat() {
+        let r = Registry::with_builtins();
+        let d = r.get("allpass").expect("allpass registered");
+        assert_eq!(d.category(), "filter");
+        let node = r.graph_node("allpass").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["freq_hz", "q"]
+        );
+        // Built from the registry: a 2 kHz tone through a 1 kHz allpass keeps its level but is
+        // reshaped (not a passthrough).
+        let input: Vec<f32> = (0..8_192)
+            .map(|i| (core::f32::consts::TAU * 2_000.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[1_000.0, 0.7]),
+            &input,
+        );
+        let energy_in: f32 = input[4_096..].iter().map(|x| x * x).sum();
+        let energy_out: f32 = out[4_096..].iter().map(|x| x * x).sum();
+        let gain = (energy_out / energy_in).sqrt();
+        assert!(
+            (gain - 1.0).abs() < 0.03,
+            "allpass keeps magnitude flat, got {gain}"
+        );
+        let diff = input[4_096..]
+            .iter()
+            .zip(&out[4_096..])
+            .map(|(x, y)| (y - x).abs())
+            .fold(0.0_f32, f32::max);
+        assert!(
+            diff > 0.05,
+            "allpass actually shifts the phase (max diff {diff})"
         );
     }
 

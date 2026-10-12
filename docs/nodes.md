@@ -208,6 +208,14 @@ Auto-generated from the registry — do not edit by hand.
 
 ## filter
 
+### allpass
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `freq_hz` — range 20..20000, default 1000
+  - `q` — range 0.1..20, default 0.707
+
 ### biquad
 
 - **Inputs:** `in` (audio)
