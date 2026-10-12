@@ -612,6 +612,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
   library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
   `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
+- [x] 000210 — 🧩 **Downward expander node** (`expander`) — the mirror of `compressor`: pushes
+  quiet parts quieter (widening dynamic range), but smoothly by `ratio` rather than `gate`'s hard
+  cutoff, with a `range_db` floor so it never fully mutes. Static curve `output = T + R·(x−T)`
+  below threshold (primary sources: MathWorks `expander`, DSP Concepts `DownwardExpanderCore`);
+  shared peak-detector idiom with `compressor`. `dynamics` category, `docs/nodes.md` regenerated.
+  Unit-tested against the gain law 🧪
 - [x] 000209 — 🧩 **Shelving EQ node** (`shelf-eq`) — a low- or high-shelf biquad that lifts or
   drops one end of the spectrum by `gain_db`, leaving the other end at unity (bass/treble of a
   mixing desk), distinct from `biquad` (band removal) and `tone` (tilt). Params `mode`/`freq_hz`/

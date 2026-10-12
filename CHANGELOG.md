@@ -32,6 +32,18 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Downward expander node (`expander`, 000210).** The mirror of `compressor`: a feed-forward
+  dynamics processor that pushes the quiet parts quieter, widening dynamic range (hiss, bleed and
+  note tails fall away). Unlike `gate`'s hard open/shut, the attenuation grows smoothly with
+  `ratio` — each dB the input sits below `threshold_db` costs `ratio` dB of output, so `ratio = 1`
+  is transparent — and `range_db` floors how far the gain can drop so it never fully mutes. Static
+  curve (dB) `output = T + R·(x − T)` below threshold, applied gain `(R − 1)·(x − T)`; verified
+  against primary sources (MathWorks `expander`, DSP Concepts `DownwardExpanderCore`). Parameters
+  `threshold_db` / `ratio` / `attack_ms` / `release_ms` / `range_db`, shared peak-detector idiom
+  with `compressor`. Registered in the `dynamics` category (next to `gate`/`limiter`); unit tests
+  cover above-threshold passthrough, the ratio-correct attenuation below threshold, deeper-below →
+  more expansion, the `range_db` floor, `ratio = 1` transparency and bounded output.
+  `docs/nodes.md` regenerated.
 - **Shelving EQ node (`shelf-eq`, 000209).** A low- or high-shelf biquad that boosts or cuts one
   end of the spectrum by a fixed `gain_db`, leaving the other end at unity — the bass/treble
   controls of a mixing desk, distinct from `biquad`'s band-removing low-/high-pass and `tone`'s
