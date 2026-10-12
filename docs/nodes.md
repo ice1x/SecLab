@@ -241,6 +241,15 @@ Auto-generated from the registry — do not edit by hand.
   - `resonance` — range 0..1, default 0.3
   - `amount_oct` — range -8..8, default 3
 
+### peak-eq
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `freq_hz` — range 20..20000, default 1000
+  - `q` — range 0.1..20, default 1
+  - `gain_db` — range -24..24, default 0
+
 ### resonator
 
 - **Inputs:** `in` (audio), `pitch` (control)

@@ -32,6 +32,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Peaking (bell) EQ node (`peak-eq`, 000211).** A resonant boost or cut of one bell-shaped band
+  around a centre frequency, the parametric mid that completes a basic EQ alongside the low/high
+  `shelf-eq`. Distinct from `biquad`'s notch (which removes a band outright) — this shapes it by a
+  set `gain_db`, with `q` setting the bandwidth. RBJ Audio EQ Cookbook peakingEQ coefficients
+  (primary source: the W3C/WebAudio copy), Direct Form I. At `gain_db = 0` it is an exact
+  passthrough (`H(z) = 1`); DC and Nyquist always pass at unity (only the band is shaped) and the
+  magnitude at the centre is exactly `A² = 10^(gain_db/20)`. Parameters `freq_hz` / `q` /
+  `gain_db`, `filter` category. Unit tests verify the 0 dB passthrough, the A² centre boost and
+  cut, far-from-centre unity, the `q`-narrower-band behaviour and bounded output; `docs/nodes.md`
+  regenerated.
 - **Downward expander node (`expander`, 000210).** The mirror of `compressor`: a feed-forward
   dynamics processor that pushes the quiet parts quieter, widening dynamic range (hiss, bleed and
   note tails fall away). Unlike `gate`'s hard open/shut, the attenuation grows smoothly with
