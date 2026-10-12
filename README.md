@@ -612,6 +612,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
   library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
   `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
+- [x] 000212 — 🧩 **Allpass filter node** (`allpass`) — unity magnitude at every frequency, only
+  the phase is shaped: the building block of phasers, Schroeder reverbs and fractional-delay
+  effects, now first-class (the `phaser` used allpass sections internally). RBJ Audio EQ Cookbook
+  APF biquad (primary source), Direct Form I; magnitude exactly unity, −180° phase at the centre
+  (a settled centre tone comes out inverted). Params `freq_hz`/`q`, `filter` category,
+  `docs/nodes.md` regenerated. Unit-tested against the flat-magnitude + phase-inversion laws 🧪
 - [x] 000211 — 🧩 **Peaking (bell) EQ node** (`peak-eq`) — a resonant boost/cut of one band around
   a centre frequency, the parametric mid completing a basic EQ with the low/high `shelf-eq`.
   Distinct from `biquad`'s notch (band removal). RBJ Audio EQ Cookbook peakingEQ coefficients

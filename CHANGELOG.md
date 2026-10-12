@@ -32,6 +32,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Allpass filter node (`allpass`, 000212).** Unity magnitude at every frequency, only the phase
+  is shaped — the building block of phasers (a swept chain of allpass stages), Schroeder reverbs
+  and fractional-delay/dispersion effects, now a first-class node (the `phaser` already used
+  allpass sections internally). RBJ Audio EQ Cookbook APF biquad (primary source: the W3C/WebAudio
+  copy), Direct Form I; because the numerator mirrors the denominator (`b = {a2, a1, a0}`) the
+  magnitude is exactly unity at all frequencies, and at the centre frequency the phase is −180° so
+  a settled tone there comes out inverted. Parameters `freq_hz` (where the phase swings through
+  −180°) and `q` (sharpness), `filter` category. Unit tests verify flat magnitude across the
+  spectrum, the centre-frequency inversion, non-passthrough off-centre with preserved level, and
+  bounded output; `docs/nodes.md` regenerated.
 - **Peaking (bell) EQ node (`peak-eq`, 000211).** A resonant boost or cut of one bell-shaped band
   around a centre frequency, the parametric mid that completes a basic EQ alongside the low/high
   `shelf-eq`. Distinct from `biquad`'s notch (which removes a band outright) — this shapes it by a

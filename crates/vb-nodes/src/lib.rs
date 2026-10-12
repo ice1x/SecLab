@@ -7,6 +7,7 @@
 pub mod ad_env;
 pub mod additive;
 pub mod ahr_env;
+pub mod allpass;
 pub mod ar_env;
 pub mod bitcrusher;
 pub mod cards;
@@ -74,6 +75,7 @@ pub mod xfade;
 pub use ad_env::AdEnv;
 pub use additive::Additive;
 pub use ahr_env::AhrEnv;
+pub use allpass::Allpass;
 pub use ar_env::ArEnv;
 pub use bitcrusher::Bitcrusher;
 pub use cards::{node_card, node_reference};
