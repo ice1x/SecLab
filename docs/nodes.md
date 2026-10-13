@@ -89,6 +89,14 @@ Auto-generated from the registry — do not edit by hand.
   - `feedback` — range -0.95..0.95, default 0.5
   - `mix` — range 0..1, default 0.5
 
+### freq-shifter
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `shift_hz` — range -2000..2000, default 0
+  - `mix` — range 0..1, default 1
+
 ### granular
 
 - **Inputs:** `in` (audio), `position` (control)

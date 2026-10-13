@@ -32,6 +32,19 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Frequency shifter node (`freq-shifter`, 000213).** A single-sideband (Bode) shifter that
+  adds a constant `shift_hz` to every partial — distinct from a pitch shifter (which multiplies by
+  a ratio, keeping harmonics integer) and a ring modulator (which keeps both sum and difference
+  sidebands). Harmonics become inharmonic, so the sound turns metallic and feedback patches drift
+  endlessly. Implemented by forming the analytic signal with an FIR Hilbert transformer (ideal
+  `h[n] = 2/(πn)` for odd `n`, Blackman-windowed, 65 taps, group delay 32), rotating it by a
+  complex exponential and taking the real part (`y = x·cos − H{x}·sin`); the dry path is delayed
+  to match the Hilbert latency so `mix` and `shift_hz = 0` stay phase-aligned. Positive shifts up,
+  negative down. Primary sources: Scilab `hilb`, Reilly/Frazer/Boashash 1994. Parameters
+  `shift_hz` (−2000..2000) / `mix`, `effect` category. Unit tests verify the zero-shift latency
+  passthrough, up/down shift (spectral energy moves to `f ± shift`), **single-sideband mirror
+  suppression** (the opposite sideband is ≥20 dB down — proving it is not a ring modulator), the
+  dry `mix = 0` path and bounded output; `docs/nodes.md` regenerated.
 - **Allpass filter node (`allpass`, 000212).** Unity magnitude at every frequency, only the phase
   is shaped — the building block of phasers (a swept chain of allpass stages), Schroeder reverbs
   and fractional-delay/dispersion effects, now a first-class node (the `phaser` already used
