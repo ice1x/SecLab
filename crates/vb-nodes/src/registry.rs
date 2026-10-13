@@ -60,6 +60,7 @@ use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::shelf_eq::{shelf_mode_from, ShelfEq};
 use crate::slew::Slew;
+use crate::spectral_freeze::SpectralFreeze;
 use crate::step_sequencer::StepSequencer;
 use crate::sub_osc::SubOsc;
 use crate::supersaw::Supersaw;
@@ -952,6 +953,20 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Vocoder::new(arg(v, 0, 15.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "spectral-freeze",
+            "effect",
+            || {
+                GraphNode::new(
+                    "spectral-freeze",
+                    vec![audio_in("in"), Port::input("freeze", SignalType::Control)],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(SpectralFreeze::new(1.0)),
+            || vec![Parameter::new("mix", 0.0, 1.0, 1.0)],
+            |_, v| Box::new(SpectralFreeze::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2160,6 +2175,57 @@ mod tests {
         assert!(
             mag(1_200.0) > 3.0 * mag(260.0),
             "registry vocoder imprints the modulator's 1.2 kHz band onto the carrier"
+        );
+    }
+
+    #[test]
+    fn spectral_freeze_is_registered_as_an_effect_and_sustains_a_frozen_tone() {
+        let r = Registry::with_builtins();
+        let d = r
+            .get("spectral-freeze")
+            .expect("spectral-freeze registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("spectral-freeze").unwrap();
+        assert_eq!(node.inputs.len(), 2);
+        assert_eq!(node.inputs[0].name, "in");
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.inputs[1].name, "freeze");
+        assert_eq!(node.inputs[1].signal, vb_core::SignalType::Control);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mix"]
+        );
+        // Built from the registry: freeze a 440 Hz tone, then feed silence — it keeps ringing.
+        let n1 = 16_384;
+        let n2 = 16_384;
+        let mut input: Vec<f32> = (0..n1)
+            .map(|i| (core::f32::consts::TAU * 440.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        input.extend(std::iter::repeat_n(0.0, n2));
+        let mut freeze = vec![0.0_f32; n1];
+        freeze.extend(std::iter::repeat_n(1.0_f32, n2));
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames: input.len(),
+        };
+        let mut p = d.processor_with(&BuildContext::default(), &[1.0]);
+        let mut out = vec![0.0_f32; input.len()];
+        p.process(&ctx, &[&input, &freeze], &mut [&mut out]);
+        let mag = |hz: f32| {
+            let w = core::f32::consts::TAU * hz / 48_000.0;
+            let (mut re, mut im) = (0.0_f32, 0.0_f32);
+            for (k, &x) in out[n1 + 4_096..].iter().enumerate() {
+                re += x * (w * k as f32).cos();
+                im -= x * (w * k as f32).sin();
+            }
+            (re * re + im * im).sqrt() / (n2 - 4_096) as f32
+        };
+        assert!(
+            mag(440.0) > 0.1,
+            "registry spectral-freeze sustains the frozen 440 Hz tone through silence"
         );
     }
 
