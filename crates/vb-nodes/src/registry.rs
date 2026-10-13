@@ -61,6 +61,7 @@ use crate::sample_hold::SampleHold;
 use crate::shelf_eq::{shelf_mode_from, ShelfEq};
 use crate::slew::Slew;
 use crate::spectral_freeze::SpectralFreeze;
+use crate::spectral_gate::SpectralGate;
 use crate::step_sequencer::StepSequencer;
 use crate::sub_osc::SubOsc;
 use crate::supersaw::Supersaw;
@@ -967,6 +968,25 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(SpectralFreeze::new(1.0)),
             || vec![Parameter::new("mix", 0.0, 1.0, 1.0)],
             |_, v| Box::new(SpectralFreeze::new(arg(v, 0, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "spectral-gate",
+            "effect",
+            || {
+                GraphNode::new(
+                    "spectral-gate",
+                    vec![audio_in("in")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(SpectralGate::new(-40.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("threshold_db", -120.0, 0.0, -40.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(SpectralGate::new(arg(v, 0, -40.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2226,6 +2246,53 @@ mod tests {
         assert!(
             mag(440.0) > 0.1,
             "registry spectral-freeze sustains the frozen 440 Hz tone through silence"
+        );
+    }
+
+    #[test]
+    fn spectral_gate_is_registered_as_an_effect_and_gates_a_quiet_partial() {
+        let r = Registry::with_builtins();
+        let d = r.get("spectral-gate").expect("spectral-gate registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("spectral-gate").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["threshold_db", "mix"]
+        );
+        // Built from the registry: a loud 440 Hz tone plus a −40 dB 3 kHz partial, gated at
+        // −30 dB — the loud tone survives, the quiet partial is removed.
+        let n = 32_768;
+        let input: Vec<f32> = (0..n)
+            .map(|i| {
+                let t = i as f32 / 48_000.0;
+                (core::f32::consts::TAU * 440.0 * t).sin()
+                    + 0.01 * (core::f32::consts::TAU * 3_000.0 * t).sin()
+            })
+            .collect();
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[-30.0, 1.0]),
+            &input,
+        );
+        let mag = |hz: f32| {
+            let w = core::f32::consts::TAU * hz / 48_000.0;
+            let (mut re, mut im) = (0.0_f32, 0.0_f32);
+            for (k, &x) in out[16_384..].iter().enumerate() {
+                re += x * (w * k as f32).cos();
+                im -= x * (w * k as f32).sin();
+            }
+            (re * re + im * im).sqrt() / out[16_384..].len() as f32
+        };
+        assert!(mag(440.0) > 0.35, "the loud tone survives: {}", mag(440.0));
+        assert!(
+            mag(3_000.0) < 0.002,
+            "the −40 dB partial is gated: {}",
+            mag(3_000.0)
         );
     }
 
