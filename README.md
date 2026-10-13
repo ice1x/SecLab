@@ -616,6 +616,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000221 — 🧩 **Spectral gate node** (`spectral-gate`) — a frequency-domain noise gate: the
+  gate decision is made **per bin**, not on the whole signal. Each frame keeps only the bins within
+  `threshold_db` of that frame's loudest bin and zeroes the rest, so a tone over a hiss floor comes
+  out clean and, pushed harder, a sound is stripped to its strongest partials (threshold is
+  peak-relative, so it tracks level). First node on the shared `vb_nodes::stft` engine (000220) —
+  the whole thing is one ~15-line transform, no phase state, proving the refactor's payoff. Params
+  `threshold_db` (−120..0) / `mix`, `effect` category, `latency_frames`, live `set_params`.
+  Unit-tested (near-open reconstructs, −40 dB partial gated at −30 dB and returns at −50 dB, dry mix,
+  bounded) + registry test. `docs/nodes.md` regenerated 🧪
 - [x] 000219 — 🧩 **Spectral freeze node** (`spectral-freeze`) — captures the current short-time
   spectrum and sustains it indefinitely (an instant of sound → endless pad). `freeze` control low =
   faithful STFT resynthesis of the input; `freeze` high = holds the last magnitude spectrum and

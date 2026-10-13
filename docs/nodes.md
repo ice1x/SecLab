@@ -159,6 +159,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `mix` — range 0..1, default 1
 
+### spectral-gate
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `threshold_db` — range -120..0, default -40
+  - `mix` — range 0..1, default 1
+
 ### tremolo
 
 - **Inputs:** `in` (audio)

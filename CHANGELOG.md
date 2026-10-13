@@ -57,6 +57,19 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Spectral gate node (`spectral-gate`, 000221).** A frequency-domain noise gate: where a
+  time-domain gate opens or closes on the whole signal's level, this makes the decision **per
+  frequency bin**. Each short-time frame it finds the loudest bin and keeps only the bins within
+  `threshold_db` of that peak, zeroing the rest — so a steady tone over a hiss floor comes out clean
+  (the tone's bins survive, the broadband hiss between partials is gated), and pushed harder it
+  strips a sound to its strongest partials. The threshold is relative to the per-frame peak, so it
+  tracks level automatically. First node built on the shared `vb_nodes::stft` engine extracted in
+  000220 — the whole node is one ~15-line per-frame transform (keep the surviving bins' analysed
+  complex value, zero the rest), no phase state. Parameters `threshold_db` (−120..0) and `mix`;
+  `effect` category; reports `latency_frames`; `set_params` updates live. A processing utility, so
+  no factory patch. Unit-tested: a near-open gate reconstructs the input, a −40 dB partial is gated
+  at a −30 dB threshold and returns at −50 dB, silence stays silent, a dry mix is verbatim, output
+  bounded; a registry behaviour test confirms the partial is gated. `docs/nodes.md` regenerated 🧪
 - **Spectral freeze node (`spectral-freeze`, 000219).** An STFT effect that captures the current
   short-time spectrum and sustains it indefinitely — an instant of sound becomes an endless,
   shimmering pad. While its `freeze` control input is low it resynthesises the input faithfully (a
