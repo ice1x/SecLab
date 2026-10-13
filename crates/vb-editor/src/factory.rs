@@ -101,6 +101,10 @@ pub const FACTORY_PATCHES: &[FactoryPatch] = &[
         ron: include_str!("../../../examples/metallic_shift.ron"),
     },
     FactoryPatch {
+        name: "Octave Stack",
+        ron: include_str!("../../../examples/octave_stack.ron"),
+    },
+    FactoryPatch {
         name: "Drum kit",
         ron: include_str!("../../../examples/drumkit.ron"),
     },

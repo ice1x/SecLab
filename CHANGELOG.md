@@ -45,6 +45,14 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Showcase patch for the pitch shifter — Octave Stack (000217).** The new `pitch-shifter` now
+  ships as a note-gated factory instrument so it is playable from the palette, not just wireable:
+  **Octave Stack** (`examples/octave_stack.ron`) is a 220 Hz saw run through `pitch-shifter` at
+  +12 semitones with a 50 % dry/wet `mix`, so the fundamental and its octave sound together for a
+  thick, bright lead — the shifter's own `mix` gives the layered octave in a single node (no
+  splitter/mixer), and its latency-matched dry path keeps the two layers time-aligned. In the
+  example manifest + factory palette with a silent-at-rest / audible-on-note behavioural test (the
+  on-note window is widened to clear the vocoder's STFT latency).
 - **Phase-vocoder pitch shifter node (`pitch-shifter`, 000216).** Transposes the input up or down
   **without** changing its speed — the complement to `freq-shifter` (which adds a constant Hz to
   every partial and so goes inharmonic): a pitch shifter *multiplies* each partial's frequency by a

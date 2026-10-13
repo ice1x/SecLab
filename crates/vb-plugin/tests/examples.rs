@@ -111,6 +111,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         "metallic_shift",
         include_str!("../../../examples/metallic_shift.ron"),
     ),
+    (
+        "octave_stack",
+        include_str!("../../../examples/octave_stack.ron"),
+    ),
 ];
 
 #[test]
@@ -1085,6 +1089,28 @@ fn metallic_shift_is_a_freq_shifter_voice_silent_at_rest_and_rings_on_a_note() {
 }
 
 #[test]
+fn octave_stack_is_a_pitch_shifter_voice_silent_at_rest_and_thick_on_a_note() {
+    let ron = include_str!("../../../examples/octave_stack.ron");
+    let doc = vb_project::open_ron(ron).expect("octave_stack loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "pitch-shifter"),
+        "the octave-stacked voice is built on the pitch shifter"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "octave stack must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110); // ~110 Hz saw → its +1-octave blend
+    assert!(
+        // The pitch shifter's STFT latency (~768 frames) plus a frame means the voice needs a
+        // few blocks before the shifted layer rings out; 24 × 256 frames clears it.
+        peak_over(ron, &ctx, 256, 24) > 0.01,
+        "octave stack must sound on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -1147,7 +1173,8 @@ fn the_example_set_is_the_expected_manifest() {
             "lofi_crush",
             "random_steps",
             "flanged_sweep",
-            "metallic_shift"
+            "metallic_shift",
+            "octave_stack"
         ]
     );
     // No example is empty.
