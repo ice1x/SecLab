@@ -607,6 +607,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000215 — 🛠️ **Extract a shared Direct Form I biquad core (`vb_nodes::biquad`)** — the four
+  RBJ cookbook nodes (`filter`/`Biquad`, `shelf-eq`, `peak-eq`, `allpass`) each inlined the same
+  normalised-`Coeffs` struct, the `x1/x2/y1/y2` delay state, the per-sample difference equation and
+  `reset`. That duplicated arithmetic now lives once in `BiquadCoeffs::normalized` (the one `/a0`)
+  and `BiquadState::step`/`reset`; each node keeps only its own coefficient formula. Pure internal
+  refactor — no API, registry, param or `docs/nodes.md` change, and every node's existing DSP-law
+  test still passes. The core has its own tests incl. a bit-identical check against a hand-rolled
+  Direct Form I recurrence 🧪
 - [x] 000208 — 🛠️ **Library owns the unique patch title (drevo #595 drift)** — drevo stopped
   enforcing unique titles (`create_node` now accepts a repeat), reddening the non-required
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the

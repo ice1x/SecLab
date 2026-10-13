@@ -14,17 +14,8 @@
 //! Primary source: RBJ "Cookbook formulae for audio EQ biquad filter coefficients"
 //! (W3C/WebAudio copy, <https://webaudio.github.io/Audio-EQ-Cookbook/audio-eq-cookbook.html>).
 
+use crate::biquad::{BiquadCoeffs, BiquadState};
 use vb_core::{ProcessContext, Processor};
-
-/// Direct Form I biquad normalised coefficients.
-#[derive(Debug, Clone, Copy)]
-struct Coeffs {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
-}
 
 /// A second-order allpass filter.
 ///
@@ -33,10 +24,7 @@ struct Coeffs {
 pub struct Allpass {
     freq_hz: f32,
     q: f32,
-    x1: f32,
-    x2: f32,
-    y1: f32,
-    y2: f32,
+    state: BiquadState,
 }
 
 impl Allpass {
@@ -46,14 +34,11 @@ impl Allpass {
         Self {
             freq_hz,
             q: q.max(1e-4),
-            x1: 0.0,
-            x2: 0.0,
-            y1: 0.0,
-            y2: 0.0,
+            state: BiquadState::default(),
         }
     }
 
-    fn coeffs(&self, sample_rate: f32) -> Coeffs {
+    fn coeffs(&self, sample_rate: f32) -> BiquadCoeffs {
         // RBJ cookbook APF biquad.
         let f0 = self.freq_hz.clamp(1.0, 0.49 * sample_rate);
         let w0 = core::f32::consts::TAU * (f0 / sample_rate);
@@ -67,13 +52,7 @@ impl Allpass {
         let a1 = -2.0 * cos;
         let a2 = 1.0 - alpha;
 
-        Coeffs {
-            b0: b0 / a0,
-            b1: b1 / a0,
-            b2: b2 / a0,
-            a1: a1 / a0,
-            a2: a2 / a0,
-        }
+        BiquadCoeffs::normalized(b0, b1, b2, a0, a1, a2)
     }
 }
 
@@ -90,20 +69,12 @@ impl Processor for Allpass {
         let c = self.coeffs(ctx.sample_rate);
         for (i, o) in outputs[0].iter_mut().enumerate().take(ctx.frames) {
             let xn = input.get(i).copied().unwrap_or(0.0);
-            let yn = c.b0 * xn + c.b1 * self.x1 + c.b2 * self.x2 - c.a1 * self.y1 - c.a2 * self.y2;
-            self.x2 = self.x1;
-            self.x1 = xn;
-            self.y2 = self.y1;
-            self.y1 = yn;
-            *o = yn;
+            *o = self.state.step(&c, xn);
         }
     }
 
     fn reset(&mut self) {
-        self.x1 = 0.0;
-        self.x2 = 0.0;
-        self.y1 = 0.0;
-        self.y2 = 0.0;
+        self.state.reset();
     }
 }
 

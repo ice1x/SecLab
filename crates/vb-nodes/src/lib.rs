@@ -9,6 +9,7 @@ pub mod additive;
 pub mod ahr_env;
 pub mod allpass;
 pub mod ar_env;
+pub mod biquad;
 pub mod bitcrusher;
 pub mod cards;
 pub mod chorus;

@@ -1,5 +1,6 @@
 //! Biquad filter node (RBJ cookbook): low-pass, high-pass, band-pass and notch.
 
+use crate::biquad::{BiquadCoeffs, BiquadState};
 use vb_core::{ProcessContext, Processor};
 
 /// The response shape of a [`Biquad`].
@@ -15,30 +16,17 @@ pub enum FilterKind {
     Notch,
 }
 
-/// Normalized biquad coefficients (already divided by `a0`).
-#[derive(Debug, Clone, Copy)]
-struct Coeffs {
-    b0: f32,
-    b1: f32,
-    b2: f32,
-    a1: f32,
-    a2: f32,
-}
-
 /// A second-order (biquad) filter with one audio input and one audio output.
 ///
 /// Coefficients follow the RBJ audio EQ cookbook and are recomputed per block from the
 /// context's sample rate, so sample-rate changes are handled automatically. The cutoff
-/// is clamped below Nyquist to stay stable. Direct Form I is used for the state.
+/// is clamped below Nyquist to stay stable. The shared [`BiquadState`] runs Direct Form I.
 #[derive(Debug, Clone)]
 pub struct Biquad {
     kind: FilterKind,
     cutoff_hz: f32,
     q: f32,
-    x1: f32,
-    x2: f32,
-    y1: f32,
-    y2: f32,
+    state: BiquadState,
 }
 
 impl Biquad {
@@ -49,10 +37,7 @@ impl Biquad {
             kind,
             cutoff_hz,
             q,
-            x1: 0.0,
-            x2: 0.0,
-            y1: 0.0,
-            y2: 0.0,
+            state: BiquadState::default(),
         }
     }
 
@@ -75,7 +60,7 @@ impl Biquad {
         self.cutoff_hz
     }
 
-    fn coeffs(&self, sample_rate: f32) -> Coeffs {
+    fn coeffs(&self, sample_rate: f32) -> BiquadCoeffs {
         let f0 = self.cutoff_hz.clamp(1.0, 0.49 * sample_rate);
         let w0 = core::f32::consts::TAU * (f0 / sample_rate);
         let (sin, cos) = w0.sin_cos();
@@ -94,13 +79,7 @@ impl Biquad {
             FilterKind::Notch => (1.0, -2.0 * cos, 1.0, 1.0 + alpha, -2.0 * cos, 1.0 - alpha),
         };
 
-        Coeffs {
-            b0: b0 / a0,
-            b1: b1 / a0,
-            b2: b2 / a0,
-            a1: a1 / a0,
-            a2: a2 / a0,
-        }
+        BiquadCoeffs::normalized(b0, b1, b2, a0, a1, a2)
     }
 }
 
@@ -115,21 +94,12 @@ impl Processor for Biquad {
 
         let c = self.coeffs(ctx.sample_rate);
         for (o, x) in outputs[0].iter_mut().zip(inputs[0].iter()).take(ctx.frames) {
-            let xn = *x;
-            let yn = c.b0 * xn + c.b1 * self.x1 + c.b2 * self.x2 - c.a1 * self.y1 - c.a2 * self.y2;
-            self.x2 = self.x1;
-            self.x1 = xn;
-            self.y2 = self.y1;
-            self.y1 = yn;
-            *o = yn;
+            *o = self.state.step(&c, *x);
         }
     }
 
     fn reset(&mut self) {
-        self.x1 = 0.0;
-        self.x2 = 0.0;
-        self.y1 = 0.0;
-        self.y2 = 0.0;
+        self.state.reset();
     }
 }
 

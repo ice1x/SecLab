@@ -20,6 +20,19 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Changed
+
+- **Shared Direct Form I biquad core extracted to `vb_nodes::biquad` (000215).** The four RBJ
+  cookbook nodes — `filter` (`Biquad`, LP/HP/BP/notch), `shelf-eq`, `peak-eq` and `allpass` — had
+  each inlined an identical normalised-coefficient struct, the two-in/two-out delay state, the
+  per-sample difference equation and `reset`. That arithmetic now lives once as
+  `BiquadCoeffs::normalized` (the single `/a0`) and `BiquadState::step`/`reset`; every node keeps
+  only its own cookbook coefficient formula and defers the running to the shared state. Purely
+  internal: no change to any node's public API, registry descriptor, parameters or `docs/nodes.md`,
+  so all existing per-node DSP-law tests pass unchanged. The core carries its own unit tests,
+  including a bit-for-bit (`to_bits`) check that `step` equals a hand-rolled Direct Form I
+  recurrence.
+
 ### Fixed
 
 - **Library re-port: enforce the unique patch title in `vb-library`, not drevo (000208).** drevo
