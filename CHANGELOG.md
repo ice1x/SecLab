@@ -45,6 +45,22 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Phase-vocoder pitch shifter node (`pitch-shifter`, 000216).** Transposes the input up or down
+  **without** changing its speed — the complement to `freq-shifter` (which adds a constant Hz to
+  every partial and so goes inharmonic): a pitch shifter *multiplies* each partial's frequency by a
+  ratio, so harmonics stay integer multiples and the tone keeps its character an octave away. The
+  method is Stephan M. Bernsee's canonical STFT `smbPitchShift`: overlapping Hann-windowed frames
+  are FFT'd, each bin's *true* frequency is recovered from the inter-frame phase advance, the
+  magnitudes and true frequencies are moved to bins scaled by the pitch ratio, the per-bin phase is
+  re-accumulated, and an inverse FFT + overlap-add resynthesise the signal (bins past Nyquist are
+  dropped, so aliasing is handled in the frequency domain). Parameters `semitones` (±12 = ±1
+  octave) and `mix`; the dry path is delayed by the vocoder latency so a dry/wet blend stays
+  time-aligned. `effect` category; reports `latency_frames`; `set_params` updates live. Because the
+  project keeps no FFT dependency, this ships a self-contained in-place radix-2 FFT
+  (`vb_nodes::fft`) verified against a naïve DFT. Primary source: Bernsee, "Pitch Shifting Using
+  the Fourier Transform" + `smbPitchShift.cpp` (Wide Open License). Unit-tested for unit-gain
+  reconstruction at ratio 1, octave-up/down transposition (energy at 2×/½× the input), a
+  pitch-preserving dry mix, silence, and bounded output; `docs/nodes.md` regenerated 🧪
 - **Showcase patches for the new effect nodes — Flanged Sweep & Metallic Shift (000214).** The two
   most audibly-demonstrable nodes added this cycle now ship as note-gated factory instruments, so
   a node nobody plays is no longer half-done: **Flanged Sweep** (`examples/flanged_sweep.ron`) — a
