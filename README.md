@@ -612,6 +612,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   `library / drevo` CI job on `a_duplicate_title_is_rejected`. `import_patch` now guards the
   library key itself: it checks `get_node_by_title` before writing and refuses a taken title with
   `DrevoError::DuplicateTitle`. Adapted to the actual drevo API (no pinning an old checkout) 🧪
+- [x] 000214 — 🧩 **Showcase patches for the new effect nodes** — the two most demonstrable nodes
+  from this cycle as note-gated factory instruments: **Flanged Sweep** (`examples/flanged_sweep.ron`,
+  a saw through the self-sweeping `flanger`) and **Metallic Shift** (`examples/metallic_shift.ron`,
+  a saw through the `freq-shifter` at +250 Hz for an inharmonic bell). In the example manifest +
+  factory palette, each with a silent-at-rest / audible-on-note behavioural test 🧪
 - [x] 000213 — 🧩 **Frequency shifter node** (`freq-shifter`) — single-sideband (Bode) shift of
   the whole spectrum by a fixed `shift_hz` (inharmonic; distinct from pitch-shift and ring-mod).
   Analytic signal via an FIR Hilbert transformer (ideal `2/(πn)`, Blackman-windowed, 65 taps),

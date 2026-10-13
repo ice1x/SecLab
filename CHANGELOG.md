@@ -32,6 +32,14 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Showcase patches for the new effect nodes — Flanged Sweep & Metallic Shift (000214).** The two
+  most audibly-demonstrable nodes added this cycle now ship as note-gated factory instruments, so
+  a node nobody plays is no longer half-done: **Flanged Sweep** (`examples/flanged_sweep.ron`) — a
+  110 Hz saw through the self-sweeping `flanger` (slow deep resonant sweep) into a gated VCA; and
+  **Metallic Shift** (`examples/metallic_shift.ron`) — a 220 Hz saw through the `freq-shifter`
+  (+250 Hz, full wet) for an inharmonic, bell-like voice. Both registered in the example manifest +
+  factory palette with silent-at-rest / audible-on-note behavioural tests. (The EQ/dynamics/allpass
+  nodes stay processing utilities — a note-gated "instrument" patch for them would be contrived.)
 - **Frequency shifter node (`freq-shifter`, 000213).** A single-sideband (Bode) shifter that
   adds a constant `shift_hz` to every partial — distinct from a pitch shifter (which multiplies by
   a ratio, keeping harmonics integer) and a ring modulator (which keeps both sum and difference
