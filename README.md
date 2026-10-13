@@ -607,6 +607,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000217 — 🧩 **Showcase patch for the pitch shifter — Octave Stack** — makes the new node
+  playable from the palette: **Octave Stack** (`examples/octave_stack.ron`) is a 220 Hz saw through
+  `pitch-shifter` at +12 semitones, 50 % dry/wet, so the fundamental and its octave ring together
+  for a thick lead. The shifter's own `mix` supplies the octave layer in one node (no splitter) and
+  its latency-matched dry path keeps the layers aligned. In the example manifest + factory palette,
+  with a silent-at-rest / audible-on-note test (on-note window widened past the STFT latency) 🧪
 - [x] 000216 — 🧩 **Phase-vocoder pitch shifter node** (`pitch-shifter`) — transposes up/down
   **without** changing speed (complement to `freq-shifter`: multiplies every partial's frequency by
   a ratio, so harmonics stay integer and the tone keeps character an octave away). Bernsee's
