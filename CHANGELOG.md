@@ -45,6 +45,22 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Spectral freeze node (`spectral-freeze`, 000219).** An STFT effect that captures the current
+  short-time spectrum and sustains it indefinitely — an instant of sound becomes an endless,
+  shimmering pad. While its `freeze` control input is low it resynthesises the input faithfully (a
+  near-passthrough); while `freeze` is high it holds the last analysed magnitude spectrum and keeps
+  advancing each bin's phase by its captured per-hop increment, so the drone keeps ringing even if
+  the input falls silent, and ignores later input until released. Reuses the same STFT overlap-add
+  engine as the pitch shifter (Hann-windowed frames, forward FFT, per-bin phase tracking, inverse
+  FFT, overlap-add) on the shared `vb_nodes::fft` radix-2 transform: each hop the magnitude and raw
+  inter-hop phase advance are captured into the held spectrum unless frozen, and the synthesis phase
+  always accumulates the held advance (so unfrozen it telescopes back to the true phase = faithful
+  reconstruction, frozen it rotates the held magnitudes at their captured pitch). Input 0 audio,
+  input 1 `freeze` control (≥0.5 freezes), parameter `mix` (dry → resynthesised); `effect` category;
+  reports `latency_frames`; `set_params` updates live. Unit-tested for faithful unfrozen
+  reconstruction, a frozen tone sustaining through silence, a freeze ignoring later input, a
+  verbatim dry mix, silence, and bounded output; a registry behaviour test drives the freeze
+  control. `docs/nodes.md` regenerated 🧪
 - **Channel vocoder node (`vocoder`, 000218).** The classic "robot voice": a two-input effect that
   imprints the moment-to-moment spectral envelope of a **modulator** (input 1, typically a voice)
   onto a **carrier** (input 0, typically a synth). The modulator is split into a bank of band-pass

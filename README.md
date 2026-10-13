@@ -607,6 +607,16 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000219 — 🧩 **Spectral freeze node** (`spectral-freeze`) — captures the current short-time
+  spectrum and sustains it indefinitely (an instant of sound → endless pad). `freeze` control low =
+  faithful STFT resynthesis of the input; `freeze` high = holds the last magnitude spectrum and
+  keeps advancing each bin's phase, so the drone rings on through silence and ignores later input.
+  Same STFT overlap-add engine as the pitch shifter on the shared `vb_nodes::fft`; unfrozen the
+  synthesis phase telescopes back to the true phase (reconstruction), frozen it rotates the held
+  magnitudes at their captured pitch. Input 0 audio + input 1 `freeze` control, param `mix`,
+  `effect` category, `latency_frames`, live `set_params`. Unit-tested: faithful unfrozen
+  reconstruction, sustain-through-silence, freeze-ignores-later-input, dry mix, bounded + a registry
+  test driving the control. `docs/nodes.md` regenerated 🧪
 - [x] 000218 — 🧩 **Channel vocoder node** (`vocoder`) — the classic "robot voice": a two-input
   effect imprinting the spectral envelope of a **modulator** (voice) onto a **carrier** (synth).
   Modulator → band-pass bank → per-band envelope followers; carrier → same bank, each band gated by
