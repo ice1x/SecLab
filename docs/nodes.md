@@ -127,6 +127,14 @@ Auto-generated from the registry — do not edit by hand.
   - `feedback` — range 0..0.95, default 0.4
   - `mix` — range 0..1, default 0.5
 
+### pitch-shifter
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `semitones` — range -12..12, default 0
+  - `mix` — range 0..1, default 1
+
 ### reverb
 
 - **Inputs:** `in` (audio)

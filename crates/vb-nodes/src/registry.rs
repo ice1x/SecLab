@@ -49,6 +49,7 @@ use crate::peak_eq::PeakEq;
 use crate::phaser::Phaser;
 use crate::ping_pong::PingPong;
 use crate::pitch_osc::PitchOsc;
+use crate::pitch_shifter::PitchShifter;
 use crate::poly::{KeyGate, PolyVoiceIn, MAX_VOICES};
 use crate::pwm::Pwm;
 use crate::quantizer::Quantizer;
@@ -912,6 +913,25 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(FreqShifter::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "pitch-shifter",
+            "effect",
+            || {
+                GraphNode::new(
+                    "pitch-shifter",
+                    vec![audio_in("in")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(PitchShifter::new(0.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("semitones", -12.0, 12.0, 0.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(PitchShifter::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2025,6 +2045,46 @@ mod tests {
         assert!(
             mag(2_500.0) > 10.0 * mag(2_000.0),
             "registry freq-shifter moves 2 kHz up to 2.5 kHz"
+        );
+    }
+
+    #[test]
+    fn pitch_shifter_is_registered_as_an_effect_and_transposes() {
+        let r = Registry::with_builtins();
+        let d = r.get("pitch-shifter").expect("pitch-shifter registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("pitch-shifter").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["semitones", "mix"]
+        );
+        // Built from the registry: a 300 Hz tone shifted +12 semitones lands an octave up at
+        // 600 Hz, with the original pitch suppressed.
+        let input: Vec<f32> = (0..32_768)
+            .map(|i| (core::f32::consts::TAU * 300.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[12.0, 1.0]),
+            &input,
+        );
+        let mag = |hz: f32| {
+            let w = core::f32::consts::TAU * hz / 48_000.0;
+            let (mut re, mut im) = (0.0_f32, 0.0_f32);
+            for (n, &x) in out[16_384..].iter().enumerate() {
+                re += x * (w * n as f32).cos();
+                im -= x * (w * n as f32).sin();
+            }
+            (re * re + im * im).sqrt()
+        };
+        assert!(
+            mag(600.0) > 8.0 * mag(300.0),
+            "registry pitch-shifter moves 300 Hz up an octave to 600 Hz"
         );
     }
 

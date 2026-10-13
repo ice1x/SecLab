@@ -607,6 +607,17 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000216 — 🧩 **Phase-vocoder pitch shifter node** (`pitch-shifter`) — transposes up/down
+  **without** changing speed (complement to `freq-shifter`: multiplies every partial's frequency by
+  a ratio, so harmonics stay integer and the tone keeps character an octave away). Bernsee's
+  canonical STFT `smbPitchShift`: Hann-windowed overlapping frames → FFT → per-bin true frequency
+  from the inter-frame phase advance → magnitudes/frequencies moved to ratio-scaled bins → phase
+  re-accumulated → inverse FFT + overlap-add (bins past Nyquist dropped = frequency-domain
+  anti-aliasing). Params `semitones` (±12) / `mix` (dry path latency-matched), `effect` category,
+  reports `latency_frames`, live `set_params`. Ships a self-contained in-place radix-2 FFT
+  (`vb_nodes::fft`) — no FFT dependency — verified against a naïve DFT. Primary source: Bernsee,
+  "Pitch Shifting Using the Fourier Transform" + `smbPitchShift.cpp`. Unit-tested for unit-gain
+  reconstruction, octave up/down, dry-mix pitch preservation; `docs/nodes.md` regenerated 🧪
 - [x] 000215 — 🛠️ **Extract a shared Direct Form I biquad core (`vb_nodes::biquad`)** — the four
   RBJ cookbook nodes (`filter`/`Biquad`, `shelf-eq`, `peak-eq`, `allpass`) each inlined the same
   normalised-`Coeffs` struct, the `x1/x2/y1/y2` delay state, the per-sample difference equation and
