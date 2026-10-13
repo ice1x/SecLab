@@ -103,6 +103,14 @@ const EXAMPLES: &[(&str, &str)] = &[
         "random_steps",
         include_str!("../../../examples/random_steps.ron"),
     ),
+    (
+        "flanged_sweep",
+        include_str!("../../../examples/flanged_sweep.ron"),
+    ),
+    (
+        "metallic_shift",
+        include_str!("../../../examples/metallic_shift.ron"),
+    ),
 ];
 
 #[test]
@@ -1037,6 +1045,46 @@ fn random_steps_is_a_sample_hold_voice_silent_at_rest_and_burbles_on_a_note() {
 }
 
 #[test]
+fn flanged_sweep_is_a_flanger_voice_silent_at_rest_and_sweeps_on_a_note() {
+    let ron = include_str!("../../../examples/flanged_sweep.ron");
+    let doc = vb_project::open_ron(ron).expect("flanged_sweep loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "flanger"),
+        "the voice is built on the flanger node"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "flanged sweep must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110); // ~110 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "flanged sweep must sound on a note"
+    );
+}
+
+#[test]
+fn metallic_shift_is_a_freq_shifter_voice_silent_at_rest_and_rings_on_a_note() {
+    let ron = include_str!("../../../examples/metallic_shift.ron");
+    let doc = vb_project::open_ron(ron).expect("metallic_shift loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "freq-shifter"),
+        "the inharmonic voice is built on the frequency shifter"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "metallic shift must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(57, 110); // ~220 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "metallic shift must sound on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -1097,7 +1145,9 @@ fn the_example_set_is_the_expected_manifest() {
             "ring_bell",
             "resonator_pluck",
             "lofi_crush",
-            "random_steps"
+            "random_steps",
+            "flanged_sweep",
+            "metallic_shift"
         ]
     );
     // No example is empty.
