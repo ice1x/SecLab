@@ -20,20 +20,8 @@
 //! `stepSize = fftFrameSize / osamp`, `freqPerBin = sampleRate / fftFrameSize`,
 //! `expct = 2π·stepSize / fftFrameSize`.
 
-use crate::fft::fft;
+use crate::stft::{Stft, FFT_SIZE, HALF, LATENCY, OSAMP, STEP_SIZE};
 use vb_core::{ProcessContext, Processor};
-
-/// FFT frame size (number of real samples per analysis frame). A power of two.
-const FFT_SIZE: usize = 1024;
-/// Oversampling / overlap factor. `osamp = 4` is a 75 % overlap — the practical minimum for a
-/// clean Hann-windowed phase vocoder — and keeps the per-sample FFT cost reasonable.
-const OSAMP: usize = 4;
-/// Hop between successive frames.
-const STEP_SIZE: usize = FFT_SIZE / OSAMP;
-/// Number of positive-frequency bins (DC … Nyquist inclusive).
-const HALF: usize = FFT_SIZE / 2;
-/// Samples the FIFO must fill before the first frame is produced; also the algorithm's latency.
-const IN_FIFO_LATENCY: usize = FFT_SIZE - STEP_SIZE;
 
 /// A phase-vocoder pitch shifter.
 ///
@@ -43,16 +31,8 @@ pub struct PitchShifter {
     semitones: f32,
     mix: f32,
 
-    /// Hann analysis/synthesis window, precomputed once.
-    window: Vec<f32>,
-    /// Running input frame buffer.
-    in_fifo: Vec<f32>,
-    /// Output samples ready to be read out.
-    out_fifo: Vec<f32>,
-    /// Interleaved complex FFT workspace (`2·FFT_SIZE`).
-    fft_work: Vec<f32>,
-    /// Overlap-add accumulator (`2·FFT_SIZE`).
-    out_accum: Vec<f32>,
+    /// Shared STFT overlap-add engine (window, FIFOs, FFT workspace, dry delay).
+    stft: Stft,
     /// Last analysis phase per bin, for the inter-frame phase difference.
     last_phase: Vec<f32>,
     /// Accumulated synthesis phase per bin.
@@ -61,13 +41,6 @@ pub struct PitchShifter {
     ana_freq: Vec<f32>,
     syn_magn: Vec<f32>,
     syn_freq: Vec<f32>,
-
-    /// Write cursor into `in_fifo` / read cursor into `out_fifo` (Bernsee's `gRover`).
-    rover: usize,
-
-    /// Dry delay line (length [`IN_FIFO_LATENCY`]) so the `mix` dry path lines up with the wet.
-    dry: Vec<f32>,
-    dry_idx: usize,
 }
 
 impl PitchShifter {
@@ -75,27 +48,16 @@ impl PitchShifter {
     /// a dry/wet `mix` (0 = dry, 1 = fully shifted).
     #[must_use]
     pub fn new(semitones: f32, mix: f32) -> Self {
-        // Hann window: w[k] = 0.5 − 0.5·cos(2πk/N).
-        let window = (0..FFT_SIZE)
-            .map(|k| 0.5 - 0.5 * (core::f32::consts::TAU * k as f32 / FFT_SIZE as f32).cos())
-            .collect();
         Self {
             semitones: semitones.clamp(-12.0, 12.0),
             mix: mix.clamp(0.0, 1.0),
-            window,
-            in_fifo: vec![0.0; FFT_SIZE],
-            out_fifo: vec![0.0; FFT_SIZE],
-            fft_work: vec![0.0; 2 * FFT_SIZE],
-            out_accum: vec![0.0; 2 * FFT_SIZE],
+            stft: Stft::new(),
             last_phase: vec![0.0; HALF + 1],
             sum_phase: vec![0.0; HALF + 1],
             ana_magn: vec![0.0; HALF + 1],
             ana_freq: vec![0.0; HALF + 1],
             syn_magn: vec![0.0; HALF + 1],
             syn_freq: vec![0.0; HALF + 1],
-            rover: IN_FIFO_LATENCY,
-            dry: vec![0.0; IN_FIFO_LATENCY],
-            dry_idx: 0,
         }
     }
 
@@ -104,21 +66,16 @@ impl PitchShifter {
         2.0_f32.powf(self.semitones / 12.0).clamp(0.5, 2.0)
     }
 
-    /// Runs one full FFT frame: analysis → pitch shift → synthesis → overlap-add.
-    fn process_frame(&mut self, ratio: f32, freq_per_bin: f32) {
+    /// The spectral transform of one analysed frame: recover each bin's true frequency, move the
+    /// magnitudes/frequencies to bins scaled by `ratio`, and re-accumulate the synthesis phase.
+    /// Reads and writes the analysed half-spectrum in `self.stft.fft_work`.
+    fn transform(&mut self, ratio: f32, freq_per_bin: f32) {
         let expct = core::f32::consts::TAU * STEP_SIZE as f32 / FFT_SIZE as f32;
-
-        // Window the current frame into the complex workspace (imaginary part zero), forward FFT.
-        for k in 0..FFT_SIZE {
-            self.fft_work[2 * k] = self.in_fifo[k] * self.window[k];
-            self.fft_work[2 * k + 1] = 0.0;
-        }
-        fft(&mut self.fft_work, FFT_SIZE, -1.0);
 
         // Analysis: recover each bin's magnitude and true frequency (Hz).
         for k in 0..=HALF {
-            let re = self.fft_work[2 * k];
-            let im = self.fft_work[2 * k + 1];
+            let re = self.stft.fft_work[2 * k];
+            let im = self.stft.fft_work[2 * k + 1];
             let magn = 2.0 * (re * re + im * im).sqrt();
             let phase = im.atan2(re);
 
@@ -165,30 +122,9 @@ impl PitchShifter {
             tmp += k as f32 * expct; // add the bin-centre advance back in
             self.sum_phase[k] += tmp;
             let phase = self.sum_phase[k];
-            self.fft_work[2 * k] = magn * phase.cos();
-            self.fft_work[2 * k + 1] = magn * phase.sin();
+            self.stft.fft_work[2 * k] = magn * phase.cos();
+            self.stft.fft_work[2 * k + 1] = magn * phase.sin();
         }
-        // Zero the negative-frequency bins before the inverse transform.
-        for k in (HALF + 1)..FFT_SIZE {
-            self.fft_work[2 * k] = 0.0;
-            self.fft_work[2 * k + 1] = 0.0;
-        }
-        fft(&mut self.fft_work, FFT_SIZE, 1.0);
-
-        // Windowed overlap-add into the accumulator. Bernsee's 2/(HALF·osamp) factor undoes the
-        // unnormalised inverse FFT and the half-spectrum magnitude doubling; the extra 2/3 is the
-        // constant-overlap-add gain of the Hann window applied at *both* analysis and synthesis
-        // (Σ Hann² over the hops = 1.5× at this overlap), restoring unity gain at ratio 1.
-        let norm = 2.0 / (HALF as f32 * OSAMP as f32) * (2.0 / 3.0);
-        for k in 0..FFT_SIZE {
-            self.out_accum[k] += self.window[k] * self.fft_work[2 * k] * norm;
-        }
-        self.out_fifo[..STEP_SIZE].copy_from_slice(&self.out_accum[..STEP_SIZE]);
-
-        // Shift the accumulator and the input FIFO down by one hop.
-        self.out_accum
-            .copy_within(STEP_SIZE..STEP_SIZE + FFT_SIZE, 0);
-        self.in_fifo.copy_within(STEP_SIZE..FFT_SIZE, 0);
     }
 }
 
@@ -208,33 +144,21 @@ impl Processor for PitchShifter {
 
         for (i, o) in outputs[0].iter_mut().enumerate().take(ctx.frames) {
             let x = input.get(i).copied().unwrap_or(0.0);
-
-            // Dry delay line, so a mixed-in dry signal is time-aligned with the latent wet one.
-            let dry = self.dry[self.dry_idx];
-            self.dry[self.dry_idx] = x;
-            self.dry_idx = (self.dry_idx + 1) % IN_FIFO_LATENCY;
-
-            self.in_fifo[self.rover] = x;
-            let wet = self.out_fifo[self.rover - IN_FIFO_LATENCY];
-            self.rover += 1;
-            if self.rover >= FFT_SIZE {
-                self.rover = IN_FIFO_LATENCY;
-                self.process_frame(ratio, freq_per_bin);
+            let dry = self.stft.dry_delay(x);
+            let (wet, frame_ready) = self.stft.push(x);
+            if frame_ready {
+                self.stft.forward();
+                self.transform(ratio, freq_per_bin);
+                self.stft.synthesize();
             }
-
             *o = mix * wet + (1.0 - mix) * dry;
         }
     }
 
     fn reset(&mut self) {
-        self.in_fifo.iter_mut().for_each(|s| *s = 0.0);
-        self.out_fifo.iter_mut().for_each(|s| *s = 0.0);
-        self.out_accum.iter_mut().for_each(|s| *s = 0.0);
+        self.stft.reset();
         self.last_phase.iter_mut().for_each(|s| *s = 0.0);
         self.sum_phase.iter_mut().for_each(|s| *s = 0.0);
-        self.dry.iter_mut().for_each(|s| *s = 0.0);
-        self.rover = IN_FIFO_LATENCY;
-        self.dry_idx = 0;
     }
 
     fn set_params(&mut self, values: &[f32]) -> bool {
@@ -248,7 +172,7 @@ impl Processor for PitchShifter {
     }
 
     fn latency_frames(&self) -> usize {
-        IN_FIFO_LATENCY
+        LATENCY
     }
 }
 

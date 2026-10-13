@@ -607,6 +607,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000220 — 🛠️ **Extract a shared STFT overlap-add engine (`vb_nodes::stft`)** — `pitch-shifter`
+  and `spectral-freeze` each inlined the same short-time-Fourier scaffolding (Hann analysis FIFO,
+  per-hop forward FFT, inverse FFT + constant-overlap-add, FIFO/accumulator shifts, latency-matched
+  dry delay), differing only in the spectral transform between analysis and synthesis. That now
+  lives once in an `Stft` engine (`dry_delay`/`push`/`forward`/`synthesize`/`reset` + the shared
+  constants and Hann² COLA norm); each node keeps only its `transform` over `self.stft.fft_work`.
+  Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
+  change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
+  Future spectral nodes now cost only their transform 🧪
 - [x] 000219 — 🧩 **Spectral freeze node** (`spectral-freeze`) — captures the current short-time
   spectrum and sustains it indefinitely (an instant of sound → endless pad). `freeze` control low =
   faithful STFT resynthesis of the input; `freeze` high = holds the last magnitude spectrum and

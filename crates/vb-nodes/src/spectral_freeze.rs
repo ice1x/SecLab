@@ -17,76 +17,44 @@
 //! it keeps rotating the held magnitudes at their captured pitch. The 2π ambiguity in the raw
 //! advance is irrelevant because only `e^{iφ}` is used.
 
-use crate::fft::fft;
+use crate::stft::{Stft, HALF, LATENCY};
 use vb_core::{ProcessContext, Processor};
-
-/// FFT frame size (power of two).
-const FFT_SIZE: usize = 1024;
-/// Overlap factor (75 % overlap).
-const OSAMP: usize = 4;
-/// Hop between frames.
-const STEP_SIZE: usize = FFT_SIZE / OSAMP;
-/// Positive-frequency bins (DC … Nyquist).
-const HALF: usize = FFT_SIZE / 2;
-/// Latency = one frame minus a hop (also the FIFO prime).
-const LATENCY: usize = FFT_SIZE - STEP_SIZE;
 
 /// A spectral-freeze effect.
 pub struct SpectralFreeze {
     mix: f32,
     frozen: bool,
 
-    window: Vec<f32>,
-    in_fifo: Vec<f32>,
-    out_fifo: Vec<f32>,
-    fft_work: Vec<f32>,
-    out_accum: Vec<f32>,
+    /// Shared STFT overlap-add engine (window, FIFOs, FFT workspace, dry delay).
+    stft: Stft,
     last_phase: Vec<f32>,
     sum_phase: Vec<f32>,
     held_magn: Vec<f32>,
     held_adv: Vec<f32>,
-    rover: usize,
-
-    dry: Vec<f32>,
-    dry_idx: usize,
 }
 
 impl SpectralFreeze {
     /// Creates a spectral freeze with dry/wet `mix` (0 = dry input, 1 = fully resynthesised).
     #[must_use]
     pub fn new(mix: f32) -> Self {
-        let window = (0..FFT_SIZE)
-            .map(|k| 0.5 - 0.5 * (core::f32::consts::TAU * k as f32 / FFT_SIZE as f32).cos())
-            .collect();
         Self {
             mix: mix.clamp(0.0, 1.0),
             frozen: false,
-            window,
-            in_fifo: vec![0.0; FFT_SIZE],
-            out_fifo: vec![0.0; FFT_SIZE],
-            fft_work: vec![0.0; 2 * FFT_SIZE],
-            out_accum: vec![0.0; 2 * FFT_SIZE],
+            stft: Stft::new(),
             last_phase: vec![0.0; HALF + 1],
             sum_phase: vec![0.0; HALF + 1],
             held_magn: vec![0.0; HALF + 1],
             held_adv: vec![0.0; HALF + 1],
-            rover: LATENCY,
-            dry: vec![0.0; LATENCY],
-            dry_idx: 0,
         }
     }
 
-    fn process_frame(&mut self) {
-        // Window the frame into the complex workspace, forward FFT.
-        for k in 0..FFT_SIZE {
-            self.fft_work[2 * k] = self.in_fifo[k] * self.window[k];
-            self.fft_work[2 * k + 1] = 0.0;
-        }
-        fft(&mut self.fft_work, FFT_SIZE, -1.0);
-
+    /// The spectral transform of one analysed frame: capture each bin's magnitude and raw phase
+    /// advance into the held spectrum (unless frozen), then write the held magnitudes back at the
+    /// accumulated phase. Reads and writes the analysed half-spectrum in `self.stft.fft_work`.
+    fn transform(&mut self) {
         for k in 0..=HALF {
-            let re = self.fft_work[2 * k];
-            let im = self.fft_work[2 * k + 1];
+            let re = self.stft.fft_work[2 * k];
+            let im = self.stft.fft_work[2 * k + 1];
             let magn = 2.0 * (re * re + im * im).sqrt();
             let phase = im.atan2(re);
             // Raw inter-hop advance; last_phase is tracked even when frozen so unfreezing resumes.
@@ -98,24 +66,9 @@ impl SpectralFreeze {
             }
             self.sum_phase[k] += self.held_adv[k];
             let p = self.sum_phase[k];
-            self.fft_work[2 * k] = self.held_magn[k] * p.cos();
-            self.fft_work[2 * k + 1] = self.held_magn[k] * p.sin();
+            self.stft.fft_work[2 * k] = self.held_magn[k] * p.cos();
+            self.stft.fft_work[2 * k + 1] = self.held_magn[k] * p.sin();
         }
-        for k in (HALF + 1)..FFT_SIZE {
-            self.fft_work[2 * k] = 0.0;
-            self.fft_work[2 * k + 1] = 0.0;
-        }
-        fft(&mut self.fft_work, FFT_SIZE, 1.0);
-
-        // Hann² constant-overlap-add gain (×2/3) on top of Bernsee's 2/(HALF·osamp).
-        let norm = 2.0 / (HALF as f32 * OSAMP as f32) * (2.0 / 3.0);
-        for k in 0..FFT_SIZE {
-            self.out_accum[k] += self.window[k] * self.fft_work[2 * k] * norm;
-        }
-        self.out_fifo[..STEP_SIZE].copy_from_slice(&self.out_accum[..STEP_SIZE]);
-        self.out_accum
-            .copy_within(STEP_SIZE..STEP_SIZE + FFT_SIZE, 0);
-        self.in_fifo.copy_within(STEP_SIZE..FFT_SIZE, 0);
     }
 }
 
@@ -135,16 +88,12 @@ impl Processor for SpectralFreeze {
             let x = input.get(i).copied().unwrap_or(0.0);
             self.frozen = freeze.get(i).copied().unwrap_or(0.0) >= 0.5;
 
-            let dry = self.dry[self.dry_idx];
-            self.dry[self.dry_idx] = x;
-            self.dry_idx = (self.dry_idx + 1) % LATENCY;
-
-            self.in_fifo[self.rover] = x;
-            let wet = self.out_fifo[self.rover - LATENCY];
-            self.rover += 1;
-            if self.rover >= FFT_SIZE {
-                self.rover = LATENCY;
-                self.process_frame();
+            let dry = self.stft.dry_delay(x);
+            let (wet, frame_ready) = self.stft.push(x);
+            if frame_ready {
+                self.stft.forward();
+                self.transform();
+                self.stft.synthesize();
             }
 
             *o = mix * wet + (1.0 - mix) * dry;
@@ -152,17 +101,12 @@ impl Processor for SpectralFreeze {
     }
 
     fn reset(&mut self) {
-        self.in_fifo.iter_mut().for_each(|s| *s = 0.0);
-        self.out_fifo.iter_mut().for_each(|s| *s = 0.0);
-        self.out_accum.iter_mut().for_each(|s| *s = 0.0);
+        self.stft.reset();
         self.last_phase.iter_mut().for_each(|s| *s = 0.0);
         self.sum_phase.iter_mut().for_each(|s| *s = 0.0);
         self.held_magn.iter_mut().for_each(|s| *s = 0.0);
         self.held_adv.iter_mut().for_each(|s| *s = 0.0);
-        self.dry.iter_mut().for_each(|s| *s = 0.0);
         self.frozen = false;
-        self.rover = LATENCY;
-        self.dry_idx = 0;
     }
 
     fn set_params(&mut self, values: &[f32]) -> bool {
@@ -215,10 +159,7 @@ mod tests {
 
     #[test]
     fn latency_is_the_fft_minus_one_hop() {
-        assert_eq!(
-            SpectralFreeze::new(1.0).latency_frames(),
-            FFT_SIZE - STEP_SIZE
-        );
+        assert_eq!(SpectralFreeze::new(1.0).latency_frames(), LATENCY);
     }
 
     #[test]

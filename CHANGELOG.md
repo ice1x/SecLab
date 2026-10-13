@@ -22,6 +22,18 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Shared STFT overlap-add engine extracted to `vb_nodes::stft` (000220).** The `pitch-shifter`
+  and `spectral-freeze` nodes each inlined the same short-time-Fourier scaffolding — a Hann-windowed
+  analysis FIFO, the per-hop forward FFT, the inverse FFT with constant-overlap-add resynthesis, the
+  output FIFO/accumulator shifts and a latency-matched dry delay — differing only in the *spectral
+  transform* in the middle. That machinery now lives once in an `Stft` engine (`dry_delay`, `push`,
+  `forward`, `synthesize`, `reset`, plus the shared `FFT_SIZE`/`OSAMP`/`STEP_SIZE`/`HALF`/`LATENCY`
+  constants and the Hann² COLA normalisation); each node keeps only its `transform` over
+  `self.stft.fft_work` and its own per-bin state. Mirrors the biquad-core extraction of 000215. Pure
+  internal refactor — no change to either node's public API, registry descriptor, parameters or
+  `docs/nodes.md`, and every existing per-node DSP-law test passes unchanged; the engine adds its own
+  tests (an identity round-trip reconstructs a tone at unit gain). Future spectral nodes now cost
+  only their transform.
 - **Shared Direct Form I biquad core extracted to `vb_nodes::biquad` (000215).** The four RBJ
   cookbook nodes — `filter` (`Biquad`, LP/HP/BP/notch), `shelf-eq`, `peak-eq` and `allpass` — had
   each inlined an identical normalised-coefficient struct, the two-in/two-out delay state, the

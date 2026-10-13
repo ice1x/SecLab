@@ -63,6 +63,7 @@ pub mod slew;
 pub mod smooth;
 pub mod spectral_freeze;
 pub mod step_sequencer;
+pub mod stft;
 pub mod sub_osc;
 pub mod supersaw;
 pub mod svf;
