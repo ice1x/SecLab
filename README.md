@@ -607,6 +607,17 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
+- [x] 000218 — 🧩 **Channel vocoder node** (`vocoder`) — the classic "robot voice": a two-input
+  effect imprinting the spectral envelope of a **modulator** (voice) onto a **carrier** (synth).
+  Modulator → band-pass bank → per-band envelope followers; carrier → same bank, each band gated by
+  its modulator envelope, summed. 16 log-spaced constant-Q bands (80 Hz–7 kHz; Moog-16 band count,
+  log spacing per MFOS), each an RBJ band-pass on the shared `vb_nodes::biquad` core (reuses the
+  000215 refactor), per-band Q derived from the spacing so bands tile. Params `release_ms` / `mix`,
+  `effect` category, live `set_params`. A processing utility (two audio ins) → no factory patch,
+  like the EQ nodes. Unit-tested for the vocoder law (flat carrier takes the modulator's band, and
+  it tracks when the band moves), silence gating from either input, verbatim dry mix, bounded
+  output + a two-input registry test. Primary sources: Wikipedia, Moog 16-ch, MFOS 12-ch;
+  `docs/nodes.md` regenerated 🧪
 - [x] 000217 — 🧩 **Showcase patch for the pitch shifter — Octave Stack** — makes the new node
   playable from the palette: **Octave Stack** (`examples/octave_stack.ron`) is a 220 Hz saw through
   `pitch-shifter` at +12 semitones, 50 % dry/wet, so the fundamental and its octave ring together

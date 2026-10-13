@@ -160,6 +160,14 @@ Auto-generated from the registry — do not edit by hand.
   - `rate_hz` — range 0.1..20, default 5
   - `depth` — range 0..1, default 0.5
 
+### vocoder
+
+- **Inputs:** `carrier` (audio), `modulator` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `release_ms` — range 1..500, default 15
+  - `mix` — range 0..1, default 1
+
 ### wavefolder
 
 - **Inputs:** `in` (audio)

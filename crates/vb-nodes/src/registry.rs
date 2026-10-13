@@ -69,6 +69,7 @@ use crate::tremolo::Tremolo;
 use crate::vca::Vca;
 use crate::vcf::Vcf;
 use crate::vco::Vco;
+use crate::vocoder::Vocoder;
 use crate::wavefolder::Wavefolder;
 use crate::waveshaper::{Shape, Waveshaper};
 use crate::wavetable::Wavetable;
@@ -932,6 +933,25 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(PitchShifter::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "vocoder",
+            "effect",
+            || {
+                GraphNode::new(
+                    "vocoder",
+                    vec![audio_in("carrier"), audio_in("modulator")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(Vocoder::new(15.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("release_ms", 1.0, 500.0, 15.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(Vocoder::new(arg(v, 0, 15.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2085,6 +2105,61 @@ mod tests {
         assert!(
             mag(600.0) > 8.0 * mag(300.0),
             "registry pitch-shifter moves 300 Hz up an octave to 600 Hz"
+        );
+    }
+
+    #[test]
+    fn vocoder_is_registered_as_a_two_input_effect_and_imprints_the_modulator() {
+        let r = Registry::with_builtins();
+        let d = r.get("vocoder").expect("vocoder registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("vocoder").unwrap();
+        assert_eq!(node.inputs.len(), 2, "carrier + modulator");
+        assert_eq!(node.inputs[0].name, "carrier");
+        assert_eq!(node.inputs[1].name, "modulator");
+        assert!(node
+            .inputs
+            .iter()
+            .all(|p| p.signal == vb_core::SignalType::Audio));
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["release_ms", "mix"]
+        );
+        // Built from the registry: a broadband carrier gated by a 1.2 kHz modulator tone comes
+        // out with its energy in the 1.2 kHz band, not at 260 Hz.
+        let n = 32_768;
+        let mut state = 0x9E37_79B9_u32;
+        let carrier: Vec<f32> = (0..n)
+            .map(|_| {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (state >> 8) as f32 / (1u32 << 23) as f32 - 1.0
+            })
+            .collect();
+        let modulator: Vec<f32> = (0..n)
+            .map(|i| (core::f32::consts::TAU * 1_200.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let ctx = ProcessContext {
+            sample_rate: 48_000.0,
+            frames: n,
+        };
+        let mut p = d.processor_with(&BuildContext::default(), &[15.0, 1.0]);
+        let mut out = vec![0.0_f32; n];
+        p.process(&ctx, &[&carrier, &modulator], &mut [&mut out]);
+        let mag = |hz: f32| {
+            let w = core::f32::consts::TAU * hz / 48_000.0;
+            let (mut re, mut im) = (0.0_f32, 0.0_f32);
+            for (k, &x) in out[16_384..].iter().enumerate() {
+                re += x * (w * k as f32).cos();
+                im -= x * (w * k as f32).sin();
+            }
+            (re * re + im * im).sqrt()
+        };
+        assert!(
+            mag(1_200.0) > 3.0 * mag(260.0),
+            "registry vocoder imprints the modulator's 1.2 kHz band onto the carrier"
         );
     }
 

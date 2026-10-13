@@ -45,6 +45,23 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Channel vocoder node (`vocoder`, 000218).** The classic "robot voice": a two-input effect that
+  imprints the moment-to-moment spectral envelope of a **modulator** (input 1, typically a voice)
+  onto a **carrier** (input 0, typically a synth). The modulator is split into a bank of band-pass
+  filters, each band's level is tracked by an envelope follower, and the carrier is split by the
+  **same** bank with each carrier band multiplied by its modulator band's envelope before the bands
+  are summed — so a sustained synth "speaks" the modulator. 16 log-spaced constant-Q bands from
+  80 Hz to 7 kHz (the band count follows the Moog 16-channel vocoder; log spacing matches pitch
+  perception, as in the MFOS design), each an RBJ band-pass biquad run on the shared
+  `vb_nodes::biquad` core; the per-band Q is derived from the band spacing so the bands tile. Reuses
+  the Direct Form I core extracted in 000215. Parameters `release_ms` (envelope follower smoothing,
+  1..500) and `mix` (dry carrier → vocoded); `effect` category; `set_params` updates live. Like the
+  EQ/dynamics nodes it is a processing utility (two audio inputs), so it ships without a factory
+  "instrument" patch. Unit-tested for the vocoder law (a flat carrier takes the modulator's band;
+  moving the modulator band moves the output band), silence gating from either input, a verbatim
+  dry mix, log-spaced centres, and bounded output; a registry behaviour test drives it with two
+  inputs. Primary sources: Wikipedia "Vocoder", Moog 16-channel (50–5080 Hz), MFOS 12-channel band
+  table. `docs/nodes.md` regenerated 🧪
 - **Showcase patch for the pitch shifter — Octave Stack (000217).** The new `pitch-shifter` now
   ships as a note-gated factory instrument so it is playable from the palette, not just wireable:
   **Octave Stack** (`examples/octave_stack.ron`) is a 220 Hz saw run through `pitch-shifter` at
