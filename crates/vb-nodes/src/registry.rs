@@ -30,6 +30,7 @@ use crate::filter::{Biquad, FilterKind};
 use crate::flanger::Flanger;
 use crate::fm_op::FmOp;
 use crate::formant::Formant;
+use crate::freq_shifter::FreqShifter;
 use crate::gate::Gate;
 use crate::glide::Glide;
 use crate::granular::Granular;
@@ -898,6 +899,19 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(RingMod::new(arg(v, 0, 200.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "freq-shifter",
+            "effect",
+            || GraphNode::new("freq-shifter", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(FreqShifter::new(0.0, 1.0)),
+            || {
+                vec![
+                    Parameter::new("shift_hz", -2_000.0, 2_000.0, 0.0),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(FreqShifter::new(arg(v, 0, 0.0), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -1972,6 +1986,45 @@ mod tests {
         assert_eq!(
             bc.iter().map(|p| p.name.as_str()).collect::<Vec<_>>(),
             vec!["bits", "downsample", "mix"]
+        );
+    }
+
+    #[test]
+    fn freq_shifter_is_registered_as_an_effect_and_shifts_the_spectrum() {
+        let r = Registry::with_builtins();
+        let d = r.get("freq-shifter").expect("freq-shifter registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("freq-shifter").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["shift_hz", "mix"]
+        );
+        // Built from the registry: a 2 kHz tone shifted +500 Hz concentrates at 2.5 kHz.
+        let input: Vec<f32> = (0..8_192)
+            .map(|i| (core::f32::consts::TAU * 2_000.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[500.0, 1.0]),
+            &input,
+        );
+        let mag = |hz: f32| {
+            let w = core::f32::consts::TAU * hz / 48_000.0;
+            let (mut re, mut im) = (0.0_f32, 0.0_f32);
+            for (n, &x) in out[1_024..].iter().enumerate() {
+                re += x * (w * n as f32).cos();
+                im -= x * (w * n as f32).sin();
+            }
+            (re * re + im * im).sqrt()
+        };
+        assert!(
+            mag(2_500.0) > 10.0 * mag(2_000.0),
+            "registry freq-shifter moves 2 kHz up to 2.5 kHz"
         );
     }
 
