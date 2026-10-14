@@ -57,6 +57,14 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Vocoder Choir showcase patch (`examples/vocoder_choir.ron`, 000226).** Demos the `vocoder`
+  (000218) as a playable instrument. A self-contained vocoder needs both a carrier and a formant-rich
+  modulator, so the patch builds both: the carrier is a 7-voice `supersaw` that tracks the note, and
+  the modulator is white `noise` shaped by the `formant` filter into a vowel; the `vocoder` imprints
+  that vowel's moving formants onto the supersaw, and an ADSR-gated `vca` (bias 0) makes the patch
+  silent at rest. Playing a note sings a bright, vowel-tinted "choir". Generated from the graph API
+  (ports match the registry), added to the example manifest and the editor's factory palette, with a
+  behaviour test: silent at rest, audible on a note.
 - **Spectral Bloom showcase patch (`examples/spectral_bloom.ron`, 000225).** The first factory patch
   built on the spectral family — a note-gated voice that makes `spectral-blur` (000224) audible: a saw
   `pitch-osc` through an ADSR-gated `vca` into `spectral-blur` at a high `amount` (0.97). A held note
