@@ -57,6 +57,27 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Spectral blur node (`spectral-blur`, 000224).** A one-pole temporal smoothing of the magnitude
+  spectrum — the frequency-domain equivalent of blurring an image along the time axis. Each frame
+  every bin's analysed magnitude is passed through a one-pole low-pass *across frames*
+  (`M'[k] = amount·M'[k] + (1-amount)·|X[k]|`), while the phase is propagated by the phase vocoder
+  (each bin's synthesis phase accumulates its measured per-hop advance, exactly as `spectral-freeze`
+  does). With `amount = 0` the smoothing is a no-op and the node is a faithful analysis/resynthesis
+  round-trip; as `amount → 1` the spectrum changes ever more slowly, so transients smear and a note
+  blooms into a long decaying tail after the input stops — a soft, reverb-like "spectral smear".
+  Clean tails: when the input goes silent the measured phase advance is meaningless (the bin is
+  numerical noise), so each bin's advance is only *updated* from frames whose magnitude is audible
+  (> `ADV_EPS`) and otherwise *held* at its last reliable value, so the still-audible smoothed
+  magnitude keeps rotating at the last real pitch rather than at garbage — the decay is a clean tone.
+  Fourth node built on the shared `vb_nodes::stft` engine (000220); reuses the `spectral-freeze`
+  phase-vocoder structure (`last_phase`/`sum_phase`/`held_adv` per bin) with continuous magnitude
+  smoothing in place of a hard freeze gate. Parameters `amount` (0..0.999, the per-hop retention) and
+  `mix`; `effect` category; reports `latency_frames`; `set_params` updates live. A processing utility,
+  so no factory patch. Unit-tested on the DSP law — `amount = 0` reconstructs the input at unit gain;
+  a tone burst followed by silence leaves a clean 440 Hz tail (rms ≫ the no-blur case, dominant over
+  1 kHz) that lengthens monotonically with `amount`; plus silence-in/out, verbatim dry mix, bounded
+  output and `set_params` clamping; a registry behaviour test confirms the bloomed tail. `docs/nodes.md`
+  regenerated 🧪
 - **Whisperize node (`whisperize`, 000223).** The phase-vocoder "whisper voice" — the complement of
   `robotize`. Where robotization replaces every bin's phase with a *fixed* value (zero) to impose a
   single pitch, whisperization replaces each bin's phase with a *random* value while keeping its

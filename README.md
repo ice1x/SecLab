@@ -616,6 +616,17 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000224 — 🧩 **Spectral blur node** (`spectral-blur`) — a one-pole temporal smoothing of the
+  magnitude spectrum (blurring the spectrogram along the time axis). Each frame every bin's magnitude
+  is low-passed across frames (`M' = amount·M' + (1-amount)·|X|`) while the phase vocoder propagates
+  the pitch, so `amount = 0` is a faithful round-trip and `amount → 1` smears transients and blooms a
+  note into a long, clean decaying tail after the input stops — a reverb-like "spectral smear". Tails
+  stay clean because each bin holds its last audible phase advance through silence instead of rotating
+  on numerical noise. Fourth node on the shared `vb_nodes::stft` engine (000220), reusing the
+  `spectral-freeze` phase-vocoder structure with continuous smoothing instead of a hard freeze. Params
+  `amount` (0..0.999) / `mix`, `effect` category, `latency_frames`, live `set_params`. Unit-tested
+  (no-blur reconstructs; a burst→silence leaves a 440 Hz tail that grows with `amount`; silence/dry/
+  bounded) + registry test. `docs/nodes.md` regenerated 🧪
 - [x] 000223 — 🧩 **Whisperize node** (`whisperize`) — the phase-vocoder "whisper voice", complement
   of `robotize`: each frame keeps its magnitude spectrum but draws a fresh **random** phase per bin.
   Destroying phase coherence removes all pitch, but the preserved magnitude envelope keeps the timbre
