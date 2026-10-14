@@ -61,6 +61,7 @@ use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::shelf_eq::{shelf_mode_from, ShelfEq};
 use crate::slew::Slew;
+use crate::spectral_blur::SpectralBlur;
 use crate::spectral_freeze::SpectralFreeze;
 use crate::spectral_gate::SpectralGate;
 use crate::step_sequencer::StepSequencer;
@@ -956,6 +957,25 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(Vocoder::new(arg(v, 0, 15.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "spectral-blur",
+            "effect",
+            || {
+                GraphNode::new(
+                    "spectral-blur",
+                    vec![audio_in("in")],
+                    vec![audio_out("out")],
+                )
+            },
+            || Box::new(SpectralBlur::new(0.9, 1.0)),
+            || {
+                vec![
+                    Parameter::new("amount", 0.0, 0.999, 0.9),
+                    Parameter::new("mix", 0.0, 1.0, 1.0),
+                ]
+            },
+            |_, v| Box::new(SpectralBlur::new(arg(v, 0, 0.9), arg(v, 1, 1.0))),
         ),
         NodeDescriptor::new(
             "spectral-freeze",
@@ -2213,6 +2233,42 @@ mod tests {
         assert!(
             mag(1_200.0) > 3.0 * mag(260.0),
             "registry vocoder imprints the modulator's 1.2 kHz band onto the carrier"
+        );
+    }
+
+    #[test]
+    fn spectral_blur_is_registered_as_an_effect_and_blooms_a_decaying_tail() {
+        let r = Registry::with_builtins();
+        let d = r.get("spectral-blur").expect("spectral-blur registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("spectral-blur").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["amount", "mix"]
+        );
+        // Built from the registry: a 440 Hz burst then silence. With heavy blur the smoothed
+        // spectrum keeps ringing well past the offset, whereas the dry input would be gone.
+        let n1 = 16_384;
+        let n2 = 16_384;
+        let mut input: Vec<f32> = (0..n1)
+            .map(|i| (core::f32::consts::TAU * 440.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        input.extend(std::iter::repeat_n(0.0, n2));
+        let out = run_effect(
+            d.processor_with(&BuildContext::default(), &[0.98, 1.0]),
+            &input,
+        );
+        let tail = &out[n1 + 4_096..];
+        let rms = (tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32).sqrt();
+        assert!(
+            rms > 0.03,
+            "registry spectral-blur blooms a tail past the input: rms = {rms}"
         );
     }
 

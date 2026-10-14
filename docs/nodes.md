@@ -159,6 +159,14 @@ Auto-generated from the registry — do not edit by hand.
 - **Parameters:**
   - `mix` — range 0..1, default 1
 
+### spectral-blur
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `amount` — range 0..0.999, default 0.9
+  - `mix` — range 0..1, default 1
+
 ### spectral-freeze
 
 - **Inputs:** `in` (audio), `freeze` (control)
