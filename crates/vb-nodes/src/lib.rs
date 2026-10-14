@@ -78,6 +78,7 @@ pub mod vocoder;
 pub mod wavefolder;
 pub mod waveshaper;
 pub mod wavetable;
+pub mod whisperize;
 pub mod width;
 pub mod xfade;
 
@@ -147,5 +148,6 @@ pub use vco::Vco;
 pub use vocoder::Vocoder;
 pub use wavefolder::Wavefolder;
 pub use waveshaper::{Shape, Waveshaper};
+pub use whisperize::Whisperize;
 pub use width::Width;
 pub use xfade::Xfade;

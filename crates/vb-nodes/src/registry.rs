@@ -76,6 +76,7 @@ use crate::vocoder::Vocoder;
 use crate::wavefolder::Wavefolder;
 use crate::waveshaper::{Shape, Waveshaper};
 use crate::wavetable::Wavetable;
+use crate::whisperize::Whisperize;
 use crate::width::Width;
 use crate::xfade::Xfade;
 
@@ -996,6 +997,14 @@ fn builtins() -> Vec<NodeDescriptor> {
             || Box::new(Robotize::new(1.0)),
             || vec![Parameter::new("mix", 0.0, 1.0, 1.0)],
             |_, v| Box::new(Robotize::new(arg(v, 0, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "whisperize",
+            "effect",
+            || GraphNode::new("whisperize", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Whisperize::new(1.0)),
+            || vec![Parameter::new("mix", 0.0, 1.0, 1.0)],
+            |_, v| Box::new(Whisperize::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2339,6 +2348,46 @@ mod tests {
             num / den > 0.85,
             "registry robotize is periodic at the hop: autocorr = {}",
             num / den
+        );
+    }
+
+    #[test]
+    fn whisperize_is_registered_as_an_effect_and_removes_the_pitch_period() {
+        let r = Registry::with_builtins();
+        let d = r.get("whisperize").expect("whisperize registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("whisperize").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mix"]
+        );
+        // Built from the registry: a 440 Hz tone whisperises to a signal that keeps its energy
+        // band but loses tonal coherence — the long-window coherent amplitude at 440 collapses
+        // relative to the signal power (tonality = 2·|coh|²/power → ~0), while a clean tone is ~1.
+        let n = 24_576;
+        let input: Vec<f32> = (0..n)
+            .map(|i| (core::f32::consts::TAU * 440.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(d.processor_with(&BuildContext::default(), &[1.0]), &input);
+        let tail = &out[8_192..];
+        let w = core::f32::consts::TAU * 440.0 / 48_000.0;
+        let (mut re, mut im) = (0.0_f32, 0.0_f32);
+        for (k, &x) in tail.iter().enumerate() {
+            re += x * (w * k as f32).cos();
+            im -= x * (w * k as f32).sin();
+        }
+        let coh = (re * re + im * im).sqrt() / tail.len() as f32;
+        let power = tail.iter().map(|s| s * s).sum::<f32>() / tail.len() as f32;
+        let tonality = 2.0 * coh * coh / power;
+        assert!(
+            tonality < 0.2,
+            "registry whisperize destroys tonal coherence: tonality = {tonality}"
         );
     }
 

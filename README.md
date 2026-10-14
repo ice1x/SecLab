@@ -616,6 +616,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000223 — 🧩 **Whisperize node** (`whisperize`) — the phase-vocoder "whisper voice", complement
+  of `robotize`: each frame keeps its magnitude spectrum but draws a fresh **random** phase per bin.
+  Destroying phase coherence removes all pitch, but the preserved magnitude envelope keeps the timbre
+  — a sung vowel becomes the same vowel whispered. DAFX (Zölzer) `ft = abs(f)·exp(i·rand)`; the phase
+  comes from a seeded xorshift32 PRNG (same seed as `noise`) so renders are deterministic and `reset`
+  replays. Third node on the shared `vb_nodes::stft` engine (000220), memoryless per frame but for the
+  PRNG. Single `mix` param, `effect` category, `latency_frames`, live `set_params`. Unit-tested on the
+  law (a 440 Hz tone's tonality ≈1 collapses to ≈0.0005 while energy stays in-band) + determinism +
+  silence/dry/bounded + registry test. `docs/nodes.md` regenerated 🧪
 - [x] 000222 — 🧩 **Robotize node** (`robotize`) — the phase-vocoder "robot voice": each frame keeps
   its magnitude spectrum and discards the phase, so every resynthesised grain is identical and the
   overlap-add becomes a pulse train one hop apart. The output pitch collapses to `sample_rate /
