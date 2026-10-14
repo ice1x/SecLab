@@ -616,6 +616,18 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000229 — 🤖 **The assistant authors the control panel, not just the graph** (prompt v2) — the
+  NL→patch contract was structure-only (kinds/ports/edges), so a generated patch arrived as a bare
+  graph with an auto-gridded default panel the model never chose. `NodeEntry` already carried the
+  interface (`values`/`widgets`/`panel_pos`/`panel_color`/`panel_hidden`, optional via serde) and
+  `from_ron` already accepted it — only the contract was silent. `vb-ai`'s prompt is now `system_v2.md`
+  (`PROMPT_VERSION` → 2) with a **"Designing the interface"** section documenting each field and the
+  five valid widget labels (`knob`/`slider`/`fader`/`switch`/`xy-pad`); the embedded example is
+  enriched to demonstrate them and regenerated from the graph API; the generate/edit pipeline passes
+  the authored interface through untouched. Fully offline tests (preamble documents every field +
+  label, example carries valid panel data, a scripted reply's values/widgets/panel survive
+  `generate_patch`). Follow-ups: round-trip existing values/panel through `to_prompt` so edits keep
+  the interface; validate panel coherence as a hard gate 🧪
 - [x] 000227 — 🎛️ **Korg MS-20 clone patch** (`examples/ms20.ron`) — a factory clone whose signature
   (unlike any existing clone) is **two filters in series**: VCO1 + VCO2 → mixer → HPF → LPF → VCA
   (confirmed from Korg's own spec/signal flow). Two `pitch-osc` VCOs (saw + detuned square) summed by

@@ -57,6 +57,25 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The assistant authors the control panel, not just the graph (prompt v2, 000229).** The NL→patch
+  contract was structure-only: the system prompt, the embedded example, and `ProjectDoc::to_prompt`
+  all described only `kind`/`inputs`/`outputs`/`feedback`/`edges`, so a generated patch arrived as a
+  bare graph and the player got an auto-gridded default panel the model had no say over. The data
+  model already carried the interface (`NodeEntry` holds `values`, `widgets`, `panel_pos`,
+  `panel_color`, `panel_hidden`, all optional via serde defaults) and `from_ron` already accepted it —
+  only the *contract* was silent. `vb-ai`'s prompt asset is now `system_v2.md` (`PROMPT_VERSION` → 2)
+  with a new **"Designing the interface"** section: it documents each presentation field, lists the
+  five valid widget labels (`knob`/`slider`/`fader`/`switch`/`xy-pad`) and when to use each, and the
+  output-contract schema now shows the optional fields. The embedded `example_patch.ron` was enriched
+  to demonstrate them (parameter values, a `switch` for the discrete waveform, a `knob`/`slider`, two
+  `panel_pos` placements and a `panel_color` accent) and is regenerated from the graph API so it stays
+  valid. The generate/edit pipeline passes the authored interface through untouched. Tests: the
+  preamble documents every interface field and widget label; the example parses, builds a graph, and
+  carries the panel data with only valid widget labels; and a scripted reply's `values`/`widgets`/
+  `panel_pos`/`panel_color` survive `generate_patch` end to end. Fully offline (`ScriptedProvider`);
+  no network. Follow-ups: feed existing `values`/panel back through `to_prompt` so edits preserve the
+  interface, and validate panel coherence (widget labels, value ranges, hidden-index bounds) as a hard
+  gate.
 - **Korg MS-20 clone patch (`examples/ms20.ron`, 000227).** A factory clone of the Korg MS-20 voice,
   whose signature — not shared by any existing clone — is its **two filters in series**: the audio
   path is VCO1 + VCO2 → mixer → high-pass filter → low-pass filter → VCA (confirmed from Korg's own

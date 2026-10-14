@@ -9,10 +9,15 @@ use vb_nodes::{node_reference, Registry};
 use vb_project::ProjectDoc;
 
 /// Version of the prompt asset set. Bump when the pre-prompt or contract changes.
-pub const PROMPT_VERSION: u32 = 1;
+///
+/// v2 adds the "Designing the interface" contract: a node entry may carry `values`,
+/// `widgets`, `panel_pos`, `panel_color`, and `panel_hidden`, so the assistant authors
+/// the control panel, not just the signal graph.
+pub const PROMPT_VERSION: u32 = 2;
 
-/// The versioned system pre-prompt: role, grounding rules, output contract, refusals.
-pub const SYSTEM_PREAMBLE: &str = include_str!("../assets/prompts/system_v1.md");
+/// The versioned system pre-prompt: role, grounding rules, output contract (graph **and**
+/// interface), refusals.
+pub const SYSTEM_PREAMBLE: &str = include_str!("../assets/prompts/system_v2.md");
 
 /// A concrete, valid `ProjectDoc` in RON — the shape the assistant must emit. Embedded
 /// so the example shown to the model is verified (a test parses it) rather than a
@@ -79,6 +84,29 @@ mod tests {
             p.contains("only") && p.to_lowercase().contains("node reference"),
             "grounding rule references the node list"
         );
+        // v2: the contract also covers the control panel, so the model authors the interface.
+        assert!(
+            p.contains("Designing the interface"),
+            "interface section present"
+        );
+        for field in [
+            "values",
+            "widgets",
+            "panel_pos",
+            "panel_color",
+            "panel_hidden",
+        ] {
+            assert!(p.contains(field), "interface field '{field}' documented");
+        }
+        for widget in [
+            "\"knob\"",
+            "\"slider\"",
+            "\"fader\"",
+            "\"switch\"",
+            "\"xy-pad\"",
+        ] {
+            assert!(p.contains(widget), "valid widget label {widget} listed");
+        }
     }
 
     #[test]
@@ -89,6 +117,38 @@ mod tests {
         let graph = doc.to_graph().expect("example builds a graph");
         assert_eq!(graph.node_count(), 2);
         assert_eq!(graph.edges().len(), 1);
+    }
+
+    #[test]
+    fn the_embedded_example_demonstrates_the_interface_contract() {
+        // v2: the example must actually SHOW the panel fields, or the model has nothing to
+        // mirror for the interface half of the contract.
+        let doc = vb_project::from_ron(EXAMPLE_PATCH_RON).expect("example parses");
+        assert!(
+            doc.nodes.iter().all(|n| !n.values.is_empty()),
+            "every node sets its parameter values"
+        );
+        assert!(
+            doc.nodes.iter().all(|n| !n.widgets.is_empty()),
+            "every node assigns widgets"
+        );
+        assert!(
+            doc.nodes.iter().any(|n| n.panel_pos.is_some()),
+            "at least one module is placed on the panel"
+        );
+        assert!(
+            doc.nodes.iter().any(|n| n.panel_color.is_some()),
+            "the example demonstrates a panel accent colour"
+        );
+        // The widget labels in the example are the ones the contract declares valid.
+        let valid = ["knob", "slider", "fader", "switch", "xy-pad"];
+        assert!(
+            doc.nodes
+                .iter()
+                .flat_map(|n| &n.widgets)
+                .all(|w| valid.contains(&w.as_str())),
+            "example widgets use only valid labels"
+        );
     }
 
     #[test]
