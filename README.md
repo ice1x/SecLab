@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000228 — 🎛️ **Poly Ensemble patch** (`examples/poly_ensemble.ron`) — the full eight-voice
+  showcase. Juno-60 and Minilogue XD each bind only four of the allocator's eight voice slots; this
+  patch binds all `MAX_VOICES` (8): eight independent `voice-in` chains (saw `pitch-osc` → ADSR-gated
+  `vca`, bias 0 → silent at rest) summed through a balanced `add` tree into a master `phaser` for a
+  string-ensemble swirl (distinct from Juno's chorus / Minilogue's reverb). An eight-note chord lights
+  up every slot — proof the allocator and per-voice fan-out scale to the whole bank. Graph-API
+  generated, in the manifest + factory palette ("Poly Ensemble"), with an eight-`voice-in` /
+  silent-at-rest / single-note / eight-note-chord-sums-and-stays-bounded test 🧪
 - [x] 000227 — 🎛️ **Korg MS-20 clone patch** (`examples/ms20.ron`) — a factory clone whose signature
   (unlike any existing clone) is **two filters in series**: VCO1 + VCO2 → mixer → HPF → LPF → VCA
   (confirmed from Korg's own spec/signal flow). Two `pitch-osc` VCOs (saw + detuned square) summed by

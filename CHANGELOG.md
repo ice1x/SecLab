@@ -57,6 +57,18 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Poly Ensemble patch — the full eight-voice showcase (`examples/poly_ensemble.ron`, 000228).**
+  The existing polyphonic patches (Juno-60, Minilogue XD) each bind only four of the voice
+  allocator's eight slots, so none of them exercises the whole voice bank. This patch binds all
+  `MAX_VOICES` (8): eight independent `voice-in` chains, each a saw `pitch-osc` through an ADSR-gated
+  `vca` (bias 0 → silent at rest), summed through a balanced tree of `add` nodes into a master
+  `phaser` for a slow string-ensemble swirl (a distinct master voice — Juno-60 uses a chorus,
+  Minilogue a reverb). A full eight-note chord lights up every slot at once, which is the proof the
+  allocator and the per-voice fan-out scale to the entire bank rather than just a hand of notes.
+  Generated from the graph API (ports match the registry), in the example manifest and the editor's
+  factory palette ("Poly Ensemble"), with a behaviour test: eight `voice-in` nodes present, silent at
+  rest, a single note audible, and an eight-note chord summing to well over twice a single note while
+  staying bounded.
 - **Korg MS-20 clone patch (`examples/ms20.ron`, 000227).** A factory clone of the Korg MS-20 voice,
   whose signature — not shared by any existing clone — is its **two filters in series**: the audio
   path is VCO1 + VCO2 → mixer → high-pass filter → low-pass filter → VCA (confirmed from Korg's own
