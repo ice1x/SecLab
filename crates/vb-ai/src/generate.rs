@@ -272,6 +272,47 @@ mod tests {
     }
 
     #[test]
+    fn the_authored_interface_survives_the_pipeline() {
+        // v2 contract: a reply may carry panel data (values / widgets / panel_pos / colour).
+        // The pipeline must pass it through untouched so the generated instrument arrives
+        // with its interface, not just its graph. The embedded example already carries it.
+        let (registry, config) = setup();
+        let provider = ScriptedProvider::replies(&[&reply_with(EXAMPLE_PATCH_RON)]);
+
+        let out = generate_patch(
+            &provider,
+            &registry,
+            &config,
+            "a tone with a panel",
+            None,
+            3,
+        )
+        .expect("valid patch");
+        let osc = &out.doc.nodes[0];
+        assert_eq!(
+            osc.values,
+            vec![2.0, 110.0],
+            "parameter values carried through"
+        );
+        assert_eq!(
+            osc.widgets,
+            vec!["switch".to_owned(), "knob".to_owned()],
+            "per-parameter widgets carried through"
+        );
+        assert_eq!(
+            osc.panel_pos,
+            Some((0.0, 0.0)),
+            "panel placement carried through"
+        );
+        let amp = &out.doc.nodes[1];
+        assert_eq!(
+            amp.panel_color.as_deref(),
+            Some("#88ccff"),
+            "panel accent colour carried through"
+        );
+    }
+
+    #[test]
     fn recovers_after_the_validator_rejects_the_first_answer() {
         let (registry, config) = setup();
         // First: an unknown kind (rejected); second: the valid example.

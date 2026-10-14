@@ -3,7 +3,8 @@
 //! Each skill is driven through a scripted (mock-provider) dialogue, and the exact
 //! prompts it produced are checked against pinned "golden" strings — the versioned
 //! pre-prompt's contract sentences and each skill's framing template. If someone edits
-//! `system_v1.md` or a skill's wording, these fail, so a prompt regression cannot slip
+//! the versioned pre-prompt (`system_v2.md`) or a skill's wording, these fail, so a prompt
+//! regression cannot slip
 //! through silently. They assert stable text, not byte-exact whole prompts, so adding a
 //! node (which grows the injected node reference) does not spuriously break them.
 
