@@ -616,6 +616,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000226 — 🎛️ **Vocoder Choir showcase patch** (`examples/vocoder_choir.ron`) — demos the
+  `vocoder` (000218) as a playable instrument. Carrier = a 7-voice `supersaw` tracking the note;
+  modulator = white `noise` shaped by the `formant` filter into a vowel; the vocoder imprints the
+  vowel's formants onto the supersaw, and an ADSR-gated `vca` (bias 0) keeps it silent at rest.
+  Playing a note sings a bright, vowel-tinted choir. Generated from the graph API, in the manifest +
+  factory palette, with a silent-at-rest / audible-on-note test 🧪
 - [x] 000225 — 🎛️ **Spectral Bloom showcase patch** (`examples/spectral_bloom.ron`) — the first
   factory patch on the spectral family, making `spectral-blur` (000224) audible: a saw `pitch-osc`
   through an ADSR-gated `vca` into `spectral-blur` at a high `amount`. A held note is a saw with a
