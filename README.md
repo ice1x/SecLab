@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000227 — 🎛️ **Korg MS-20 clone patch** (`examples/ms20.ron`) — a factory clone whose signature
+  (unlike any existing clone) is **two filters in series**: VCO1 + VCO2 → mixer → HPF → LPF → VCA
+  (confirmed from Korg's own spec/signal flow). Two `pitch-osc` VCOs (saw + detuned square) summed by
+  `add`, into two `vcf` filters (both 2-pole/12 dB-oct like the hardware) wired HP → LP, the LPF given
+  a high peak + wide envelope sweep for the aggressive resonant MS-20 bite. One ADSR (EG2) sweeps both
+  filters and gates the `vca` (bias 0 → silent at rest), matching the MS-20's EG2 wiring. Graph-API
+  generated, in the manifest + factory palette, with a two-filters-in-series / silent-at-rest /
+  audible-on-note test 🧪
 - [x] 000226 — 🎛️ **Vocoder Choir showcase patch** (`examples/vocoder_choir.ron`) — demos the
   `vocoder` (000218) as a playable instrument. Carrier = a 7-voice `supersaw` tracking the note;
   modulator = white `noise` shaped by the `formant` filter into a vowel; the vocoder imprints the

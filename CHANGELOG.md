@@ -57,6 +57,17 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Korg MS-20 clone patch (`examples/ms20.ron`, 000227).** A factory clone of the Korg MS-20 voice,
+  whose signature — not shared by any existing clone — is its **two filters in series**: the audio
+  path is VCO1 + VCO2 → mixer → high-pass filter → low-pass filter → VCA (confirmed from Korg's own
+  MS-20 spec and signal-flow descriptions — VCO mixer into the HPF, HPF into the LPF, VCA after the
+  filters). Built as two `pitch-osc` VCOs (a saw and a slightly detuned square) summed by an `add`
+  mixer, then two `vcf` nodes (both 2-pole/12 dB-per-octave like the real MS-20) wired HP → LP, the
+  low-pass given a high peak (`q`) and a wide envelope sweep for the aggressive resonant MS-20
+  character. One ADSR (EG2) modulates both filter cutoffs and gates the `vca` (bias 0 → silent at
+  rest), matching the MS-20's EG2 hard-wiring to the filters and the amp. Generated from the graph
+  API (ports match the registry), in the example manifest and the editor's factory palette, with a
+  behaviour test: two filters present and in series, silent at rest, audible on a note.
 - **Vocoder Choir showcase patch (`examples/vocoder_choir.ron`, 000226).** Demos the `vocoder`
   (000218) as a playable instrument. A self-contained vocoder needs both a carrier and a formant-rich
   modulator, so the patch builds both: the carrier is a 7-voice `supersaw` that tracks the note, and
