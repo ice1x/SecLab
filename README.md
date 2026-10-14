@@ -616,6 +616,17 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000222 — 🧩 **Robotize node** (`robotize`) — the phase-vocoder "robot voice": each frame keeps
+  its magnitude spectrum and discards the phase, so every resynthesised grain is identical and the
+  overlap-add becomes a pulse train one hop apart. The output pitch collapses to `sample_rate /
+  STEP_SIZE` (≈187.5 Hz at 48 kHz) and its harmonics **regardless of input pitch**, while the timbre
+  (magnitude envelope) is preserved — a monotone, buzzy robot. DAFX (Zölzer) `r = abs(f)`; the
+  reference `fftshift` that centres the zero-phase pulse is folded into the frequency domain as the
+  `(-1)^k` half-frame shift. Second node on the shared `vb_nodes::stft` engine (000220), memoryless
+  per frame like `spectral-gate`. Single `mix` param, `effect` category, `latency_frames`, live
+  `set_params`. Unit-tested on the DSP law (output autocorrelation at lag `STEP_SIZE` ≈1 while the dry
+  tone is not; a different input pitch gives the same hop period) + silence/dry/bounded + registry
+  test. `docs/nodes.md` regenerated 🧪
 - [x] 000221 — 🧩 **Spectral gate node** (`spectral-gate`) — a frequency-domain noise gate: the
   gate decision is made **per bin**, not on the whole signal. Each frame keeps only the bins within
   `threshold_db` of that frame's loudest bin and zeroes the rest, so a tone over a hiss floor comes
