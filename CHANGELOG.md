@@ -57,6 +57,13 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Spectral Bloom showcase patch (`examples/spectral_bloom.ron`, 000225).** The first factory patch
+  built on the spectral family — a note-gated voice that makes `spectral-blur` (000224) audible: a saw
+  `pitch-osc` through an ADSR-gated `vca` into `spectral-blur` at a high `amount` (0.97). A held note
+  sounds a saw with a smeared attack; on release the blurred spectrum keeps blooming into a soft,
+  reverb-like tail instead of cutting off. Generated from the graph API (so its ports match the
+  registry exactly), added to the example manifest and the editor's factory palette, with a behaviour
+  test: silent at rest, audible on a note once the ~768-frame STFT latency clears (32 × 256 frames).
 - **Spectral blur node (`spectral-blur`, 000224).** A one-pole temporal smoothing of the magnitude
   spectrum — the frequency-domain equivalent of blurring an image along the time axis. Each frame
   every bin's analysed magnitude is passed through a one-pole low-pass *across frames*

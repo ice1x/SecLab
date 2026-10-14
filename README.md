@@ -616,6 +616,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000225 — 🎛️ **Spectral Bloom showcase patch** (`examples/spectral_bloom.ron`) — the first
+  factory patch on the spectral family, making `spectral-blur` (000224) audible: a saw `pitch-osc`
+  through an ADSR-gated `vca` into `spectral-blur` at a high `amount`. A held note is a saw with a
+  smeared attack; on release the blurred spectrum blooms into a soft, reverb-like tail. Generated from
+  the graph API, in the example manifest + factory palette, with a silent-at-rest / audible-on-note
+  behaviour test (32 × 256 frames to clear the STFT latency) 🧪
 - [x] 000224 — 🧩 **Spectral blur node** (`spectral-blur`) — a one-pole temporal smoothing of the
   magnitude spectrum (blurring the spectrogram along the time axis). Each frame every bin's magnitude
   is low-passed across frames (`M' = amount·M' + (1-amount)·|X|`) while the phase vocoder propagates

@@ -115,6 +115,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         "octave_stack",
         include_str!("../../../examples/octave_stack.ron"),
     ),
+    (
+        "spectral_bloom",
+        include_str!("../../../examples/spectral_bloom.ron"),
+    ),
 ];
 
 #[test]
@@ -1111,6 +1115,28 @@ fn octave_stack_is_a_pitch_shifter_voice_silent_at_rest_and_thick_on_a_note() {
 }
 
 #[test]
+fn spectral_bloom_is_a_spectral_blur_voice_silent_at_rest_and_blooms_on_a_note() {
+    let ron = include_str!("../../../examples/spectral_bloom.ron");
+    let doc = vb_project::open_ron(ron).expect("spectral_bloom loads");
+    assert!(
+        doc.nodes.iter().any(|e| e.node.kind == "spectral-blur"),
+        "the bloom voice is built on the spectral blur"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "spectral bloom must be silent until a note plays"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110); // ~110 Hz saw, smeared into a bloom
+    assert!(
+        // The spectral-blur STFT latency (~768 frames) plus the smoothing ramp means the voice
+        // needs several blocks before it rings out; 32 × 256 frames clears it.
+        peak_over(ron, &ctx, 256, 32) > 0.01,
+        "spectral bloom must sound on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -1174,7 +1200,8 @@ fn the_example_set_is_the_expected_manifest() {
             "random_steps",
             "flanged_sweep",
             "metallic_shift",
-            "octave_stack"
+            "octave_stack",
+            "spectral_bloom"
         ]
     );
     // No example is empty.
