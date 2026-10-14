@@ -124,6 +124,10 @@ const EXAMPLES: &[(&str, &str)] = &[
         include_str!("../../../examples/vocoder_choir.ron"),
     ),
     ("ms20", include_str!("../../../examples/ms20.ron")),
+    (
+        "poly_ensemble",
+        include_str!("../../../examples/poly_ensemble.ron"),
+    ),
 ];
 
 #[test]
@@ -733,6 +737,70 @@ fn minilogue_is_polyphonic() {
 }
 
 #[test]
+fn poly_ensemble_fills_all_eight_voices() {
+    // The full-polyphony showcase: eight independent `voice-in` chains (saw → VCA, gated by
+    // its own ADSR) summed into a master phaser. Unlike the four-voice Juno-60 and Minilogue
+    // patches, this one binds every one of the allocator's MAX_VOICES (8) slots, so a full
+    // eight-note chord sounds all eight voices at once — the proof the allocator scales to the
+    // whole voice bank, not just a hand of notes.
+    let registry = Registry::with_builtins();
+    let ron = include_str!("../../../examples/poly_ensemble.ron");
+    let doc = vb_project::open_ron(ron).expect("poly_ensemble loads");
+    assert_eq!(
+        doc.nodes
+            .iter()
+            .filter(|e| e.node.kind == "voice-in")
+            .count(),
+        8,
+        "eight-voice polyphony (the full voice bank)"
+    );
+
+    let measure = |notes: &[u8]| {
+        let ctx = BuildContext::default();
+        for &n in notes {
+            ctx.poly.note_on(n, 100);
+        }
+        let (mut engine, sink) = engine_from_doc(&doc, &registry, &ctx, 512).expect("builds");
+        let sink = sink.expect("has a sink");
+        // Let the slow pad attack (~0.08 s) open, then measure a settled block.
+        let mut last = Vec::new();
+        let mut peak = 0.0_f32;
+        for _ in 0..12 {
+            engine.process(&vb_core::ProcessContext {
+                sample_rate: 48_000.0,
+                frames: 512,
+            });
+            last = engine
+                .node_output(sink)
+                .and_then(|b| b.channel(0))
+                .unwrap()
+                .to_vec();
+            assert!(last.iter().all(|s| s.is_finite()), "finite audio");
+            peak = peak.max(last.iter().fold(0.0, |m, s| m.max(s.abs())));
+        }
+        let rms = (last.iter().map(|s| s * s).sum::<f32>() / last.len() as f32).sqrt();
+        (rms, peak)
+    };
+
+    let (silent, _) = measure(&[]);
+    assert!(
+        silent < 1e-6,
+        "poly ensemble must be silent at rest: {silent}"
+    );
+
+    let (one, _) = measure(&[60]);
+    assert!(one > 0.01, "a single note sounds: {one}");
+
+    // A full eight-note chord lights up all eight voices and sums to far more energy than one.
+    let (eight, peak) = measure(&[48, 52, 55, 59, 62, 65, 69, 72]);
+    assert!(
+        eight > one * 2.0,
+        "eight voices sum well above a single note: one {one} vs eight {eight}"
+    );
+    assert!(peak <= 1.0, "eight summed voices stay bounded: {peak}");
+}
+
+#[test]
 fn drumkit_triggers_each_voice_by_its_note_and_plays_them_together() {
     // The TR-style drum kit: kick (36) / snare (38) / hat (42), each a `key-gate` firing
     // its own synth voice. Because the gates read the polyphonic note source, several
@@ -1252,7 +1320,8 @@ fn the_example_set_is_the_expected_manifest() {
             "octave_stack",
             "spectral_bloom",
             "vocoder_choir",
-            "ms20"
+            "ms20",
+            "poly_ensemble"
         ]
     );
     // No example is empty.

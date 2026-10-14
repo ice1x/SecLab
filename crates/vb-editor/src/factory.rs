@@ -117,6 +117,10 @@ pub const FACTORY_PATCHES: &[FactoryPatch] = &[
         ron: include_str!("../../../examples/ms20.ron"),
     },
     FactoryPatch {
+        name: "Poly Ensemble",
+        ron: include_str!("../../../examples/poly_ensemble.ron"),
+    },
+    FactoryPatch {
         name: "Drum kit",
         ron: include_str!("../../../examples/drumkit.ron"),
     },
