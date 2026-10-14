@@ -152,6 +152,13 @@ Auto-generated from the registry — do not edit by hand.
   - `freq_hz` — range 1..8000, default 200
   - `mix` — range 0..1, default 1
 
+### robotize
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `mix` — range 0..1, default 1
+
 ### spectral-freeze
 
 - **Inputs:** `in` (audio), `freeze` (control)

@@ -57,6 +57,22 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Robotize node (`robotize`, 000222).** The classic phase-vocoder "robot voice": each short-time
+  frame keeps its magnitude spectrum `|X(k)|` and discards the measured phase, so every resynthesised
+  grain is identical in phase and the overlap-add becomes a train of identical pulses spaced one hop
+  apart. That imposes a constant period of `STEP_SIZE` samples on the output — the pitch collapses to
+  `sample_rate / STEP_SIZE` (≈187.5 Hz at 48 kHz) and its harmonics **regardless of the input pitch**,
+  while the magnitude spectrum (timbre/formant envelope) is preserved: a monotone, buzzy robot version
+  of the source. Follows the DAFX (Zölzer) robotization formula (`r = abs(f)`); the reference
+  `fftshift` that centres the zero-phase pulse under the Hann taper is folded into the frequency
+  domain as the `(-1)^k` half-frame shift, since the shared engine applies no shift. Second node built
+  on the shared `vb_nodes::stft` engine (000220) and memoryless per frame like `spectral-gate` — one
+  short per-frame transform, no phase accumulation. Single `mix` parameter; `effect` category; reports
+  `latency_frames`; `set_params` updates live. A processing utility, so no factory patch. Unit-tested
+  on the DSP law — the robotised output's autocorrelation at lag `STEP_SIZE` is ≈1 (periodic at the
+  hop) while the dry tone is not, and a different input pitch robotises to the same hop period — plus
+  silence-in/silence-out, verbatim dry mix, audible-and-bounded level and `set_params` clamping; a
+  registry behaviour test confirms the fixed hop period. `docs/nodes.md` regenerated 🧪
 - **Spectral gate node (`spectral-gate`, 000221).** A frequency-domain noise gate: where a
   time-domain gate opens or closes on the whole signal's level, this makes the decision **per
   frequency bin**. Each short-time frame it finds the loudest bin and keeps only the bins within

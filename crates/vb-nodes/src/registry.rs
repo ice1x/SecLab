@@ -56,6 +56,7 @@ use crate::quantizer::Quantizer;
 use crate::resonator::Resonator;
 use crate::reverb::Reverb;
 use crate::ring_mod::RingMod;
+use crate::robotize::Robotize;
 use crate::routing::{Merger, Selector, Splitter};
 use crate::sample_hold::SampleHold;
 use crate::shelf_eq::{shelf_mode_from, ShelfEq};
@@ -987,6 +988,14 @@ fn builtins() -> Vec<NodeDescriptor> {
                 ]
             },
             |_, v| Box::new(SpectralGate::new(arg(v, 0, -40.0), arg(v, 1, 1.0))),
+        ),
+        NodeDescriptor::new(
+            "robotize",
+            "effect",
+            || GraphNode::new("robotize", vec![audio_in("in")], vec![audio_out("out")]),
+            || Box::new(Robotize::new(1.0)),
+            || vec![Parameter::new("mix", 0.0, 1.0, 1.0)],
+            |_, v| Box::new(Robotize::new(arg(v, 0, 1.0))),
         ),
         NodeDescriptor::new(
             "bitcrusher",
@@ -2293,6 +2302,43 @@ mod tests {
             mag(3_000.0) < 0.002,
             "the −40 dB partial is gated: {}",
             mag(3_000.0)
+        );
+    }
+
+    #[test]
+    fn robotize_is_registered_as_an_effect_and_imposes_a_fixed_hop_period() {
+        use crate::stft::STEP_SIZE;
+        let r = Registry::with_builtins();
+        let d = r.get("robotize").expect("robotize registered");
+        assert_eq!(d.category(), "effect");
+        let node = r.graph_node("robotize").unwrap();
+        assert_eq!(node.inputs.len(), 1);
+        assert_eq!(node.inputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(node.outputs[0].signal, vb_core::SignalType::Audio);
+        assert_eq!(
+            d.params()
+                .iter()
+                .map(|p| p.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["mix"]
+        );
+        // Built from the registry: a 440 Hz tone robotises to a signal periodic at the synthesis
+        // hop (the "robot" pitch), whatever the input pitch.
+        let n = 24_576;
+        let input: Vec<f32> = (0..n)
+            .map(|i| (core::f32::consts::TAU * 440.0 * i as f32 / 48_000.0).sin())
+            .collect();
+        let out = run_effect(d.processor_with(&BuildContext::default(), &[1.0]), &input);
+        let tail = &out[8_192..];
+        let (mut num, mut den) = (0.0_f32, 0.0_f32);
+        for k in 0..tail.len() - STEP_SIZE {
+            num += tail[k] * tail[k + STEP_SIZE];
+            den += tail[k] * tail[k];
+        }
+        assert!(
+            num / den > 0.85,
+            "registry robotize is periodic at the hop: autocorr = {}",
+            num / den
         );
     }
 
