@@ -208,6 +208,13 @@ Auto-generated from the registry — do not edit by hand.
   - `drive` — range 0.1..20, default 2
   - `level` — range 0..1, default 0.8
 
+### whisperize
+
+- **Inputs:** `in` (audio)
+- **Outputs:** `out` (audio)
+- **Parameters:**
+  - `mix` — range 0..1, default 1
+
 ### width
 
 - **Inputs:** `left` (audio), `right` (audio)

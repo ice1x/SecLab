@@ -57,6 +57,23 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Whisperize node (`whisperize`, 000223).** The phase-vocoder "whisper voice" — the complement of
+  `robotize`. Where robotization replaces every bin's phase with a *fixed* value (zero) to impose a
+  single pitch, whisperization replaces each bin's phase with a *random* value while keeping its
+  magnitude `|X(k)|`. Destroying the phase coherence (between bins and between frames) removes all
+  periodic/pitched structure, but because the magnitude spectrum is preserved the formant / timbre
+  envelope survives: a sung vowel comes out as the same vowel *whispered* — the resonances are there,
+  the pitch is gone. The DAFX (Zölzer) whisperization formula `ft = abs(f)·exp(i·random_phase)`. The
+  random phase comes from a seeded xorshift32 PRNG (the same generator and seed as `noise`), so a
+  patch renders identically every time and `reset` replays from the seed — determinism is part of
+  the node contract. Third node built on the shared `vb_nodes::stft` engine (000220), memoryless per
+  frame apart from the PRNG state. Single `mix` parameter; `effect` category; reports
+  `latency_frames`; `set_params` updates live. A processing utility, so no factory patch. Unit-tested
+  on the DSP law — a clean 440 Hz tone has tonality (coherent amplitude² / power) ≈1 while the
+  whispered output drops to ≈0.0005 (coherence destroyed) with its energy still in the source band
+  (≫ the 5 kHz floor); plus determinism/reset-replay, silence-in/out, verbatim dry mix, bounded
+  output and `set_params` clamping; a registry behaviour test confirms the tonal collapse.
+  `docs/nodes.md` regenerated 🧪
 - **Robotize node (`robotize`, 000222).** The classic phase-vocoder "robot voice": each short-time
   frame keeps its magnitude spectrum `|X(k)|` and discards the measured phase, so every resynthesised
   grain is identical in phase and the overlap-add becomes a train of identical pulses spaced one hop
