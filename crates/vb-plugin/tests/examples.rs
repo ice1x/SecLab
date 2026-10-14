@@ -123,6 +123,7 @@ const EXAMPLES: &[(&str, &str)] = &[
         "vocoder_choir",
         include_str!("../../../examples/vocoder_choir.ron"),
     ),
+    ("ms20", include_str!("../../../examples/ms20.ron")),
 ];
 
 #[test]
@@ -1163,6 +1164,28 @@ fn vocoder_choir_is_a_vocoder_voice_silent_at_rest_and_sings_a_vowel_on_a_note()
 }
 
 #[test]
+fn ms20_is_a_two_vco_series_hp_lp_voice_silent_at_rest_and_sounds_on_a_note() {
+    // Korg MS-20 topology: two VCOs → mixer → HPF → LPF (in series), EG2 sweeping both filters
+    // and gating the VCA. The series two-filter chain is the MS-20's signature.
+    let ron = include_str!("../../../examples/ms20.ron");
+    let doc = vb_project::open_ron(ron).expect("ms20 loads");
+    assert!(
+        doc.nodes.iter().filter(|e| e.node.kind == "vcf").count() == 2,
+        "the MS-20 voice has two filters in series (HPF then LPF)"
+    );
+    assert!(
+        peak_over(ron, &BuildContext::default(), 256, 8) < 1e-6,
+        "MS-20 must be silent until a note plays (VCA bias 0)"
+    );
+    let ctx = BuildContext::default();
+    ctx.notes.note_on(45, 110); // ~110 Hz
+    assert!(
+        peak_over(ron, &ctx, 256, 16) > 0.01,
+        "MS-20 must sound on a note"
+    );
+}
+
+#[test]
 fn auto_wah_drones_and_stays_bounded() {
     // The auto-wah patch has a built-in saw drone (no note needed), tremolo-driven through
     // an envelope-follower-swept filter. It should produce sustained, bounded audio.
@@ -1228,7 +1251,8 @@ fn the_example_set_is_the_expected_manifest() {
             "metallic_shift",
             "octave_stack",
             "spectral_bloom",
-            "vocoder_choir"
+            "vocoder_choir",
+            "ms20"
         ]
     );
     // No example is empty.
