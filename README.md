@@ -616,6 +616,17 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000230 — 🎛️ **Edits preserve the authored panel + a hard coherence gate** — prompt v2 (000229)
+  let the assistant author a panel but left two gaps. `ProjectDoc::to_prompt` (the current patch shown
+  to the model on an edit) emitted only structure, so an edit silently dropped every authored
+  `values`/`widgets`/`panel_pos`/`panel_color`/`panel_hidden`; the node-line grammar (prompt header →
+  **v2**) now carries each as an optional non-default-only token and `from_prompt` parses them back, so
+  the panel round-trips exactly while structure-only patches stay terse. And the mandatory validator
+  (`patch_issues`) now runs a **panel-coherence** gate: widget labels must be known, `widgets`/`values`
+  must not outnumber the kind's parameters, every value must sit inside its registry `min..max`, hidden
+  indices must exist, and `panel_color` must be `#rrggbb` — an incoherent panel is fed back for repair.
+  The valid-label set lives once as `vb_project::VALID_WIDGET_LABELS` (a `vb-editor` test pins its
+  `WidgetKind` enum to the same set). Fully offline tests 🧪
 - [x] 000229 — 🤖 **The assistant authors the control panel, not just the graph** (prompt v2) — the
   NL→patch contract was structure-only (kinds/ports/edges), so a generated patch arrived as a bare
   graph with an auto-gridded default panel the model never chose. `NodeEntry` already carried the

@@ -185,8 +185,9 @@ pub(crate) fn evaluate_reply(
     }
 }
 
-/// Mandatory validation: unknown node kinds (grounding) plus every structural problem
-/// [`ProjectDoc::validate`] reports. Shared with the repair skill (000118).
+/// Mandatory validation: unknown node kinds (grounding), every structural problem
+/// [`ProjectDoc::validate`] reports, and panel-coherence (the authored interface must
+/// match the node's real parameters). Shared with the repair skill (000118).
 pub(crate) fn patch_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String> {
     let mut issues: Vec<String> = doc
         .nodes
@@ -200,7 +201,83 @@ pub(crate) fn patch_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String>
         })
         .collect();
     issues.extend(doc.validate().iter().map(ToString::to_string));
+    issues.extend(panel_issues(doc, registry));
     issues
+}
+
+/// Checks each node's **presentation** fields against the node's real parameters: widget
+/// labels must be ones the panel knows, the per-parameter `widgets`/`values` lists must
+/// not be longer than the kind's parameter count, every value must sit inside its stated
+/// range, hidden-control indices must address a parameter that exists, and an accent
+/// colour must be a `#rrggbb` hex string. The system prompt instructs all of this; this is
+/// the hard gate that enforces it, so a panel that lies about the graph is fed back for
+/// repair instead of reaching the canvas.
+///
+/// Nodes of an unknown kind are skipped here — the grounding check already reports them,
+/// and without a descriptor there is nothing to check the panel against.
+fn panel_issues(doc: &ProjectDoc, registry: &Registry) -> Vec<String> {
+    let mut issues = Vec::new();
+    for entry in &doc.nodes {
+        let Some(descriptor) = registry.get(&entry.node.kind) else {
+            continue;
+        };
+        let params = descriptor.params();
+        let n = params.len();
+        let id = entry.id.0;
+        let kind = &entry.node.kind;
+
+        for label in &entry.widgets {
+            if !vb_project::VALID_WIDGET_LABELS.contains(&label.as_str()) {
+                issues.push(format!(
+                    "node {id} ({kind}) uses unknown widget '{label}' — use one of: {}",
+                    vb_project::VALID_WIDGET_LABELS.join(", ")
+                ));
+            }
+        }
+        if entry.widgets.len() > n {
+            issues.push(format!(
+                "node {id} ({kind}) lists {} widgets but the kind has {n} parameter(s)",
+                entry.widgets.len()
+            ));
+        }
+        if entry.values.len() > n {
+            issues.push(format!(
+                "node {id} ({kind}) sets {} values but the kind has {n} parameter(s)",
+                entry.values.len()
+            ));
+        }
+        for (value, param) in entry.values.iter().zip(&params) {
+            if *value < param.min || *value > param.max {
+                issues.push(format!(
+                    "node {id} ({kind}) parameter '{}' value {value} is outside its range [{}, {}]",
+                    param.name, param.min, param.max
+                ));
+            }
+        }
+        for idx in &entry.panel_hidden {
+            if *idx >= n {
+                issues.push(format!(
+                    "node {id} ({kind}) hides parameter index {idx} but the kind has only {n} parameter(s)"
+                ));
+            }
+        }
+        if let Some(color) = &entry.panel_color {
+            if !is_hex_color(color) {
+                issues.push(format!(
+                    "node {id} ({kind}) panel_color '{color}' is not a #rrggbb hex colour"
+                ));
+            }
+        }
+    }
+    issues
+}
+
+/// Whether `s` is a `#rrggbb` hex colour: a `#` and exactly six hex digits.
+fn is_hex_color(s: &str) -> bool {
+    let Some(hex) = s.strip_prefix('#') else {
+        return false;
+    };
+    hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
 /// The follow-up message listing the problems to fix.
@@ -481,6 +558,164 @@ mod tests {
         assert!(provider.requests()[0].messages[0]
             .content
             .contains("Keep existing node ids stable"));
+    }
+
+    /// A single-oscillator doc (params: waveform 0..3, freq_hz 20..20000) for panel checks.
+    fn osc_doc() -> ProjectDoc {
+        use vb_core::{GraphNode, NodeId, Port, SignalType};
+        ProjectDoc {
+            version: vb_project::FORMAT_VERSION,
+            nodes: vec![vb_project::NodeEntry::new(
+                NodeId(0),
+                GraphNode::new(
+                    "oscillator",
+                    vec![],
+                    vec![Port::output("out", SignalType::Audio)],
+                ),
+            )],
+            edges: vec![],
+        }
+    }
+
+    #[test]
+    fn the_embedded_example_has_no_panel_issues() {
+        // The example the model is told to mirror must itself pass the panel gate, or the
+        // contract contradicts the validator.
+        let (registry, _) = setup();
+        let doc = vb_project::from_ron(EXAMPLE_PATCH_RON).expect("parses");
+        assert!(
+            patch_issues(&doc, &registry).is_empty(),
+            "example should be fully coherent: {:?}",
+            patch_issues(&doc, &registry)
+        );
+    }
+
+    #[test]
+    fn an_unknown_widget_label_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        doc.nodes[0].widgets = vec!["knob".to_owned(), "dial".to_owned()];
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues.iter().any(|i| i.contains("unknown widget 'dial'")),
+            "got {issues:?}"
+        );
+    }
+
+    #[test]
+    fn more_widgets_than_parameters_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        // Oscillator has 2 params; three widgets is incoherent.
+        doc.nodes[0].widgets = vec!["knob".to_owned(), "knob".to_owned(), "knob".to_owned()];
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("lists 3 widgets but the kind has 2 parameter")),
+            "got {issues:?}"
+        );
+    }
+
+    #[test]
+    fn a_value_out_of_range_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        // freq_hz max is 20000; 48000 is out of range.
+        doc.nodes[0].values = vec![0.0, 48_000.0];
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("freq_hz") && i.contains("outside its range")),
+            "got {issues:?}"
+        );
+    }
+
+    #[test]
+    fn too_many_values_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        doc.nodes[0].values = vec![0.0, 440.0, 0.5];
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("sets 3 values but the kind has 2 parameter")),
+            "got {issues:?}"
+        );
+    }
+
+    #[test]
+    fn a_hidden_index_out_of_bounds_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        doc.nodes[0].panel_hidden = vec![5];
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues.iter().any(|i| i.contains("hides parameter index 5")),
+            "got {issues:?}"
+        );
+    }
+
+    #[test]
+    fn a_malformed_panel_colour_is_a_panel_issue() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        doc.nodes[0].panel_color = Some("blue".to_owned());
+        let issues = patch_issues(&doc, &registry);
+        assert!(
+            issues
+                .iter()
+                .any(|i| i.contains("panel_color 'blue' is not a #rrggbb")),
+            "got {issues:?}"
+        );
+        // A well-formed colour passes.
+        doc.nodes[0].panel_color = Some("#1a2b3c".to_owned());
+        assert!(patch_issues(&doc, &registry)
+            .iter()
+            .all(|i| !i.contains("panel_color")));
+    }
+
+    #[test]
+    fn a_within_range_panel_is_accepted() {
+        let (registry, _) = setup();
+        let mut doc = osc_doc();
+        doc.nodes[0].values = vec![2.0, 110.0];
+        doc.nodes[0].widgets = vec!["switch".to_owned(), "knob".to_owned()];
+        doc.nodes[0].panel_pos = Some((0.0, 0.0));
+        doc.nodes[0].panel_color = Some("#88ccff".to_owned());
+        assert!(
+            patch_issues(&doc, &registry).is_empty(),
+            "a coherent panel must pass: {:?}",
+            patch_issues(&doc, &registry)
+        );
+    }
+
+    #[test]
+    fn the_retry_loop_rejects_an_incoherent_panel_then_recovers() {
+        // A reply whose panel lies about the graph (a bogus widget) is rejected and fed
+        // back; a corrected reply then converges — the panel gate behaves like the
+        // structural gate.
+        let (registry, config) = setup();
+        let bad = r#"(
+            version: 1,
+            nodes: [ (id: (0), node: (kind: "oscillator", inputs: [], outputs: [
+                (name: "out", direction: Output, signal: Audio) ], feedback: false),
+                widgets: ["wobble"]) ],
+            edges: [],
+        )"#;
+        let provider =
+            ScriptedProvider::replies(&[&reply_with(bad), &reply_with(EXAMPLE_PATCH_RON)]);
+        let out =
+            generate_patch(&provider, &registry, &config, "a tone", None, 3).expect("recovers");
+        assert_eq!(out.attempts, 2);
+        let second = &provider.requests()[1];
+        let fed_back = &second.messages.last().unwrap().content;
+        assert!(
+            fed_back.contains("unknown widget 'wobble'"),
+            "the panel issue was fed back: {fed_back}"
+        );
     }
 
     #[test]
