@@ -57,6 +57,24 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The assistant settings persist to `settings.ron` — keys stay in the keychain (000231).** The
+  Settings view-model (`AssistantSettings`: provider, model, token budget, temperature, the
+  OpenAI-compatible endpoint override, and the offline/consent privacy policy) was in-memory only, so
+  every restart reset the user's provider and model choice back to the defaults. A new `vb_ai::persist`
+  module now reads and writes those choices as a small RON file: `save_settings(dir, &settings)` writes
+  `dir/settings.ron` (creating the directory tree), and `load_settings(dir)` reads it back — a **missing**
+  file is the normal first-run case and returns the deny-by-default settings, while a **present but
+  corrupt** file is surfaced as an error rather than silently reset. The directory is the caller's to
+  supply (the apps pass `vb_editor::user_modules_dir()`, so the file sits beside the user's saved
+  modules); taking it as an argument keeps `vb-ai` free of platform-path logic and of any dependency on
+  `vb-editor`. **No key material is ever written:** `AssistantSettings` holds no key — it reads key
+  *presence* from the `KeyStore` live and the secret stays in the OS keychain — so the serialized file
+  carries only the non-secret choices, and a test stores a key, saves, and asserts the on-disk bytes
+  never contain it. `PrivacySettings` and `AssistantSettings` gain `serde` derives (both
+  `#[serde(default)]` so an older or partial file still loads); the unset endpoint is skipped in the
+  file. Tests: a round trip preserves every field, an empty directory yields the defaults without
+  creating a file, a corrupt file errors, and `save` creates missing parents. Pure filesystem + RON — no
+  network, no feature gate.
 - **Edits preserve the authored panel, and a hard gate enforces its coherence (000230).** The
   prompt-v2 contract (000229) let the assistant *author* a control panel, but two gaps remained, both
   flagged there as follow-ups. First, `ProjectDoc::to_prompt` — the compact rendering of the *current*

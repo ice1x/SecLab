@@ -616,6 +616,16 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000231 — ⚙️ **Assistant settings persist to `settings.ron` — keys stay in the keychain** — the
+  Settings view-model (provider, model, token budget, temperature, endpoint override, offline/consent
+  policy) was in-memory only, so every restart reset the provider/model choice. A new `vb_ai::persist`
+  module reads/writes those choices as RON: `save_settings(dir, &settings)` / `load_settings(dir)`, where
+  a missing file is the normal first-run default and a corrupt file errors rather than silently resetting.
+  The directory is the caller's (the apps pass `user_modules_dir()`), keeping `vb-ai` free of
+  platform-path logic and of a `vb-editor` dependency. **No key is ever written** — `AssistantSettings`
+  holds none (it reads presence from the `KeyStore`; the secret stays in the OS keychain), and a test
+  saves with a key configured then asserts the on-disk bytes never contain it. Pure filesystem + RON, no
+  network 🧪
 - [x] 000230 — 🎛️ **Edits preserve the authored panel + a hard coherence gate** — prompt v2 (000229)
   let the assistant author a panel but left two gaps. `ProjectDoc::to_prompt` (the current patch shown
   to the model on an edit) emitted only structure, so an edit silently dropped every authored

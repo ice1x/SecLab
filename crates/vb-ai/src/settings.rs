@@ -11,6 +11,8 @@
 //! struct (which is why the struct is freely `Clone`/`Debug`-able). The view-model only ever
 //! asks the store *whether* a key is present, never *what* it is.
 
+use serde::{Deserialize, Serialize};
+
 use crate::keystore::{KeyStore, KeyStoreError};
 use crate::privacy::PrivacySettings;
 use crate::provider::{ProviderConfig, ProviderKind};
@@ -43,7 +45,13 @@ impl SendBlocker {
 /// The assistant Settings screen's state: the provider/model/sampling
 /// [`ProviderConfig`] and the [`PrivacySettings`]. Key presence is read live from a
 /// [`KeyStore`] — the key value is never stored here.
-#[derive(Debug, Clone, Default, PartialEq)]
+///
+/// This is also the on-disk settings shape ([`crate::persist`]): it serializes cleanly
+/// precisely *because* it holds no secret — only the non-key choices reach `settings.ron`.
+/// `#[serde(default)]` lets a partial or older file load, each missing field taking its
+/// default.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct AssistantSettings {
     config: ProviderConfig,
     privacy: PrivacySettings,
@@ -51,6 +59,7 @@ pub struct AssistantSettings {
     /// endpoint). This is what makes "OpenAI-compatible" actually cover third-party and local
     /// servers (Ollama's OpenAI shim, Together, Groq, a self-hosted gateway…). Ignored for
     /// the Anthropic provider, which has a fixed endpoint.
+    #[serde(skip_serializing_if = "Option::is_none")]
     endpoint: Option<String>,
 }
 

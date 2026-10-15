@@ -25,6 +25,7 @@ pub mod inspect;
 pub mod keystore;
 pub mod local;
 pub mod openai;
+pub mod persist;
 pub mod privacy;
 pub mod prompt;
 pub mod provider;
@@ -54,6 +55,7 @@ pub use local::{LocalBackend, LocalProvider};
 // `openai::…` to avoid colliding with the flat `anthropic::…` re-exports above; the
 // provider type is the primary entry point, so it is re-exported here.
 pub use openai::OpenAiProvider;
+pub use persist::{load_settings, save_settings, settings_path, SettingsIoError, SETTINGS_FILE};
 pub use privacy::{preview_request, GuardedProvider, PrivacySettings};
 pub use prompt::{build_system_prompt, EXAMPLE_PATCH_RON, PROMPT_VERSION, SYSTEM_PREAMBLE};
 pub use provider::{

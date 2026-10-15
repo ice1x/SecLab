@@ -16,6 +16,9 @@ serde.workspace = true
 # serde_json. The codec is always compiled and unit-tested — no network — so this is a
 # regular (non-optional) dependency.
 serde_json = "1"
+# RON is the on-disk format for the persisted assistant settings (`persist`). Non-optional:
+# the settings view-model is always compiled, and persistence carries no platform dependency.
+ron.workspace = true
 # Real OS-keychain backend for BYOK keys, behind the `keychain` feature so the default
 # build (and CI) needs no platform secret-store dependency.
 keyring = { version = "3", optional = true, features = ["apple-native"] }
@@ -33,9 +36,6 @@ keychain = ["dep:keyring"]
 # Enables ReqwestTransport — real network IO for the provider adapters. OFF by default:
 # the codec and the mock-transport tests need no network, and CI never sends a request.
 net = ["dep:reqwest"]
-
-[dev-dependencies]
-ron.workspace = true
 
 [lints]
 workspace = true
