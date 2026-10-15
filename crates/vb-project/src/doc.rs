@@ -13,6 +13,15 @@ pub const FORMAT_VERSION: u32 = 1;
 /// The oldest format version this build can migrate to [`FORMAT_VERSION`].
 pub const MIN_SUPPORTED_VERSION: u32 = 1;
 
+/// The control-widget labels the panel format accepts, in a stable order.
+///
+/// A [`NodeEntry::widgets`] entry stores one of these strings per parameter. This list is
+/// the **format's source of truth** for which labels are valid; `vb-editor`'s `WidgetKind`
+/// enum is cross-checked against it (a test there asserts the two agree) so the two never
+/// drift, while `vb-project` stays free of a `vb-editor` dependency. Anything outside this
+/// set is a malformed panel that the assistant's validator rejects.
+pub const VALID_WIDGET_LABELS: [&str; 5] = ["knob", "slider", "fader", "switch", "xy-pad"];
+
 /// One node in a serialized project: its stable id, its structural definition, and
 /// its saved parameter values.
 ///
@@ -36,9 +45,10 @@ pub struct NodeEntry {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub panel_pos: Option<(f32, f32)>,
     /// Per-parameter **control-widget kind** on the panel, in registry `params()` order, each as
-    /// the kind's short label (`"knob"` / `"slider"` / `"switch"` / `"xy-pad"`). Empty means every
-    /// parameter uses its default control. The format stores the label (a plain string) rather
-    /// than the editor's `WidgetKind` enum so `vb-project` stays free of a `vb-editor` dependency.
+    /// the kind's short label (one of [`VALID_WIDGET_LABELS`]: `"knob"` / `"slider"` / `"fader"` /
+    /// `"switch"` / `"xy-pad"`). Empty means every parameter uses its default control. The format
+    /// stores the label (a plain string) rather than the editor's `WidgetKind` enum so `vb-project`
+    /// stays free of a `vb-editor` dependency.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub widgets: Vec<String>,
     /// Optional **panel accent colour** for this node's control block, as a `#rrggbb` hex string.

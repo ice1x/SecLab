@@ -18,7 +18,7 @@ pub mod modmatrix;
 pub mod prompt;
 pub mod validate;
 
-pub use doc::{NodeEntry, ProjectDoc, FORMAT_VERSION, MIN_SUPPORTED_VERSION};
+pub use doc::{NodeEntry, ProjectDoc, FORMAT_VERSION, MIN_SUPPORTED_VERSION, VALID_WIDGET_LABELS};
 pub use error::ProjectError;
 pub use io::{from_ron, load_from_path, open_path, open_ron, save_to_path, to_ron};
 pub use mapping::{build_mappings, ParamId, ParamMap, ParamMapping};

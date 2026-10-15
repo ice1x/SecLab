@@ -57,6 +57,26 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Edits preserve the authored panel, and a hard gate enforces its coherence (000230).** The
+  prompt-v2 contract (000229) let the assistant *author* a control panel, but two gaps remained, both
+  flagged there as follow-ups. First, `ProjectDoc::to_prompt` — the compact rendering of the *current*
+  patch shown to the model when it edits — still emitted only structure (`node … in= out=`, `edge …`),
+  so an edit round-trip silently dropped every authored `values`/`widgets`/`panel_pos`/`panel_color`/
+  `panel_hidden`: the model never saw the interface it was meant to keep. The node-line grammar
+  (prompt header → **v2**) now carries each presentation field as an optional, non-default-only token
+  (`values=`, `widgets=`, `pos=`, `color=`, `hidden=`), and `from_prompt` parses them back, so the
+  prompt form round-trips the panel exactly while a structure-only patch still renders as terse as
+  before. Second, the mandatory validator (`patch_issues`, shared by generate/edit/repair) now runs a
+  **panel-coherence** gate alongside grounding and `ProjectDoc::validate`: a widget label must be one
+  the panel knows, the per-parameter `widgets`/`values` lists must not outnumber the kind's real
+  parameters, every value must sit inside its registry `min..max`, a hidden-control index must address
+  a parameter that exists, and `panel_color` must be a `#rrggbb` hex string — so a panel that lies
+  about the graph is fed back for repair instead of reaching the canvas. The format's valid-label set
+  lives once as `vb_project::VALID_WIDGET_LABELS` (the validator reads it; a `vb-editor` test asserts
+  its `WidgetKind` enum names exactly the same set, so the two never drift). Tests: prompt text emits
+  and round-trips the panel fields and rejects malformed tokens; each coherence rule reports its own
+  issue and a correct panel passes; and the retry loop rejects an incoherent panel then recovers.
+  Fully offline (`ScriptedProvider`); no network.
 - **The assistant authors the control panel, not just the graph (prompt v2, 000229).** The NL→patch
   contract was structure-only: the system prompt, the embedded example, and `ProjectDoc::to_prompt`
   all described only `kind`/`inputs`/`outputs`/`feedback`/`edges`, so a generated patch arrived as a

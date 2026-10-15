@@ -254,6 +254,22 @@ mod tests {
     }
 
     #[test]
+    fn labels_match_the_project_formats_valid_set() {
+        // `vb-project` carries the format's source-of-truth list of valid widget labels
+        // (the assistant's panel validator checks against it, free of a vb-editor dep).
+        // This enum is the other half: the two must name exactly the same set, or a label
+        // the editor draws would be rejected by the validator, or vice versa.
+        let mut from_enum: Vec<&str> = WidgetKind::ALL.iter().map(|k| k.label()).collect();
+        let mut from_format: Vec<&str> = vb_project::VALID_WIDGET_LABELS.to_vec();
+        from_enum.sort_unstable();
+        from_format.sort_unstable();
+        assert_eq!(
+            from_enum, from_format,
+            "WidgetKind labels and vb_project::VALID_WIDGET_LABELS have drifted"
+        );
+    }
+
+    #[test]
     fn continuous_params_default_to_a_knob() {
         assert_eq!(default_widget(&cont()), WidgetKind::Knob);
         assert_eq!(default_widget(&enum4()), WidgetKind::Knob);
