@@ -8,10 +8,16 @@
 //! before the first send. [`preview_request`] renders the exact bytes a request would
 //! carry, so the user can inspect a payload before granting consent.
 
+use serde::{Deserialize, Serialize};
+
 use crate::provider::{AiError, AiProvider, ChatRequest, ChatResponse, ProviderKind, Role};
 
 /// User privacy settings governing whether a request may be sent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Persisted as part of the assistant settings (see [`crate::persist`]); `#[serde(default)]`
+/// so an older or partial file still loads to the deny-by-default policy.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
 pub struct PrivacySettings {
     /// When on, no request may leave the machine at all.
     pub offline: bool,
