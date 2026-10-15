@@ -24,8 +24,16 @@ pub enum ProviderKind {
     /// Anthropic Claude (the reference implementation, 000113).
     #[default]
     Anthropic,
-    /// Any OpenAI-compatible chat-completions endpoint (000114).
+    /// A cloud OpenAI-compatible chat-completions endpoint reached with a BYOK key
+    /// (OpenAI itself, Azure, Together, Groq, OpenRouter… — 000114).
     OpenAiCompatible,
+    /// A **local**, keyless OpenAI-compatible server on `localhost` (Ollama, LM Studio,
+    /// llama.cpp — 000111). Speaks the same wire protocol as [`OpenAiCompatible`] but needs
+    /// no cloud credential, so the key gate does not apply (see [`requires_key`]).
+    ///
+    /// [`OpenAiCompatible`]: ProviderKind::OpenAiCompatible
+    /// [`requires_key`]: ProviderKind::requires_key
+    Local,
 }
 
 impl ProviderKind {
@@ -35,6 +43,17 @@ impl ProviderKind {
         match self {
             ProviderKind::Anthropic => "anthropic",
             ProviderKind::OpenAiCompatible => "openai-compatible",
+            ProviderKind::Local => "local",
+        }
+    }
+
+    /// Whether this provider needs a BYOK API key. A local server is keyless, so the
+    /// Settings readiness gate skips the key check for it; the cloud providers require one.
+    #[must_use]
+    pub fn requires_key(self) -> bool {
+        match self {
+            ProviderKind::Anthropic | ProviderKind::OpenAiCompatible => true,
+            ProviderKind::Local => false,
         }
     }
 }
@@ -264,6 +283,17 @@ mod tests {
         assert_eq!(c.max_tokens, DEFAULT_MAX_TOKENS);
         assert_eq!(ProviderKind::default(), ProviderKind::Anthropic);
         assert_eq!(ProviderKind::Anthropic.label(), "anthropic");
+    }
+
+    #[test]
+    fn only_the_local_provider_is_keyless() {
+        assert_eq!(ProviderKind::Local.label(), "local");
+        assert!(ProviderKind::Anthropic.requires_key());
+        assert!(ProviderKind::OpenAiCompatible.requires_key());
+        assert!(
+            !ProviderKind::Local.requires_key(),
+            "a local server needs no BYOK key"
+        );
     }
 
     #[test]

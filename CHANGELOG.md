@@ -57,6 +57,23 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **A local, keyless LLM provider is selectable in Settings — run the assistant fully offline on
+  Ollama / LM Studio / llama.cpp (000232).** The engine already had a keyless `LocalProvider`
+  (000111) that speaks the OpenAI-compatible protocol to a `localhost` server and sends no
+  `Authorization` header, but it was unreachable from the product: `ProviderKind` offered only
+  `Anthropic` and `OpenAiCompatible`, and the latter's adapter *requires* a BYOK key — so a user
+  running `ollama run qwen2.5-coder:14b` could only connect by storing a throwaway key to get past
+  the readiness gate. This adds a first-class `ProviderKind::Local`: `AssistantSettings::providers()`
+  lists it, `ProviderKind::requires_key()` marks it keyless, and `send_blocker` skips the key check
+  for it — a local model is ready once online and consented, with no key at all (offline mode and
+  consent still apply). The Settings panel shows the endpoint field for it (blank → Ollama's
+  `localhost:11434`) and **hides** the BYOK key controls, since there is no key to manage. In the
+  editor, `apply_assistant_settings` routes `Local` to a new `set_assistant_local_endpoint`, which
+  wires `LocalProvider::at(url)` (or Ollama's default) over HTTP with no keychain read. The cloud
+  providers are unchanged and still require their key. Tests: only `Local` is keyless
+  (`requires_key`); a local provider is ready with no key yet still honours offline/consent; a cloud
+  provider still blocks on a missing key; and the panel renders the local provider keyless-and-ready
+  with an endpoint. Fully offline — no network in the tests.
 - **The assistant settings persist to `settings.ron` — keys stay in the keychain (000231).** The
   Settings view-model (`AssistantSettings`: provider, model, token budget, temperature, the
   OpenAI-compatible endpoint override, and the offline/consent privacy policy) was in-memory only, so

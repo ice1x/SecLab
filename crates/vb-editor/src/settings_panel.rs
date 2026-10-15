@@ -69,16 +69,22 @@ pub fn settings_panel_ui(
         }
     });
 
-    // Endpoint override — only meaningful for the OpenAI-compatible provider (a local or
-    // third-party server); blank means the default OpenAI endpoint.
-    if settings.provider() == ProviderKind::OpenAiCompatible {
+    // Endpoint override — meaningful for the OpenAI-compatible provider (a cloud gateway) and
+    // the local provider (a self-hosted server). Blank means the provider's default endpoint:
+    // api.openai.com for OpenAI-compatible, Ollama's localhost:11434 for local.
+    let endpoint_hint = match settings.provider() {
+        ProviderKind::OpenAiCompatible => Some("default: api.openai.com"),
+        ProviderKind::Local => Some("default: localhost:11434 (Ollama)"),
+        ProviderKind::Anthropic => None,
+    };
+    if let Some(hint) = endpoint_hint {
         let mut endpoint = settings.endpoint().unwrap_or_default().to_owned();
         ui.horizontal(|ui| {
             ui.label("endpoint");
             if ui
                 .add(
                     egui::TextEdit::singleline(&mut endpoint)
-                        .hint_text("default: api.openai.com")
+                        .hint_text(hint)
                         .desired_width(240.0),
                 )
                 .changed()
@@ -121,43 +127,46 @@ pub fn settings_panel_ui(
 
     ui.separator();
 
-    // BYOK key: masked entry that goes straight to the store, plus its live presence.
-    let present = settings.key_present(keys);
-    ui.label(if present {
-        "API key: stored ✓"
-    } else {
-        "API key: none"
-    });
-    ui.horizontal(|ui| {
-        ui.add(
-            egui::TextEdit::singleline(key_draft)
-                .password(true)
-                .hint_text("paste API key")
-                .desired_width(160.0),
-        );
-        let can_save = !key_draft.trim().is_empty();
-        if ui
-            .add_enabled(can_save, egui::Button::new("save key"))
-            .clicked()
-        {
-            match settings.store_key(keys, key_draft) {
-                Ok(()) => {
-                    key_draft.clear();
-                    settings_status(ui, "key saved");
+    // BYOK key: masked entry that goes straight to the store, plus its live presence. A local
+    // provider is keyless, so the whole section is hidden for it — there is no key to manage.
+    if settings.provider().requires_key() {
+        let present = settings.key_present(keys);
+        ui.label(if present {
+            "API key: stored ✓"
+        } else {
+            "API key: none"
+        });
+        ui.horizontal(|ui| {
+            ui.add(
+                egui::TextEdit::singleline(key_draft)
+                    .password(true)
+                    .hint_text("paste API key")
+                    .desired_width(160.0),
+            );
+            let can_save = !key_draft.trim().is_empty();
+            if ui
+                .add_enabled(can_save, egui::Button::new("save key"))
+                .clicked()
+            {
+                match settings.store_key(keys, key_draft) {
+                    Ok(()) => {
+                        key_draft.clear();
+                        settings_status(ui, "key saved");
+                    }
+                    Err(e) => settings_status(ui, &format!("key error: {e}")),
                 }
-                Err(e) => settings_status(ui, &format!("key error: {e}")),
             }
-        }
-        if ui
-            .add_enabled(present, egui::Button::new("clear key"))
-            .clicked()
-        {
-            let _ = settings.clear_key(keys);
-            settings_status(ui, "key cleared");
-        }
-    });
+            if ui
+                .add_enabled(present, egui::Button::new("clear key"))
+                .clicked()
+            {
+                let _ = settings.clear_key(keys);
+                settings_status(ui, "key cleared");
+            }
+        });
 
-    ui.separator();
+        ui.separator();
+    }
 
     // Readiness: the single most pressing blocker, or a ready state.
     match settings.send_blocker(keys) {
@@ -243,6 +252,26 @@ mod tests {
         let mut keys = MemoryKeyStore::new();
         let mut draft = String::new();
         // The endpoint row only appears for OpenAI-compatible; the frame must build with it.
+        assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+        assert_eq!(
+            settings.endpoint(),
+            Some("http://localhost:11434/v1/chat/completions")
+        );
+    }
+
+    #[test]
+    fn the_local_provider_renders_keyless_and_ready_with_an_endpoint() {
+        // Picking the local provider shows the endpoint row, hides the BYOK key controls, and
+        // (once consented) renders the ready line — all without a key stored. The frame must
+        // build cleanly through those keyless branches.
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Local);
+        settings.set_consent(true);
+        settings.set_endpoint("http://localhost:11434/v1/chat/completions");
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+
+        assert!(settings.is_ready(&keys), "precondition: keyless-ready");
         assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
         assert_eq!(
             settings.endpoint(),
