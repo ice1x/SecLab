@@ -3764,6 +3764,12 @@ mod tests {
     #[test]
     fn assistant_settings_key_and_readiness_round_trip_through_the_host() {
         let mut app = EditorApp::new();
+        // Drive the readiness logic through an in-memory key store, not the host's default.
+        // Under `assistant-net` that default is the real OS `KeychainStore`, which cannot be
+        // written on a headless CI runner (no unlocked keychain) — and this test is about the
+        // view-model/readiness round trip, not the keychain backend, so an in-memory store keeps
+        // it deterministic in every build.
+        app.assistant.keys = Box::new(vb_ai::MemoryKeyStore::new());
         // Reach the host's own view-model and key store the panel would drive.
         assert!(!app
             .assistant
