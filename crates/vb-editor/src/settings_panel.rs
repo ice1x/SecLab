@@ -57,12 +57,17 @@ pub fn settings_panel_ui(
             });
     });
 
-    // Model identifier.
+    // Model identifier, with a provider-appropriate example as the hint.
+    let model_hint = match settings.provider() {
+        ProviderKind::Anthropic => "e.g. claude-sonnet-5",
+        ProviderKind::OpenAiCompatible => "e.g. gpt-4o-mini",
+        ProviderKind::Local => "e.g. qwen2.5-coder:14b",
+    };
     let mut model = settings.model().to_owned();
     ui.horizontal(|ui| {
         ui.label("model");
         if ui
-            .add(egui::TextEdit::singleline(&mut model).hint_text("model id"))
+            .add(egui::TextEdit::singleline(&mut model).hint_text(model_hint))
             .changed()
         {
             settings.set_model(model);
@@ -92,6 +97,18 @@ pub fn settings_panel_ui(
                 settings.set_endpoint(endpoint);
             }
         });
+        // For a local server, offer one-click presets that fill the endpoint with each known
+        // backend's default URL (Ollama / LM Studio / llama.cpp).
+        if settings.provider() == ProviderKind::Local {
+            ui.horizontal(|ui| {
+                ui.label("presets");
+                for backend in vb_ai::LocalBackend::ALL {
+                    if ui.button(backend.label()).clicked() {
+                        settings.set_endpoint(backend.url());
+                    }
+                }
+            });
+        }
     }
 
     // Sampling.
@@ -273,6 +290,25 @@ mod tests {
 
         assert!(settings.is_ready(&keys), "precondition: keyless-ready");
         assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+        assert_eq!(
+            settings.endpoint(),
+            Some("http://localhost:11434/v1/chat/completions")
+        );
+    }
+
+    #[test]
+    fn the_local_provider_renders_its_endpoint_presets() {
+        // With a blank endpoint, the local provider still renders the preset buttons row (one
+        // per LocalBackend) and the model hint — the frame must build through that path.
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Local);
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+        assert_eq!(settings.endpoint(), None, "precondition: blank endpoint");
+        assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+
+        // The preset values the buttons write are the backends' own default URLs.
+        settings.set_endpoint(vb_ai::LocalBackend::Ollama.url());
         assert_eq!(
             settings.endpoint(),
             Some("http://localhost:11434/v1/chat/completions")
