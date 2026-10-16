@@ -57,6 +57,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Local-server endpoint presets and provider-aware model hints in Settings (000234).** With the
+  local provider selected, the Settings panel now shows one-click **preset buttons** — Ollama / LM
+  Studio / llama.cpp — that fill the endpoint field with each backend's default chat-completions URL,
+  so the user no longer has to remember `http://localhost:11434/v1/chat/completions`. The presets come
+  from a new `vb_ai::LocalBackend::ALL`, the single list of known local backends (each with its own
+  `url()`/`label()`). The model field's placeholder is now provider-appropriate — `e.g.
+  qwen2.5-coder:14b` for local, `e.g. gpt-4o-mini` for OpenAI-compatible, `e.g. claude-sonnet-5` for
+  Anthropic — so it hints at a valid id for the chosen backend. Pure UI/view-model, no network: tests
+  cover `LocalBackend::ALL` (every backend, distinct urls/labels) and the panel rendering the local
+  presets row with a blank endpoint.
 - **The AI assistant is live in the standalone app — chat + Settings, with persisted choices
   (000233).** Everything the last three steps built (the NL→patch assistant, the Settings
   view-model, `settings.ron` persistence, the local keyless provider) existed only behind the

@@ -616,6 +616,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000234 — 🎚️ **Local-server endpoint presets + provider-aware model hints in Settings** — with the
+  local provider selected, one-click preset buttons (Ollama / LM Studio / llama.cpp) fill the endpoint
+  with each backend's default URL, from a new `vb_ai::LocalBackend::ALL`; no more remembering
+  `localhost:11434/v1/chat/completions`. The model placeholder adapts per provider (`e.g.
+  qwen2.5-coder:14b` for local). Pure UI/view-model, offline tests 🧪
 - [x] 000233 — 💬 **The AI assistant is live in the standalone app (chat + Settings, persisted)** — the
   NL→patch assistant, the Settings view-model, `settings.ron` persistence and the local keyless
   provider all existed behind the `assistant` feature, which no shipping binary enabled, so the panels

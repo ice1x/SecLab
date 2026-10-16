@@ -34,6 +34,13 @@ pub enum LocalBackend {
 }
 
 impl LocalBackend {
+    /// Every known local backend, in display order — for a UI that offers them as presets.
+    pub const ALL: [LocalBackend; 3] = [
+        LocalBackend::Ollama,
+        LocalBackend::LmStudio,
+        LocalBackend::LlamaCpp,
+    ];
+
     /// The default Chat Completions URL this backend listens on.
     #[must_use]
     pub fn url(self) -> &'static str {
@@ -157,6 +164,22 @@ mod tests {
             "http://localhost:8080/v1/chat/completions"
         );
         assert_eq!(LocalBackend::Ollama.label(), "ollama");
+    }
+
+    #[test]
+    fn all_lists_every_backend_with_distinct_urls_and_labels() {
+        let all = LocalBackend::ALL;
+        assert_eq!(all.len(), 3);
+        assert!(all.contains(&LocalBackend::Ollama));
+        assert!(all.contains(&LocalBackend::LmStudio));
+        assert!(all.contains(&LocalBackend::LlamaCpp));
+        // Each preset points somewhere distinct and has its own label.
+        for (i, a) in all.iter().enumerate() {
+            for b in &all[i + 1..] {
+                assert_ne!(a.url(), b.url(), "{a:?} and {b:?} share a URL");
+                assert_ne!(a.label(), b.label(), "{a:?} and {b:?} share a label");
+            }
+        }
     }
 
     #[test]
