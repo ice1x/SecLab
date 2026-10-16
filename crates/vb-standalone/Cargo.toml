@@ -12,8 +12,11 @@ vb-core.workspace = true
 vb-nodes.workspace = true
 vb-runtime.workspace = true
 # The standalone runs the editor as its own eframe window, so it needs the `app` feature
-# (off by default at the workspace level, where the plugin wants it off).
-vb-editor = { workspace = true, features = ["app"] }
+# (off by default at the workspace level, where the plugin wants it off). `assistant-net`
+# turns on the AI assistant chat + Settings panels with the real network providers (reqwest)
+# and the OS keychain, so a user can run a cloud or a local (Ollama/LM Studio/llama.cpp) model
+# from the app.
+vb-editor = { workspace = true, features = ["app", "assistant-net"] }
 cpal.workspace = true
 midir.workspace = true
 egui.workspace = true

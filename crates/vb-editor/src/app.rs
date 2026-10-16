@@ -1625,6 +1625,34 @@ impl EditorApp {
         }
     }
 
+    /// Loads the persisted assistant settings from `settings.ron` under [`Self::modules_dir`]
+    /// into the live Settings state, so the user's provider/model/endpoint/privacy choices are
+    /// restored across restarts. A **missing** file is the normal first run (defaults are kept);
+    /// a **corrupt** file is reported in the assistant status and the defaults are kept. The
+    /// stored key is untouched — it lives in the keychain, never in this file. Call it once at
+    /// startup after [`Self::set_modules_dir`]; the user still clicks "apply / connect" to wire
+    /// the provider.
+    #[cfg(feature = "assistant")]
+    pub fn load_assistant_settings(&mut self) {
+        match vb_ai::load_settings(&self.modules_dir) {
+            Ok(settings) => self.assistant.settings = settings,
+            Err(e) => {
+                self.assistant.status = Some(format!("could not load settings: {e}"));
+            }
+        }
+    }
+
+    /// Writes the current assistant settings to `settings.ron` under [`Self::modules_dir`] so
+    /// they survive a restart. Never writes the API key (it stays in the keychain). A write
+    /// failure is reported in the assistant status rather than propagated. Called when the user
+    /// applies the Settings panel.
+    #[cfg(feature = "assistant")]
+    fn save_assistant_settings(&mut self) {
+        if let Err(e) = vb_ai::save_settings(&self.modules_dir, &self.assistant.settings) {
+            self.assistant.status = Some(format!("could not save settings: {e}"));
+        }
+    }
+
     /// Consumes a worker's proposal if one has arrived, recording it on the main thread via
     /// [`EditSession::record`]. Returns `true` if a message was consumed. Called every frame
     /// and, in tests, after joining the worker. No-op when no request is in flight.
@@ -1708,6 +1736,8 @@ impl EditorApp {
                 );
                 if settings_action == Some(SettingsAction::Apply) {
                     self.apply_assistant_settings();
+                    // Persist the applied choices (never the key) so they survive a restart.
+                    self.save_assistant_settings();
                 }
             });
         });
@@ -3734,6 +3764,12 @@ mod tests {
     #[test]
     fn assistant_settings_key_and_readiness_round_trip_through_the_host() {
         let mut app = EditorApp::new();
+        // Drive the readiness logic through an in-memory key store, not the host's default.
+        // Under `assistant-net` that default is the real OS `KeychainStore`, which cannot be
+        // written on a headless CI runner (no unlocked keychain) — and this test is about the
+        // view-model/readiness round trip, not the keychain backend, so an in-memory store keeps
+        // it deterministic in every build.
+        app.assistant.keys = Box::new(vb_ai::MemoryKeyStore::new());
         // Reach the host's own view-model and key store the panel would drive.
         assert!(!app
             .assistant
@@ -3753,6 +3789,53 @@ mod tests {
             .expect("stores through the host key store");
 
         assert!(app.assistant.settings.is_ready(app.assistant.keys.as_ref()));
+    }
+
+    /// The assistant settings persist through the editor: saving to the modules dir and loading
+    /// them into a fresh app restores the provider/model/endpoint/privacy choices. A missing file
+    /// keeps the defaults.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn assistant_settings_persist_through_the_editor() {
+        let dir = std::env::temp_dir().join(format!("vb-editor-settings-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+
+        // A fresh app pointed at an empty dir loads nothing and keeps the defaults.
+        let mut app = EditorApp::new();
+        app.set_modules_dir(&dir);
+        app.load_assistant_settings();
+        assert_eq!(
+            app.assistant.settings.provider(),
+            vb_ai::ProviderKind::Anthropic
+        );
+
+        // Edit the settings and save them (the Apply path does this).
+        app.assistant
+            .settings
+            .select_provider(vb_ai::ProviderKind::Local);
+        app.assistant.settings.set_model("qwen2.5-coder:14b");
+        app.assistant
+            .settings
+            .set_endpoint("http://localhost:11434/v1/chat/completions");
+        app.assistant.settings.set_consent(true);
+        app.save_assistant_settings();
+
+        // A second app pointed at the same dir restores them.
+        let mut restored = EditorApp::new();
+        restored.set_modules_dir(&dir);
+        restored.load_assistant_settings();
+        assert_eq!(
+            restored.assistant.settings.provider(),
+            vb_ai::ProviderKind::Local
+        );
+        assert_eq!(restored.assistant.settings.model(), "qwen2.5-coder:14b");
+        assert_eq!(
+            restored.assistant.settings.endpoint(),
+            Some("http://localhost:11434/v1/chat/completions")
+        );
+        assert!(restored.assistant.settings.consent());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// Without the `assistant-net` feature, applying the settings has no provider to connect,

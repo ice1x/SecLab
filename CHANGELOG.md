@@ -57,6 +57,21 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The AI assistant is live in the standalone app — chat + Settings, with persisted choices
+  (000233).** Everything the last three steps built (the NL→patch assistant, the Settings
+  view-model, `settings.ron` persistence, the local keyless provider) existed only behind the
+  `assistant` feature, which no shipping binary turned on — so the panels were unreachable outside
+  tests. `vb-standalone` now builds `vb-editor` with `assistant-net`, so the assistant chat and the
+  provider/model/endpoint/privacy Settings panels render in the real app with the live network
+  providers (reqwest) and the OS keychain. Two small `EditorApp` methods close the persistence loop:
+  `load_assistant_settings` restores the saved choices from `settings.ron` under the modules dir at
+  startup (a missing file keeps the defaults; a corrupt one is reported, not fatal), and the Settings
+  panel's "apply / connect" now also saves them (never the key — that stays in the keychain). The
+  upshot: a user can open the app, pick provider **local** + model `qwen2.5-coder:14b`, consent, and
+  chat to a running Ollama with no key, and the choice is remembered next launch. The plugin keeps
+  the editor without the assistant for now (a DAW-embedded network/keychain path is a separate step).
+  Test: the settings round-trip through the editor (save under the modules dir → load into a fresh
+  app restores provider/model/endpoint/consent).
 - **A local, keyless LLM provider is selectable in Settings — run the assistant fully offline on
   Ollama / LM Studio / llama.cpp (000232).** The engine already had a keyless `LocalProvider`
   (000111) that speaks the OpenAI-compatible protocol to a `localhost` server and sends no
