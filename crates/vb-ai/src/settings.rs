@@ -55,10 +55,12 @@ impl SendBlocker {
 pub struct AssistantSettings {
     config: ProviderConfig,
     privacy: PrivacySettings,
-    /// Base URL override for the OpenAI-compatible provider (`None` = the default OpenAI
-    /// endpoint). This is what makes "OpenAI-compatible" actually cover third-party and local
-    /// servers (Ollama's OpenAI shim, Together, Groq, a self-hosted gateway…). Ignored for
-    /// the Anthropic provider, which has a fixed endpoint.
+    /// Base URL override for the OpenAI-compatible and local providers (`None` = the
+    /// provider's default endpoint: `api.openai.com` for OpenAI-compatible, Ollama's
+    /// `localhost:11434` for local). This is what lets those providers cover third-party and
+    /// self-hosted servers (OpenAI's shim, Together, Groq, a gateway, or a local Ollama / LM
+    /// Studio / llama.cpp on a non-standard port). Ignored for the Anthropic provider, which
+    /// has a fixed endpoint.
     #[serde(skip_serializing_if = "Option::is_none")]
     endpoint: Option<String>,
 }
@@ -149,8 +151,12 @@ impl AssistantSettings {
 
     /// Every provider the UI can offer, in display order.
     #[must_use]
-    pub fn providers() -> [ProviderKind; 2] {
-        [ProviderKind::Anthropic, ProviderKind::OpenAiCompatible]
+    pub fn providers() -> [ProviderKind; 3] {
+        [
+            ProviderKind::Anthropic,
+            ProviderKind::OpenAiCompatible,
+            ProviderKind::Local,
+        ]
     }
 
     /// Selects `provider`. The model is left as-is — the UI sets one appropriate to the new
@@ -213,13 +219,16 @@ impl AssistantSettings {
     /// offline mode first, then missing consent, then a missing key for the selected
     /// provider. Mirrors [`PrivacySettings::blocked_reason`]'s precedence and adds the key
     /// check the privacy layer cannot see.
+    ///
+    /// A **local** provider is keyless ([`ProviderKind::requires_key`]), so the key check is
+    /// skipped for it — a local model is ready once online and consented, with no BYOK key.
     #[must_use]
     pub fn send_blocker(&self, store: &dyn KeyStore) -> Option<SendBlocker> {
         if self.privacy.offline {
             Some(SendBlocker::Offline)
         } else if !self.privacy.consent_to_send {
             Some(SendBlocker::NoConsent)
-        } else if !self.key_present(store) {
+        } else if self.config.provider.requires_key() && !self.key_present(store) {
             Some(SendBlocker::NoKey)
         } else {
             None
@@ -370,6 +379,44 @@ mod tests {
         let all = AssistantSettings::providers();
         assert!(all.contains(&ProviderKind::Anthropic));
         assert!(all.contains(&ProviderKind::OpenAiCompatible));
+        assert!(all.contains(&ProviderKind::Local));
+    }
+
+    #[test]
+    fn a_local_provider_is_ready_without_any_key() {
+        // A local server (Ollama/LM Studio/llama.cpp) is keyless: once online and consented,
+        // the assistant is ready with no BYOK key stored at all.
+        let mut s = AssistantSettings::new();
+        s.select_provider(ProviderKind::Local);
+        s.set_consent(true);
+        let store = MemoryKeyStore::new();
+
+        assert!(!s.key_present(&store), "precondition: no key is stored");
+        assert_eq!(
+            s.send_blocker(&store),
+            None,
+            "a local provider needs no key to be ready"
+        );
+        assert!(s.is_ready(&store));
+
+        // Offline still wins — the explicit switch blocks even a local call.
+        s.set_offline(true);
+        assert_eq!(s.send_blocker(&store), Some(SendBlocker::Offline));
+        // And consent is still required before it is ready.
+        s.set_offline(false);
+        s.set_consent(false);
+        assert_eq!(s.send_blocker(&store), Some(SendBlocker::NoConsent));
+    }
+
+    #[test]
+    fn a_cloud_provider_still_requires_its_key() {
+        // The keyless exemption is local-only: the OpenAI-compatible cloud path still blocks
+        // on a missing key even with consent granted.
+        let mut s = AssistantSettings::new();
+        s.select_provider(ProviderKind::OpenAiCompatible);
+        s.set_consent(true);
+        let store = MemoryKeyStore::new();
+        assert_eq!(s.send_blocker(&store), Some(SendBlocker::NoKey));
     }
 
     #[test]

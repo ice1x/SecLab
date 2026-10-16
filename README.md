@@ -616,6 +616,16 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000232 — 🖥️ **Local, keyless LLM provider selectable in Settings (Ollama / LM Studio / llama.cpp)** —
+  the keyless `LocalProvider` (000111) that talks the OpenAI-compatible protocol to a `localhost`
+  server existed but was unreachable from the UI: `ProviderKind` had only `Anthropic` and
+  `OpenAiCompatible`, and the cloud adapter *requires* a BYOK key, so running
+  `ollama run qwen2.5-coder:14b` meant storing a throwaway key to pass the readiness gate. Adds a
+  first-class `ProviderKind::Local` — listed in `providers()`, marked keyless via `requires_key()`,
+  and skipped by the `send_blocker` key check (offline/consent still apply). The Settings panel shows
+  the endpoint field (blank → Ollama's `localhost:11434`) and hides the key controls; the editor
+  routes `Local` to a new `set_assistant_local_endpoint` wiring `LocalProvider::at(url)` with no
+  keychain read. Cloud providers unchanged. Offline tests 🧪
 - [x] 000231 — ⚙️ **Assistant settings persist to `settings.ron` — keys stay in the keychain** — the
   Settings view-model (provider, model, token budget, temperature, endpoint override, offline/consent
   policy) was in-memory only, so every restart reset the provider/model choice. A new `vb_ai::persist`

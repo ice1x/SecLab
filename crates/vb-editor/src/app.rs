@@ -1566,6 +1566,29 @@ impl EditorApp {
         Ok(())
     }
 
+    /// Wires a **keyless** local, OpenAI-compatible server by URL — this is the path the
+    /// Settings panel uses for the `Local` provider. A blank `endpoint` defaults to Ollama's
+    /// `localhost:11434`; any other local server (LM Studio, llama.cpp, a non-standard port)
+    /// is reached by giving its full chat-completions URL. No keychain is touched.
+    /// `assistant-net` only.
+    ///
+    /// # Errors
+    /// [`vb_ai::AiError`] if the HTTP client cannot be built.
+    #[cfg(feature = "assistant-net")]
+    pub fn set_assistant_local_endpoint(
+        &mut self,
+        endpoint: Option<&str>,
+        timeout: std::time::Duration,
+    ) -> Result<(), vb_ai::AiError> {
+        let transport = vb_ai::ReqwestTransport::new(timeout)?;
+        let provider = match endpoint {
+            Some(url) => vb_ai::LocalProvider::at(transport, url),
+            None => vb_ai::LocalProvider::new(transport, vb_ai::LocalBackend::Ollama),
+        };
+        self.set_assistant_provider(Arc::new(provider));
+        Ok(())
+    }
+
     /// Applies the Settings panel: the worker already snapshots `settings.config()` each
     /// request, so this only (re)connects the live provider. Under `assistant-net` it builds
     /// the provider the panel selected, reading the key from the keychain; without it there is
@@ -1581,6 +1604,12 @@ impl EditorApp {
                 vb_ai::ProviderKind::OpenAiCompatible => {
                     let endpoint = self.assistant.settings.endpoint().map(str::to_owned);
                     self.set_assistant_openai("VST_bomb", timeout, endpoint.as_deref())
+                }
+                vb_ai::ProviderKind::Local => {
+                    // Keyless, on-machine: the endpoint override is the local server URL
+                    // (blank → Ollama's default). No keychain read.
+                    let endpoint = self.assistant.settings.endpoint().map(str::to_owned);
+                    self.set_assistant_local_endpoint(endpoint.as_deref(), timeout)
                 }
             };
             self.assistant.status = Some(match result {
