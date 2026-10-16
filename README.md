@@ -616,6 +616,15 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000233 — 💬 **The AI assistant is live in the standalone app (chat + Settings, persisted)** — the
+  NL→patch assistant, the Settings view-model, `settings.ron` persistence and the local keyless
+  provider all existed behind the `assistant` feature, which no shipping binary enabled, so the panels
+  were unreachable outside tests. `vb-standalone` now builds `vb-editor` with `assistant-net`: the chat
+  and provider/model/endpoint/privacy Settings panels render in the real app with the live network
+  providers and the OS keychain. `EditorApp::load_assistant_settings` restores the saved choices from
+  `settings.ron` at startup, and "apply / connect" saves them (never the key). So: open the app, pick
+  provider **local** + `qwen2.5-coder:14b`, consent, chat to Ollama with no key — remembered next
+  launch. The plugin keeps the editor assistant-less for now. Offline test 🧪
 - [x] 000232 — 🖥️ **Local, keyless LLM provider selectable in Settings (Ollama / LM Studio / llama.cpp)** —
   the keyless `LocalProvider` (000111) that talks the OpenAI-compatible protocol to a `localhost`
   server existed but was unreachable from the UI: `ProviderKind` had only `Anthropic` and

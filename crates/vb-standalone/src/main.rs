@@ -456,6 +456,10 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     // Share the per-user modules folder with the plugin so a macro saved in either is browsable in
     // both (the default is a relative `modules`, tied to the launch directory).
     editor.set_modules_dir(vb_editor::user_modules_dir());
+    // Restore the assistant's persisted provider/model/endpoint/privacy choices (never the key —
+    // that stays in the keychain) from `settings.ron` in that same folder. The user clicks
+    // "apply / connect" in the Settings panel to wire the provider.
+    editor.load_assistant_settings();
     let registry = Registry::with_builtins();
     let build_ctx = BuildContext::default();
     let stack = start_stack(
