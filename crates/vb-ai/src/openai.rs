@@ -65,16 +65,7 @@ fn role_wire(role: Role) -> &'static str {
 /// [`AiError::Api`], [`AiError::Decode`], or [`AiError::NoContent`] per the rules above.
 pub fn parse_response(status: u16, body: &str) -> Result<ChatResponse, AiError> {
     if !(200..300).contains(&status) {
-        let message = serde_json::from_str::<serde_json::Value>(body)
-            .ok()
-            .and_then(|v| {
-                v.get("error")
-                    .and_then(|e| e.get("message"))
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_owned)
-            })
-            .unwrap_or_else(|| format!("HTTP {status}: {body}"));
-        return Err(AiError::Api(message));
+        return Err(api_error(status, body));
     }
 
     let value: serde_json::Value =
@@ -103,6 +94,63 @@ pub fn parse_response(status: u16, body: &str) -> Result<ChatResponse, AiError> 
         content: text.to_owned(),
         stop_reason,
     })
+}
+
+/// Turns a non-2xx reply into an [`AiError::Api`], preferring the JSON `error.message`
+/// field and falling back to `HTTP <status>: <body>` when it is absent or unparseable.
+fn api_error(status: u16, body: &str) -> AiError {
+    let message = serde_json::from_str::<serde_json::Value>(body)
+        .ok()
+        .and_then(|v| {
+            v.get("error")
+                .and_then(|e| e.get("message"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| format!("HTTP {status}: {body}"));
+    AiError::Api(message)
+}
+
+/// Derives the models-listing endpoint (`GET /v1/models`) from a Chat Completions URL.
+///
+/// Every OpenAI-compatible server exposes both `.../v1/chat/completions` and
+/// `.../v1/models` on the same host, so the listing URL is the chat URL with its
+/// `/chat/completions` suffix replaced by `/models`. A URL that does not end that way is
+/// handled best-effort: a trailing slash is dropped before `/models` is appended.
+#[must_use]
+pub fn models_url(chat_completions_url: &str) -> String {
+    if let Some(base) = chat_completions_url.strip_suffix("/chat/completions") {
+        format!("{base}/models")
+    } else {
+        format!("{}/models", chat_completions_url.trim_end_matches('/'))
+    }
+}
+
+/// Parses a `GET /v1/models` reply into the list of model identifiers.
+///
+/// The OpenAI-compatible shape is `{"data": [{"id": "..."}, ...]}`; each entry's `id` is
+/// collected in server order. A server with no models yields an empty list (not an error).
+///
+/// # Errors
+/// [`AiError::Api`] for a non-2xx status (carrying `error.message` when present) and
+/// [`AiError::Decode`] for a body that will not parse as JSON.
+pub fn parse_models_list(status: u16, body: &str) -> Result<Vec<String>, AiError> {
+    if !(200..300).contains(&status) {
+        return Err(api_error(status, body));
+    }
+    let value: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| AiError::Decode(e.to_string()))?;
+    let ids = value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|m| m.get("id").and_then(serde_json::Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok(ids)
 }
 
 /// The OpenAI-compatible adapter: a [`HttpTransport`] plus a [`KeyStore`] for the BYOK key.
@@ -329,5 +377,56 @@ mod tests {
             transport.only_request().url,
             "http://localhost:1234/v1/chat/completions"
         );
+    }
+
+    #[test]
+    fn models_url_replaces_the_chat_suffix_with_models() {
+        assert_eq!(
+            models_url("http://localhost:11434/v1/chat/completions"),
+            "http://localhost:11434/v1/models"
+        );
+        assert_eq!(
+            models_url("https://api.openai.com/v1/chat/completions"),
+            "https://api.openai.com/v1/models"
+        );
+        // A URL that does not end in /chat/completions still gets a sane /models path.
+        assert_eq!(
+            models_url("http://localhost:1234/v1/"),
+            "http://localhost:1234/v1/models"
+        );
+    }
+
+    #[test]
+    fn parse_models_list_collects_the_ids_in_order() {
+        let body = r#"{"object":"list","data":[
+            {"id":"qwen2.5-coder:14b","object":"model"},
+            {"id":"llama3.1:8b","object":"model"}
+        ]}"#;
+        assert_eq!(
+            parse_models_list(200, body).unwrap(),
+            vec!["qwen2.5-coder:14b".to_owned(), "llama3.1:8b".to_owned()]
+        );
+    }
+
+    #[test]
+    fn parse_models_list_tolerates_an_empty_catalog() {
+        assert_eq!(
+            parse_models_list(200, r#"{"object":"list","data":[]}"#).unwrap(),
+            Vec::<String>::new()
+        );
+    }
+
+    #[test]
+    fn parse_models_list_surfaces_an_error_status() {
+        let err = parse_models_list(500, r#"{"error":{"message":"server on fire"}}"#);
+        assert_eq!(err, Err(AiError::Api("server on fire".to_owned())));
+    }
+
+    #[test]
+    fn parse_models_list_rejects_a_malformed_body() {
+        match parse_models_list(200, "not json at all") {
+            Err(AiError::Decode(_)) => {}
+            other => panic!("expected Decode, got {other:?}"),
+        }
     }
 }

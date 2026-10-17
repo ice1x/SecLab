@@ -616,6 +616,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000235 — 📋 **The local provider can list its installed models** — `vb_ai::LocalProvider::list_models`
+  queries the local server's `GET /v1/models` (every OpenAI-compatible server exposes it beside
+  `/chat/completions`) and returns the installed model ids, so a UI can offer them as a picklist
+  instead of making the user type `qwen2.5-coder:14b`. New pure helpers `openai::models_url` (derives
+  the listing URL) and `openai::parse_models_list` (`data[].id`); the `HttpTransport` seam gains a
+  `get` (real socket only behind `net`). Keyless by default; whole path unit-tested offline via
+  `MockTransport`. No Settings-panel wiring yet — a model picklist is the follow-up 🧪
 - [x] 000234 — 🎚️ **Local-server endpoint presets + provider-aware model hints in Settings** — with the
   local provider selected, one-click preset buttons (Ollama / LM Studio / llama.cpp) fill the endpoint
   with each backend's default URL, from a new `vb_ai::LocalBackend::ALL`; no more remembering

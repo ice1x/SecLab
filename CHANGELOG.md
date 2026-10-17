@@ -57,6 +57,21 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The local provider can list its installed models (000235).** `vb_ai::LocalProvider::list_models`
+  queries the local server's `GET /v1/models` endpoint — every OpenAI-compatible server (Ollama, LM
+  Studio, llama.cpp) exposes it alongside `/chat/completions` on the same host — and returns the
+  installed model identifiers in server order, so a UI can offer them as a picklist instead of making
+  the user type `qwen2.5-coder:14b` by hand. The listing URL is derived from the configured chat URL
+  by the new pure `vb_ai::openai::models_url` (replaces the `/chat/completions` suffix with
+  `/models`), and the reply is decoded by the new pure `vb_ai::openai::parse_models_list`
+  (`data[].id`; an empty catalog is an empty list, not an error). The listing is keyless by default
+  like the rest of the local path, attaching a bearer only when a token is set for a secured gateway.
+  To carry a bodyless request the `HttpTransport` seam gains a `get` method (real socket only in the
+  `net`-gated `ReqwestTransport`); the whole path is unit-tested offline through the recording
+  `MockTransport` — URL derivation, id parsing, error/decode handling, the keyless/bearer header set,
+  and an unreachable server surfacing as `Network`. The error-status extraction shared by
+  `parse_response` and `parse_models_list` is factored into one `api_error` helper. No Settings-panel
+  wiring yet (a model picklist is a follow-up); this is the tested provider capability it will build on.
 - **Local-server endpoint presets and provider-aware model hints in Settings (000234).** With the
   local provider selected, the Settings panel now shows one-click **preset buttons** — Ollama / LM
   Studio / llama.cpp — that fill the endpoint field with each backend's default chat-completions URL,
