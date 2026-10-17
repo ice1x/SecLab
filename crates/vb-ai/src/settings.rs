@@ -47,6 +47,49 @@ impl SendBlocker {
     }
 }
 
+/// The last model identifier chosen for **each** provider, so switching providers restores
+/// that provider's own model instead of leaving a mismatched one behind (e.g. a `claude-…`
+/// id selected against a local Ollama server, which the server would reject). Every slot
+/// starts blank; a blank slot means "no model picked for this provider yet", which the
+/// readiness gate surfaces as [`SendBlocker::NoModel`].
+///
+/// `#[serde(default)]` at field level lets an older `settings.ron` (written before this
+/// existed) load with every slot blank; the active provider's model is recovered on the first
+/// provider switch, which saves the live model before swapping.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+struct RememberedModels {
+    anthropic: String,
+    openai_compatible: String,
+    local: String,
+}
+
+impl RememberedModels {
+    /// The remembered model for `provider` (blank if none chosen yet).
+    fn get(&self, provider: ProviderKind) -> &str {
+        match provider {
+            ProviderKind::Anthropic => &self.anthropic,
+            ProviderKind::OpenAiCompatible => &self.openai_compatible,
+            ProviderKind::Local => &self.local,
+        }
+    }
+
+    /// Records `model` as `provider`'s model.
+    fn set(&mut self, provider: ProviderKind, model: String) {
+        match provider {
+            ProviderKind::Anthropic => self.anthropic = model,
+            ProviderKind::OpenAiCompatible => self.openai_compatible = model,
+            ProviderKind::Local => self.local = model,
+        }
+    }
+}
+
+/// Whether the per-provider memory is still all-blank — used to keep it out of the serialized
+/// form until the user has actually chosen a model for some provider.
+fn is_default_models(models: &RememberedModels) -> bool {
+    *models == RememberedModels::default()
+}
+
 /// The assistant Settings screen's state: the provider/model/sampling
 /// [`ProviderConfig`] and the [`PrivacySettings`]. Key presence is read live from a
 /// [`KeyStore`] — the key value is never stored here.
@@ -60,6 +103,10 @@ impl SendBlocker {
 pub struct AssistantSettings {
     config: ProviderConfig,
     privacy: PrivacySettings,
+    /// Per-provider model memory (see [`RememberedModels`]). Skipped when every slot is blank
+    /// so a fresh settings file stays minimal and older files keep round-tripping unchanged.
+    #[serde(skip_serializing_if = "is_default_models")]
+    models: RememberedModels,
     /// Base URL override for the OpenAI-compatible and local providers (`None` = the
     /// provider's default endpoint: `api.openai.com` for OpenAI-compatible, Ollama's
     /// `localhost:11434` for local). This is what lets those providers cover third-party and
@@ -81,10 +128,15 @@ impl AssistantSettings {
     /// neither carries a key). The endpoint override starts unset.
     #[must_use]
     pub fn with(config: ProviderConfig, privacy: PrivacySettings) -> Self {
+        // Seed the active provider's memory slot from the restored model, so a later switch
+        // away and back returns to it.
+        let mut models = RememberedModels::default();
+        models.set(config.provider, config.model.clone());
         Self {
             config,
             privacy,
             endpoint: None,
+            models,
         }
     }
 
@@ -164,15 +216,29 @@ impl AssistantSettings {
         ]
     }
 
-    /// Selects `provider`. The model is left as-is — the UI sets one appropriate to the new
-    /// provider (there is no single cross-provider default model).
+    /// Selects `provider`, restoring **that provider's own** last model. Each provider keeps
+    /// its own model identifier (there is no cross-provider default — a `claude-…` id means
+    /// nothing to a local Ollama server, and vice versa), so switching saves the current
+    /// model under the outgoing provider and loads the incoming one's remembered model. A
+    /// provider with no model chosen yet comes back **blank**, which the readiness gate reports
+    /// as [`SendBlocker::NoModel`] rather than letting a mismatched id reach the server.
+    /// Selecting the already-current provider is a no-op.
     pub fn select_provider(&mut self, provider: ProviderKind) {
+        if provider == self.config.provider {
+            return;
+        }
+        self.models
+            .set(self.config.provider, std::mem::take(&mut self.config.model));
         self.config.provider = provider;
+        self.config.model = self.models.get(provider).to_owned();
     }
 
-    /// Sets the model identifier.
+    /// Sets the model identifier for the current provider, remembering it so a later switch
+    /// back to this provider restores it.
     pub fn set_model(&mut self, model: impl Into<String>) {
-        self.config.model = model.into();
+        let model = model.into();
+        self.models.set(self.config.provider, model.clone());
+        self.config.model = model;
     }
 
     /// Sets the generation token budget.
@@ -397,6 +463,7 @@ mod tests {
         // the assistant is ready with no BYOK key stored at all.
         let mut s = AssistantSettings::new();
         s.select_provider(ProviderKind::Local);
+        s.set_model("qwen2.5-coder:14b"); // a local provider still needs a model picked
         s.set_consent(true);
         let store = MemoryKeyStore::new();
 
@@ -418,15 +485,54 @@ mod tests {
     }
 
     #[test]
+    fn switching_providers_keeps_a_model_per_provider() {
+        // Each provider owns its own model identifier: a `claude-…` id means nothing to a
+        // local Ollama server, so switching must never carry one provider's model into another.
+        let mut s = AssistantSettings::new();
+        assert_eq!(s.provider(), ProviderKind::Anthropic);
+        let claude = s.model().to_owned();
+        assert!(
+            !claude.is_empty(),
+            "Anthropic starts with its default model"
+        );
+
+        // Switching to local does NOT inherit the claude id — a fresh local provider has no
+        // model yet (so the readiness gate will ask for one).
+        s.select_provider(ProviderKind::Local);
+        assert_eq!(
+            s.model(),
+            "",
+            "a mismatched cloud model must not leak into local"
+        );
+
+        // Pick a local model; it is remembered for local only.
+        s.set_model("qwen2.5-coder:14b");
+        assert_eq!(s.model(), "qwen2.5-coder:14b");
+
+        // Back to Anthropic restores its own model, untouched by the local pick.
+        s.select_provider(ProviderKind::Anthropic);
+        assert_eq!(s.model(), claude);
+
+        // And back to local restores the local pick.
+        s.select_provider(ProviderKind::Local);
+        assert_eq!(s.model(), "qwen2.5-coder:14b");
+
+        // Re-selecting the current provider is a no-op (does not blank the model).
+        s.select_provider(ProviderKind::Local);
+        assert_eq!(s.model(), "qwen2.5-coder:14b");
+    }
+
+    #[test]
     fn a_blank_model_blocks_even_a_keyless_local_provider() {
         // The keyless local path clears offline+consent+key, so a blank model is the only
         // remaining gate — and a request with no model would be rejected by the server, so the
         // readiness line must flag it rather than claim "ready".
         let mut s = AssistantSettings::new();
         s.select_provider(ProviderKind::Local);
+        s.set_model("qwen2.5-coder:14b"); // pick a model so the only variable is blanking it
         s.set_consent(true);
         let store = MemoryKeyStore::new();
-        // Precondition: with the default (non-empty) model it is already ready.
+        // Precondition: with a model chosen it is ready.
         assert_eq!(s.send_blocker(&store), None);
 
         s.set_model("   ");
