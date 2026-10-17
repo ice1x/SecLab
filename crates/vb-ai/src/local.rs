@@ -16,7 +16,7 @@
 //! privacy-preserving path — no BYOK key, no cloud round-trip.
 
 use crate::http::{Header, HttpTransport};
-use crate::openai::{build_request_body, parse_response};
+use crate::openai::{build_request_body, models_url, parse_models_list, parse_response};
 use crate::provider::{AiError, AiProvider, ChatRequest, ChatResponse, ProviderKind};
 
 /// A known local LLM server exposing an OpenAI-compatible Chat Completions endpoint.
@@ -100,6 +100,29 @@ where
     pub fn with_token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(token.into());
         self
+    }
+
+    /// Lists the models the local server currently has installed.
+    ///
+    /// Queries the server's `GET /v1/models` endpoint — derived from the configured chat
+    /// URL via [`models_url`] — and returns each model identifier in server order. This
+    /// lets the UI offer the installed models (e.g. `qwen2.5-coder:14b`) as a picklist
+    /// instead of making the user type the name. Keyless by default, like
+    /// [`complete`](LocalProvider::complete); a token set with
+    /// [`with_token`](LocalProvider::with_token) is sent as a bearer for a secured gateway.
+    ///
+    /// # Errors
+    /// [`AiError::Network`] if the server is unreachable, [`AiError::Api`] for a non-2xx
+    /// reply, or [`AiError::Decode`] for a body that will not parse.
+    pub fn list_models(&self) -> Result<Vec<String>, AiError> {
+        let url = models_url(&self.url);
+        let bearer = self.token.as_ref().map(|t| format!("Bearer {t}"));
+        let mut headers: Vec<Header<'_>> = Vec::with_capacity(1);
+        if let Some(b) = &bearer {
+            headers.push(("authorization", b.as_str()));
+        }
+        let reply = self.transport.get(&url, &headers)?;
+        parse_models_list(reply.status, &reply.body)
     }
 }
 
@@ -238,6 +261,54 @@ mod tests {
             LocalBackend::LlamaCpp,
         );
         match provider.complete(&request()) {
+            Err(AiError::Network(msg)) => assert!(msg.contains("connection refused")),
+            other => panic!("expected Network, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn list_models_gets_v1_models_and_returns_the_ids() {
+        let provider = LocalProvider::new(
+            MockTransport::replying(
+                200,
+                r#"{"object":"list","data":[{"id":"qwen2.5-coder:14b"},{"id":"llama3.1:8b"}]}"#,
+            ),
+            LocalBackend::Ollama,
+        );
+        let models = provider.list_models().unwrap();
+        assert_eq!(models, vec!["qwen2.5-coder:14b", "llama3.1:8b"]);
+
+        let LocalProvider { transport, .. } = provider;
+        let sent = transport.only_request();
+        // The listing endpoint is the chat URL's sibling, and keyless by default.
+        assert_eq!(sent.url, "http://localhost:11434/v1/models");
+        assert!(
+            !sent.headers.iter().any(|(k, _)| k == "authorization"),
+            "a keyless local listing must carry no Authorization header"
+        );
+    }
+
+    #[test]
+    fn list_models_attaches_a_bearer_for_a_secured_gateway() {
+        let provider = LocalProvider::new(ok_reply(), LocalBackend::LmStudio).with_token("tok");
+        // ok_reply() returns a chat-completion body, not a models list, so the parse
+        // yields an empty catalog — the point here is the request headers/url.
+        let _ = provider.list_models();
+        let LocalProvider { transport, .. } = provider;
+        let sent = transport.only_request();
+        assert_eq!(sent.url, "http://localhost:1234/v1/models");
+        assert!(sent
+            .headers
+            .contains(&("authorization".to_owned(), "Bearer tok".to_owned())));
+    }
+
+    #[test]
+    fn list_models_on_a_dead_server_surfaces_as_network() {
+        let provider = LocalProvider::new(
+            MockTransport::failing("connection refused"),
+            LocalBackend::LlamaCpp,
+        );
+        match provider.list_models() {
             Err(AiError::Network(msg)) => assert!(msg.contains("connection refused")),
             other => panic!("expected Network, got {other:?}"),
         }

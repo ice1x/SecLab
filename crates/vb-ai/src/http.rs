@@ -46,6 +46,18 @@ pub trait HttpTransport {
         headers: &[Header<'_>],
         body: &str,
     ) -> Result<HttpReply, AiError>;
+
+    /// GETs `url` with `headers` set, returning the status and body.
+    ///
+    /// Used for read-only queries that carry no request body — e.g. listing a local
+    /// server's installed models (`GET /v1/models`). Same contract as
+    /// [`post_json`](HttpTransport::post_json): transport failures become
+    /// [`AiError::Network`]; a non-2xx status is returned as an [`HttpReply`] for the
+    /// caller's parser to interpret, not an error.
+    ///
+    /// # Errors
+    /// [`AiError::Network`] if the request cannot be completed at all.
+    fn get(&self, url: &str, headers: &[Header<'_>]) -> Result<HttpReply, AiError>;
 }
 
 /// A real blocking HTTP transport over `reqwest` (rustls). Behind the `net` feature so the
@@ -82,6 +94,17 @@ impl HttpTransport for ReqwestTransport {
         body: &str,
     ) -> Result<HttpReply, AiError> {
         let mut req = self.client.post(url).body(body.to_owned());
+        for (name, value) in headers {
+            req = req.header(*name, *value);
+        }
+        let resp = req.send().map_err(|e| AiError::Network(e.to_string()))?;
+        let status = resp.status().as_u16();
+        let body = resp.text().map_err(|e| AiError::Network(e.to_string()))?;
+        Ok(HttpReply { status, body })
+    }
+
+    fn get(&self, url: &str, headers: &[Header<'_>]) -> Result<HttpReply, AiError> {
+        let mut req = self.client.get(url);
         for (name, value) in headers {
             req = req.header(*name, *value);
         }
@@ -163,6 +186,19 @@ pub(crate) mod mock {
                     .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
                     .collect(),
                 body: body.to_owned(),
+            });
+            self.reply.clone()
+        }
+
+        fn get(&self, url: &str, headers: &[Header<'_>]) -> Result<HttpReply, AiError> {
+            // A GET carries no body; record an empty one so `only_request` still works.
+            self.seen.borrow_mut().push(Captured {
+                url: url.to_owned(),
+                headers: headers
+                    .iter()
+                    .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+                    .collect(),
+                body: String::new(),
             });
             self.reply.clone()
         }
