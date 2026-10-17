@@ -28,6 +28,10 @@ pub enum SendBlocker {
     NoConsent,
     /// No API key is stored for the selected provider.
     NoKey,
+    /// No model is selected — the model identifier is blank, so there is nothing to run.
+    /// Reachable above all for a keyless **local** provider: it needs no key, so a blank
+    /// model is the only thing between it and a request that the server would reject.
+    NoModel,
 }
 
 impl SendBlocker {
@@ -38,6 +42,7 @@ impl SendBlocker {
             SendBlocker::Offline => "offline mode is on",
             SendBlocker::NoConsent => "consent to send the project is required",
             SendBlocker::NoKey => "no API key for the selected provider",
+            SendBlocker::NoModel => "no model selected",
         }
     }
 }
@@ -221,7 +226,9 @@ impl AssistantSettings {
     /// check the privacy layer cannot see.
     ///
     /// A **local** provider is keyless ([`ProviderKind::requires_key`]), so the key check is
-    /// skipped for it — a local model is ready once online and consented, with no BYOK key.
+    /// skipped for it — a local model is ready once online and consented *and a model is
+    /// picked*. The model check comes last, after the privacy and key gates: a blank model
+    /// identifier can never produce a valid request, whichever provider is selected.
     #[must_use]
     pub fn send_blocker(&self, store: &dyn KeyStore) -> Option<SendBlocker> {
         if self.privacy.offline {
@@ -230,6 +237,8 @@ impl AssistantSettings {
             Some(SendBlocker::NoConsent)
         } else if self.config.provider.requires_key() && !self.key_present(store) {
             Some(SendBlocker::NoKey)
+        } else if self.config.model.trim().is_empty() {
+            Some(SendBlocker::NoModel)
         } else {
             None
         }
@@ -406,6 +415,55 @@ mod tests {
         s.set_offline(false);
         s.set_consent(false);
         assert_eq!(s.send_blocker(&store), Some(SendBlocker::NoConsent));
+    }
+
+    #[test]
+    fn a_blank_model_blocks_even_a_keyless_local_provider() {
+        // The keyless local path clears offline+consent+key, so a blank model is the only
+        // remaining gate — and a request with no model would be rejected by the server, so the
+        // readiness line must flag it rather than claim "ready".
+        let mut s = AssistantSettings::new();
+        s.select_provider(ProviderKind::Local);
+        s.set_consent(true);
+        let store = MemoryKeyStore::new();
+        // Precondition: with the default (non-empty) model it is already ready.
+        assert_eq!(s.send_blocker(&store), None);
+
+        s.set_model("   ");
+        assert_eq!(
+            s.send_blocker(&store),
+            Some(SendBlocker::NoModel),
+            "a whitespace-only model is no model"
+        );
+        assert!(!s.is_ready(&store));
+
+        // Picking a real model clears it.
+        s.set_model("qwen2.5-coder:14b");
+        assert_eq!(s.send_blocker(&store), None);
+        assert!(s.is_ready(&store));
+    }
+
+    #[test]
+    fn the_model_check_comes_after_the_key_gate() {
+        // For a cloud provider a missing key is reported before a blank model — the user
+        // resolves the auth gate first, then the model.
+        let mut s = AssistantSettings::new();
+        s.select_provider(ProviderKind::OpenAiCompatible);
+        s.set_consent(true);
+        s.set_model("");
+        let mut store = MemoryKeyStore::new();
+        assert_eq!(
+            s.send_blocker(&store),
+            Some(SendBlocker::NoKey),
+            "the key gate ranks ahead of the model gate"
+        );
+
+        s.store_key(&mut store, "sk-openai").unwrap();
+        assert_eq!(
+            s.send_blocker(&store),
+            Some(SendBlocker::NoModel),
+            "with a key stored, the blank model is the next blocker"
+        );
     }
 
     #[test]

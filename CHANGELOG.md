@@ -57,6 +57,18 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The readiness check flags a missing model, and the send refuses one (000237).** The keyless
+  **local** provider (Ollama/LM Studio/llama.cpp) needs no API key, so once offline mode is off and
+  consent is granted the only thing left between it and a request is a chosen model — yet a blank
+  model identifier produces a request the server rejects with a confusing error. `vb_ai::SendBlocker`
+  gains a `NoModel` variant and `AssistantSettings::send_blocker` now returns it (after the privacy
+  and key gates) when the model identifier is blank, so the Settings readiness line shows
+  *"not ready: no model selected"* instead of a green "ready ✓". The editor's assistant Submit
+  handler mirrors this: a blank model is refused up front with *"cannot send: no model selected"*,
+  spawning no worker and leaving the canvas untouched, rather than letting an empty-model request
+  leave the machine. Pure view-model logic, unit-tested in `vb-ai` (blank blocks a keyless local
+  provider; the model gate ranks after the key gate) and at the editor layer (the send guard, and the
+  panel's "not ready" branch rendering headlessly).
 - **Settings offers the local server's models as one-click picks (000236).** Building on the
   `list_models` capability (000235), the assistant Settings panel now has a **"↻ fetch"** button for
   the local provider: it asks the host to query the configured local server (blank endpoint → Ollama's

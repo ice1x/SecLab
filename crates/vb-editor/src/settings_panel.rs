@@ -319,6 +319,25 @@ mod tests {
     }
 
     #[test]
+    fn a_keyless_local_provider_with_a_blank_model_renders_the_not_ready_line() {
+        // A consented, keyless local provider clears every gate but the model — with a blank
+        // model the readiness line must take the "not ready: no model selected" branch, not the
+        // green "ready" one. The frame must build through it.
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Local);
+        settings.set_consent(true);
+        settings.set_model("   ");
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+        assert_eq!(
+            settings.send_blocker(&keys),
+            Some(vb_ai::SendBlocker::NoModel),
+            "precondition: the only blocker is the blank model"
+        );
+        assert!(run_once(&mut settings, &mut keys, &mut draft).is_none());
+    }
+
+    #[test]
     fn the_local_provider_renders_keyless_and_ready_with_an_endpoint() {
         // Picking the local provider shows the endpoint row, hides the BYOK key controls, and
         // (once consented) renders the ready line — all without a key stored. The frame must

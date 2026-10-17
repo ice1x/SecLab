@@ -616,6 +616,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000237 — 🚦 **Readiness flags a missing model and the send refuses one** — the keyless local
+  provider needs no key, so once online and consented the only remaining gate is a chosen model; a
+  blank model id otherwise sails through to a confusing server-side rejection. `vb_ai::SendBlocker`
+  gains `NoModel`, `AssistantSettings::send_blocker` returns it (after the privacy/key gates) for a
+  blank model, so the Settings readiness line reads *"not ready: no model selected"*; the editor's
+  Submit handler mirrors it with *"cannot send: no model selected"*, spawning no worker. Pure
+  view-model logic, unit-tested in vb-ai and at the editor layer (send guard + the panel branch) 🧪
 - [x] 000236 — 🧲 **Settings offers the local server's models as one-click picks** — building on
   000235, the assistant Settings panel gains a **"↻ fetch"** button for the local provider that
   queries the configured server (blank → Ollama) and lists its installed models as selectable chips,
