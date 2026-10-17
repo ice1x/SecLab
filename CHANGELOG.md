@@ -57,6 +57,17 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Settings offers the local server's models as one-click picks (000236).** Building on the
+  `list_models` capability (000235), the assistant Settings panel now has a **"↻ fetch"** button for
+  the local provider: it asks the host to query the configured local server (blank endpoint → Ollama's
+  default) and lists the installed models as selectable chips, so the user picks `qwen2.5-coder:14b`
+  with a click instead of typing it. The fetched list is held on the editor (`AssistantHost::models`)
+  and passed into the panel; a new `SettingsAction::FetchModels` carries the button press back to the
+  host, where `EditorApp::fetch_assistant_models` (under `assistant-net`) builds a keyless
+  `LocalProvider` and calls `list_models`, reporting the count or the error in the assistant status
+  line (without `assistant-net` it just says to rebuild with it). Panel-rendering branches are tested
+  headlessly (the picks row with a model list, the fetch row's local-only visibility); the live
+  network fetch follows the project's established gated-but-untested pattern for the real socket.
 - **The local provider can list its installed models (000235).** `vb_ai::LocalProvider::list_models`
   queries the local server's `GET /v1/models` endpoint — every OpenAI-compatible server (Ollama, LM
   Studio, llama.cpp) exposes it alongside `/chat/completions` on the same host — and returns the

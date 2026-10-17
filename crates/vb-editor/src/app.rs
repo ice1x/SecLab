@@ -88,6 +88,9 @@ struct AssistantHost {
     keys: Box<dyn KeyStore>,
     /// Scratch buffer for the masked key field in the Settings panel.
     key_draft: String,
+    /// Model identifiers last fetched from the local server (empty until a fetch succeeds),
+    /// shown as one-click picks in the Settings panel for the local provider.
+    models: Vec<String>,
     /// The in-progress instruction text.
     draft: String,
     /// Repair attempts the session may spend converging a valid patch per request.
@@ -119,6 +122,7 @@ impl AssistantHost {
             settings: AssistantSettings::new(),
             keys,
             key_draft: String::new(),
+            models: Vec::new(),
             draft: String::new(),
             max_attempts: 3,
             status: None,
@@ -1625,6 +1629,42 @@ impl EditorApp {
         }
     }
 
+    /// Fetches the local server's installed models into [`AssistantHost::models`] so the
+    /// Settings panel can offer them as one-click picks. Under `assistant-net` it builds a
+    /// keyless [`vb_ai::LocalProvider`] at the configured endpoint (blank → Ollama's default)
+    /// and calls [`list_models`](vb_ai::LocalProvider::list_models); success replaces the list
+    /// and notes the count, a failure is reported and the old list is kept. Without
+    /// `assistant-net` there is no network client, so it just says so. Only meaningful for the
+    /// local provider; the panel only offers the fetch there.
+    #[cfg(feature = "assistant")]
+    fn fetch_assistant_models(&mut self) {
+        #[cfg(feature = "assistant-net")]
+        {
+            let timeout = std::time::Duration::from_secs(30);
+            let endpoint = self.assistant.settings.endpoint().map(str::to_owned);
+            let result = vb_ai::ReqwestTransport::new(timeout).and_then(|transport| {
+                let provider = match endpoint.as_deref() {
+                    Some(url) => vb_ai::LocalProvider::at(transport, url),
+                    None => vb_ai::LocalProvider::new(transport, vb_ai::LocalBackend::Ollama),
+                };
+                provider.list_models()
+            });
+            self.assistant.status = Some(match result {
+                Ok(models) => {
+                    let n = models.len();
+                    self.assistant.models = models;
+                    format!("fetched {n} model(s)")
+                }
+                Err(e) => format!("fetch models failed: {e}"),
+            });
+        }
+        #[cfg(not(feature = "assistant-net"))]
+        {
+            self.assistant.status =
+                Some("build with `assistant-net` to fetch local models".to_owned());
+        }
+    }
+
     /// Loads the persisted assistant settings from `settings.ron` under [`Self::modules_dir`]
     /// into the live Settings state, so the user's provider/model/endpoint/privacy choices are
     /// restored across restarts. A **missing** file is the normal first run (defaults are kept);
@@ -1733,11 +1773,16 @@ impl EditorApp {
                     &mut self.assistant.settings,
                     &mut *self.assistant.keys,
                     &mut self.assistant.key_draft,
+                    &self.assistant.models,
                 );
-                if settings_action == Some(SettingsAction::Apply) {
-                    self.apply_assistant_settings();
-                    // Persist the applied choices (never the key) so they survive a restart.
-                    self.save_assistant_settings();
+                match settings_action {
+                    Some(SettingsAction::Apply) => {
+                        self.apply_assistant_settings();
+                        // Persist the applied choices (never the key) so they survive a restart.
+                        self.save_assistant_settings();
+                    }
+                    Some(SettingsAction::FetchModels) => self.fetch_assistant_models(),
+                    None => {}
                 }
             });
         });

@@ -616,6 +616,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000236 — 🧲 **Settings offers the local server's models as one-click picks** — building on
+  000235, the assistant Settings panel gains a **"↻ fetch"** button for the local provider that
+  queries the configured server (blank → Ollama) and lists its installed models as selectable chips,
+  so the user picks `qwen2.5-coder:14b` with a click instead of typing it. New
+  `SettingsAction::FetchModels` → `EditorApp::fetch_assistant_models` (keyless `LocalProvider`, under
+  `assistant-net`); the fetched list lives on `AssistantHost::models`. Panel branches tested headless;
+  the live fetch follows the gated-but-untested network pattern 🧪
 - [x] 000235 — 📋 **The local provider can list its installed models** — `vb_ai::LocalProvider::list_models`
   queries the local server's `GET /v1/models` (every OpenAI-compatible server exposes it beside
   `/chat/completions`) and returns the installed model ids, so a UI can offer them as a picklist

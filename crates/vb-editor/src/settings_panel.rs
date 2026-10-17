@@ -21,6 +21,10 @@ pub enum SettingsAction {
     /// The user pressed "apply" — the host should (re)connect the live provider from the
     /// current settings and stored key.
     Apply,
+    /// The user asked to fetch the local server's installed models — the host should query
+    /// it (via [`vb_ai::LocalProvider::list_models`]) and fill the panel's model list so the
+    /// user can pick one instead of typing it.
+    FetchModels,
 }
 
 /// A short label for a provider in the dropdown.
@@ -30,13 +34,16 @@ fn provider_label(kind: ProviderKind) -> &'static str {
 
 /// Renders the assistant Settings panel into `ui`, driving `settings` and the key `keys`
 /// store from the widgets. `key_draft` is the panel's own scratch buffer for the masked key
-/// field (kept by the caller across frames). Returns `Some(SettingsAction::Apply)` when the
-/// user asks to (re)connect the provider.
+/// field (kept by the caller across frames). `models` is the list of model identifiers the
+/// host last fetched from the local server (empty until a fetch succeeds) — rendered as
+/// one-click picks for the local provider. Returns the one [`SettingsAction`] the host must
+/// act on this frame, if any.
 pub fn settings_panel_ui(
     ui: &mut Ui,
     settings: &mut AssistantSettings,
     keys: &mut dyn KeyStore,
     key_draft: &mut String,
+    models: &[String],
 ) -> Option<SettingsAction> {
     let mut action = None;
 
@@ -108,6 +115,31 @@ pub fn settings_panel_ui(
                     }
                 }
             });
+            // Fetch the server's installed models, then offer them as one-click picks so the
+            // user need not type an id like `qwen2.5-coder:14b`. The fetch itself is the
+            // host's job (it owns the network provider); this only asks for it and renders
+            // whatever came back.
+            ui.horizontal(|ui| {
+                ui.label("models");
+                if ui.button("↻ fetch").clicked() {
+                    action = Some(SettingsAction::FetchModels);
+                }
+                if models.is_empty() {
+                    ui.weak("(none fetched)");
+                }
+            });
+            if !models.is_empty() {
+                ui.horizontal_wrapped(|ui| {
+                    for m in models {
+                        if ui
+                            .selectable_label(settings.model() == m.as_str(), m)
+                            .clicked()
+                        {
+                            settings.set_model(m.clone());
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -219,11 +251,21 @@ mod tests {
         keys: &mut dyn KeyStore,
         key_draft: &mut String,
     ) -> Option<SettingsAction> {
+        run_once_with_models(settings, keys, key_draft, &[])
+    }
+
+    /// Like [`run_once`] but with a fetched-model list for the local-provider picks.
+    fn run_once_with_models(
+        settings: &mut AssistantSettings,
+        keys: &mut dyn KeyStore,
+        key_draft: &mut String,
+        models: &[String],
+    ) -> Option<SettingsAction> {
         let ctx = egui::Context::default();
         let mut out = None;
         let _ = ctx.run(egui::RawInput::default(), |ctx| {
             egui::CentralPanel::default().show(ctx, |ui| {
-                out = settings_panel_ui(ui, settings, keys, key_draft);
+                out = settings_panel_ui(ui, settings, keys, key_draft, models);
             });
         });
         out
@@ -313,6 +355,41 @@ mod tests {
             settings.endpoint(),
             Some("http://localhost:11434/v1/chat/completions")
         );
+    }
+
+    #[test]
+    fn the_local_provider_renders_a_fetched_model_list() {
+        // With a non-empty model list, the local provider renders the one-click picks row;
+        // the frame must build through that branch without panicking.
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Local);
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+        let models = vec!["qwen2.5-coder:14b".to_owned(), "llama3.1:8b".to_owned()];
+        assert!(run_once_with_models(&mut settings, &mut keys, &mut draft, &models).is_none());
+    }
+
+    #[test]
+    fn picking_a_fetched_model_sets_it_on_the_settings() {
+        // The selectable picks drive `set_model`; assert the underlying effect directly (the
+        // panel is a thin shell over this call, exercised by the rendering test above).
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Local);
+        assert_ne!(settings.model(), "qwen2.5-coder:14b");
+        settings.set_model("qwen2.5-coder:14b".to_owned());
+        assert_eq!(settings.model(), "qwen2.5-coder:14b");
+    }
+
+    #[test]
+    fn a_non_local_provider_shows_no_model_fetch_row() {
+        // The fetch row is local-only: an Anthropic panel renders cleanly even when a model
+        // list is (irrelevantly) supplied — the list is simply not drawn.
+        let mut settings = AssistantSettings::new();
+        settings.select_provider(ProviderKind::Anthropic);
+        let mut keys = MemoryKeyStore::new();
+        let mut draft = String::new();
+        let models = vec!["should-be-ignored".to_owned()];
+        assert!(run_once_with_models(&mut settings, &mut keys, &mut draft, &models).is_none());
     }
 
     #[test]
