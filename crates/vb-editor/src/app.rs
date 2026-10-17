@@ -1821,6 +1821,13 @@ impl EditorApp {
                     self.assistant.status = Some(format!("cannot send: {reason}"));
                     return;
                 }
+                // A blank model can never produce a valid request — the keyless local path
+                // reaches here with every other gate cleared, so this is the last guard. Catch
+                // it up front with a clear message instead of a confusing server-side rejection.
+                if self.assistant.settings.model().trim().is_empty() {
+                    self.assistant.status = Some("cannot send: no model selected".to_owned());
+                    return;
+                }
                 // Snapshot everything the blocking call needs and run it off the UI thread.
                 let doc = self
                     .assistant
@@ -3746,6 +3753,37 @@ mod tests {
             app.assistant.session.as_ref().map(EditSession::state),
             Some(EditState::Proposed)
         );
+    }
+
+    /// A blank model is refused up front — the keyless local path clears every privacy gate,
+    /// so without this guard a send would go out with no model and fail server-side. It must
+    /// spawn no worker, leave the canvas untouched, and say why.
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn a_blank_model_blocks_the_send_with_a_clear_message() {
+        let mut app = EditorApp::new();
+        app.assistant.settings.set_consent(true); // privacy gate cleared
+        app.assistant.settings.set_model("   "); // but no model picked
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        ))));
+        let before = app.patch().to_doc().nodes.len();
+
+        app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
+
+        assert!(!app.assistant.in_flight(), "no worker without a model");
+        assert_eq!(app.patch().to_doc().nodes.len(), before, "canvas untouched");
+        let status = app.assistant.status.as_deref().unwrap_or_default();
+        assert!(
+            status.contains("no model selected"),
+            "unexpected status: {status:?}"
+        );
+
+        // Picking a model lets the same request proceed.
+        app.assistant.settings.set_model("qwen2.5-coder:14b");
+        app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
+        assert!(app.assistant.in_flight(), "now the request runs");
+        await_assistant(&mut app);
     }
 
     /// The editor renders a full frame — toolbar, palette (with the assistant section),
