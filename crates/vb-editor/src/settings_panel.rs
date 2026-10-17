@@ -344,6 +344,7 @@ mod tests {
         // build cleanly through those keyless branches.
         let mut settings = AssistantSettings::new();
         settings.select_provider(ProviderKind::Local);
+        settings.set_model("qwen2.5-coder:14b"); // a local provider still needs a model picked
         settings.set_consent(true);
         settings.set_endpoint("http://localhost:11434/v1/chat/completions");
         let mut keys = MemoryKeyStore::new();

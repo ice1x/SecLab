@@ -57,6 +57,20 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Each provider remembers its own model, so switching never carries a mismatched one (000238).**
+  Provider model identifiers are not interchangeable — a `claude-…` id means nothing to a local
+  Ollama server, and an Ollama tag means nothing to Anthropic — yet selecting a new provider used to
+  leave the previous provider's model in place. With consent granted and a keyless local server that
+  non-empty but wrong id read as "ready ✓" and then failed at the server with a confusing
+  *model not found*. `AssistantSettings` now keeps a per-provider model memory: `select_provider`
+  saves the outgoing provider's model and restores the incoming provider's own (blank if none was
+  ever chosen for it, which the readiness gate reports as "no model selected" — see 000237), and
+  `set_model` records the choice against the current provider. Switching Anthropic → Local → Anthropic
+  returns to each provider's own model untouched; re-selecting the current provider is a no-op. The
+  memory persists in `settings.ron` (field-level `#[serde(default)]`, omitted while still all-blank),
+  so older files load unchanged and the active provider's model is recovered on the first switch.
+  Unit-tested in vb-ai (the per-provider round trip; the save/load persistence round trip already
+  covers the new field) and at the editor layer.
 - **The readiness check flags a missing model, and the send refuses one (000237).** The keyless
   **local** provider (Ollama/LM Studio/llama.cpp) needs no API key, so once offline mode is off and
   consent is granted the only thing left between it and a request is a chosen model — yet a blank

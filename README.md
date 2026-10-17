@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000238 — 🎛️ **Each provider remembers its own model** — provider model ids are not
+  interchangeable (a `claude-…` id means nothing to Ollama), but selecting a new provider used to
+  leave the old model behind, so a keyless local server read "ready ✓" and then failed server-side
+  with *model not found*. `AssistantSettings` now keeps a per-provider model memory: `select_provider`
+  saves the outgoing model and restores the incoming provider's own (blank → "no model selected", per
+  000237); `set_model` records it against the current provider. Switching back and forth returns to
+  each provider's own model; persisted in `settings.ron` (field `#[serde(default)]`, omitted while
+  all-blank, so older files load unchanged). Unit-tested in vb-ai and the editor 🧪
 - [x] 000237 — 🚦 **Readiness flags a missing model and the send refuses one** — the keyless local
   provider needs no key, so once online and consented the only remaining gate is a chosen model; a
   blank model id otherwise sails through to a confusing server-side rejection. `vb_ai::SendBlocker`
