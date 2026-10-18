@@ -57,6 +57,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The generation token budget is floored at 1, so it can no longer read "ready ✓" and then fail
+  (000240).** `max_tokens` is sent to the provider verbatim — it is cloned into the request body of
+  both the Anthropic and OpenAI-compatible senders (`"max_tokens": …`) and drives the budget
+  accounting — and both APIs reject `max_tokens = 0` (the field must be positive). The Settings panel
+  exposes it as a bare `DragValue` with no lower bound, so dragging it to zero produced a request that
+  read "ready ✓" and then failed server-side — the same ready-but-fails trap as 000237/000238/000239,
+  this time for sampling rather than the model. `AssistantSettings::set_max_tokens` now floors its
+  argument at 1, mirroring the way `set_temperature` already clamps its `[0.0, 2.0]` range; only the
+  lower bound is clamped because the upper bound is model-dependent, not universal. Unit-tested in
+  vb-ai (zero clamps up to 1 and reaches the sent config; a positive budget is kept as-is).
 - **The model identifier is trimmed, so a stray space can no longer read "ready ✓" and then fail
   (000239).** A model id is sent to the provider verbatim — `ProviderConfig.model` is cloned straight
   into the request body (`"model": …`) — but `set_model` stored it raw, while the readiness gate only

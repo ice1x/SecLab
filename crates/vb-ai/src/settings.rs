@@ -252,9 +252,14 @@ impl AssistantSettings {
         self.config.model = model;
     }
 
-    /// Sets the generation token budget.
+    /// Sets the generation token budget, floored at **1**. The value is sent to the provider
+    /// verbatim and both the Anthropic and OpenAI-compatible APIs reject `max_tokens = 0` (it
+    /// must be positive), so a zero — reachable by dragging the Settings field to the bottom —
+    /// would otherwise read "ready ✓" and then fail server-side. There is no universal upper
+    /// bound (it is model-dependent), so only the lower bound is clamped, mirroring how
+    /// [`set_temperature`](Self::set_temperature) clamps its range.
     pub fn set_max_tokens(&mut self, max_tokens: u32) {
-        self.config.max_tokens = max_tokens;
+        self.config.max_tokens = max_tokens.max(1);
     }
 
     /// Sets the sampling temperature, clamped to the `[0.0, 2.0]` range providers accept
@@ -441,6 +446,30 @@ mod tests {
         // The config handed to the generation loop reflects the edits.
         assert_eq!(s.config().model, "claude-opus-5");
         assert_eq!(s.config().max_tokens, 8192);
+    }
+
+    #[test]
+    fn set_max_tokens_floors_at_one() {
+        // max_tokens is sent to the provider verbatim (cloned into the request body of both the
+        // Anthropic and OpenAI-compatible senders), and both APIs reject `max_tokens = 0` — it
+        // must be >= 1. The Settings panel exposes it as a bare DragValue with no floor, so a drag
+        // to zero would read "ready ✓" and then fail server-side. Clamp in the setter, mirroring
+        // the way set_temperature already clamps its range.
+        let mut s = AssistantSettings::new();
+        s.set_max_tokens(0);
+        assert_eq!(
+            s.max_tokens(),
+            1,
+            "zero is clamped up to the API minimum of 1"
+        );
+        assert_eq!(
+            s.config().max_tokens,
+            1,
+            "the clamp reaches the sent config"
+        );
+
+        s.set_max_tokens(2048);
+        assert_eq!(s.max_tokens(), 2048, "a positive budget is kept as-is");
     }
 
     #[test]
