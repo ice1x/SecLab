@@ -57,6 +57,18 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **The model identifier is trimmed, so a stray space can no longer read "ready ✓" and then fail
+  (000239).** A model id is sent to the provider verbatim — `ProviderConfig.model` is cloned straight
+  into the request body (`"model": …`) — but `set_model` stored it raw, while the readiness gate only
+  trimmed to test for *emptiness*. So a model entered or pasted as `"qwen2.5-coder:14b "` (a trailing
+  space is easy to pick up from a copy-paste or an edited chip) passed the gate as non-blank, read
+  "ready ✓", and was then rejected server-side as *model not found* — the same ready-but-fails trap
+  that 000237/000238 closed for blank and mismatched models. `AssistantSettings::set_model` now trims
+  its input before storing it (in both the live config and the per-provider memory), exactly as
+  `store_key` and `set_endpoint` already do, and `AssistantSettings::with` trims a model restored
+  from an older `settings.ron`. A whitespace-only value collapses to empty and is reported as
+  "no model selected" (000237). Unit-tested in vb-ai (the trim on set, the trim on restore, and that
+  the trimmed value is what persists per provider).
 - **Each provider remembers its own model, so switching never carries a mismatched one (000238).**
   Provider model identifiers are not interchangeable — a `claude-…` id means nothing to a local
   Ollama server, and an Ollama tag means nothing to Anthropic — yet selecting a new provider used to
