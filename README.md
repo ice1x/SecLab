@@ -616,6 +616,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000240 — 🔢 **The generation token budget is floored at 1** — `max_tokens` is cloned verbatim
+  into both senders' request bodies (`"max_tokens": …`) and both APIs reject `0` (must be positive),
+  yet the Settings panel's bare `DragValue` has no floor, so dragging to zero read "ready ✓" then
+  failed server-side — the same ready-but-fails trap as 000237–000239, for sampling. `set_max_tokens`
+  now floors at 1 (mirroring `set_temperature`'s clamp); only the lower bound is clamped since the
+  upper is model-dependent. Unit-tested in vb-ai 🧪
 - [x] 000239 — ✂️ **The model identifier is trimmed before it is stored and sent** — a model id is
   cloned verbatim into the request body (`"model": …`), yet `set_model` kept it raw while readiness
   only trimmed to test for *emptiness*, so a pasted `"qwen2.5-coder:14b "` (stray trailing space) read
