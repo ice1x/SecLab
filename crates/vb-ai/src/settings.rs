@@ -128,6 +128,10 @@ impl AssistantSettings {
     /// neither carries a key). The endpoint override starts unset.
     #[must_use]
     pub fn with(config: ProviderConfig, privacy: PrivacySettings) -> Self {
+        // Trim the restored model: a padded id from an older file must not reach the wire with
+        // stray whitespace (it is sent verbatim), mirroring `set_model`.
+        let mut config = config;
+        config.model = config.model.trim().to_owned();
         // Seed the active provider's memory slot from the restored model, so a later switch
         // away and back returns to it.
         let mut models = RememberedModels::default();
@@ -234,9 +238,16 @@ impl AssistantSettings {
     }
 
     /// Sets the model identifier for the current provider, remembering it so a later switch
-    /// back to this provider restores it.
+    /// back to this provider restores it. The id is **trimmed** (as [`store_key`] and
+    /// [`set_endpoint`] are): it is sent to the server verbatim, so a stray surrounding space —
+    /// easily picked up from a copy-paste — would otherwise pass the readiness gate yet be
+    /// rejected server-side as *model not found*. A whitespace-only value collapses to empty,
+    /// which the gate reports as [`SendBlocker::NoModel`].
+    ///
+    /// [`store_key`]: Self::store_key
+    /// [`set_endpoint`]: Self::set_endpoint
     pub fn set_model(&mut self, model: impl Into<String>) {
-        let model = model.into();
+        let model = model.into().trim().to_owned();
         self.models.set(self.config.provider, model.clone());
         self.config.model = model;
     }
@@ -569,6 +580,68 @@ mod tests {
             s.send_blocker(&store),
             Some(SendBlocker::NoModel),
             "with a key stored, the blank model is the next blocker"
+        );
+    }
+
+    #[test]
+    fn set_model_trims_surrounding_whitespace() {
+        // The model id is sent to the server verbatim (`ProviderConfig.model` is cloned straight
+        // into the request body), so a stray space from a copy-paste or an edited chip would read
+        // "ready ✓" and then be rejected as "model not found" — the same ready-but-fails trap as a
+        // mismatched provider model. `set_model` must trim, exactly as `store_key` and
+        // `set_endpoint` already do.
+        let mut s = AssistantSettings::new();
+        s.select_provider(ProviderKind::Local);
+        s.set_consent(true);
+        let store = MemoryKeyStore::new();
+
+        s.set_model("  qwen2.5-coder:14b  ");
+        assert_eq!(
+            s.model(),
+            "qwen2.5-coder:14b",
+            "surrounding whitespace is stripped"
+        );
+        assert_eq!(
+            s.send_blocker(&store),
+            None,
+            "a trimmed, non-blank model is ready"
+        );
+
+        // The trimmed value is what persists per provider: switch away and back restores it clean,
+        // never re-introducing the padding.
+        s.select_provider(ProviderKind::Anthropic);
+        s.select_provider(ProviderKind::Local);
+        assert_eq!(
+            s.model(),
+            "qwen2.5-coder:14b",
+            "the remembered model is trimmed too"
+        );
+
+        // A whitespace-only model collapses to empty → NoModel, same as a blank one.
+        s.set_model("   ");
+        assert_eq!(s.model(), "");
+        assert_eq!(s.send_blocker(&store), Some(SendBlocker::NoModel));
+    }
+
+    #[test]
+    fn with_trims_a_restored_model() {
+        // An older `settings.ron` (or any `ProviderConfig`) carrying a padded model id loads clean,
+        // so a restored value can never reach the wire with stray whitespace.
+        let config = ProviderConfig {
+            provider: ProviderKind::Local,
+            model: "  qwen2.5-coder:14b  ".to_owned(),
+            ..ProviderConfig::default()
+        };
+        let privacy = PrivacySettings {
+            offline: false,
+            consent_to_send: true,
+        };
+        let s = AssistantSettings::with(config, privacy);
+        assert_eq!(s.model(), "qwen2.5-coder:14b");
+        assert_eq!(
+            s.config().model,
+            "qwen2.5-coder:14b",
+            "the config handed to the generation loop is trimmed"
         );
     }
 

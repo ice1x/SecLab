@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000239 — ✂️ **The model identifier is trimmed before it is stored and sent** — a model id is
+  cloned verbatim into the request body (`"model": …`), yet `set_model` kept it raw while readiness
+  only trimmed to test for *emptiness*, so a pasted `"qwen2.5-coder:14b "` (stray trailing space) read
+  "ready ✓" and then failed server-side with *model not found* — the same ready-but-fails trap as a
+  blank (000237) or mismatched (000238) model. `AssistantSettings::set_model` now trims its input (into
+  both the live config and the per-provider memory), as `store_key`/`set_endpoint` already do, and
+  `with` trims a model restored from an older `settings.ron`; a whitespace-only value collapses to
+  empty → "no model selected". Unit-tested in vb-ai 🧪
 - [x] 000238 — 🎛️ **Each provider remembers its own model** — provider model ids are not
   interchangeable (a `claude-…` id means nothing to Ollama), but selecting a new provider used to
   leave the old model behind, so a keyless local server read "ready ✓" and then failed server-side
