@@ -1814,18 +1814,18 @@ impl EditorApp {
                         Some("no AI backend configured (assistant-net only)".to_owned());
                     return;
                 };
-                // Enforce the privacy policy before anything leaves the machine: offline mode
-                // and missing consent both block the send (000110). A provider is already
-                // configured here, so the key precondition is met — only the policy remains.
-                if let Some(reason) = self.assistant.settings.privacy().blocked_reason() {
-                    self.assistant.status = Some(format!("cannot send: {reason}"));
-                    return;
-                }
-                // A blank model can never produce a valid request — the keyless local path
-                // reaches here with every other gate cleared, so this is the last guard. Catch
-                // it up front with a clear message instead of a confusing server-side rejection.
-                if self.assistant.settings.model().trim().is_empty() {
-                    self.assistant.status = Some("cannot send: no model selected".to_owned());
+                // Gate the send on the SAME rule the Settings readiness line uses, so the two can
+                // never disagree: offline mode, missing consent, a missing key for a key-requiring
+                // provider, or a blank model each refuse up front (000110/000237/000242) instead of
+                // spawning a worker that fails. A wired provider is NOT proof of a key — a cloud
+                // provider holds the key store and reads the key live at request time, from the very
+                // store checked here — so the key gate belongs here too, not just in Settings.
+                if let Some(blocker) = self
+                    .assistant
+                    .settings
+                    .send_blocker(self.assistant.keys.as_ref())
+                {
+                    self.assistant.status = Some(format!("cannot send: {}", blocker.label()));
                     return;
                 }
                 // Snapshot everything the blocking call needs and run it off the UI thread.
@@ -3608,6 +3608,22 @@ mod tests {
         );
     }
 
+    /// Makes the send gate pass for the default (Anthropic) provider: an in-memory key store —
+    /// never the host's real keychain, which under `assistant-net` cannot be written on a headless
+    /// runner — with a test key stored, plus consent granted. The flow tests below exercise the
+    /// propose/apply/reject plumbing, not the readiness rules, so this keeps them on the default
+    /// provider while making the state genuinely sendable (`send_blocker` → `None`), which the
+    /// Submit gate now requires (it defers to `send_blocker`, the same rule the Settings readiness
+    /// line uses).
+    #[cfg(feature = "assistant")]
+    fn stub_key_for_tests(app: &mut EditorApp) {
+        app.assistant.keys = Box::new(vb_ai::MemoryKeyStore::new());
+        app.assistant
+            .settings
+            .store_key(app.assistant.keys.as_mut(), "sk-test")
+            .expect("store the test key");
+    }
+
     /// Submitting spawns a worker; once it lands the session is Proposed and applying replaces
     /// the canvas with the provider's document (the example patch, distinct from the demo).
     #[cfg(feature = "assistant")]
@@ -3615,6 +3631,7 @@ mod tests {
     fn assistant_submit_then_apply_updates_the_canvas() {
         let mut app = EditorApp::new();
         app.assistant.settings.set_consent(true); // privacy gate: allow the send
+        stub_key_for_tests(&mut app); // key gate: the Submit gate now checks send_blocker
         let before = app.patch().to_doc().nodes.len();
         let expected = vb_project::from_ron(vb_ai::EXAMPLE_PATCH_RON)
             .expect("example doc parses")
@@ -3655,6 +3672,7 @@ mod tests {
     fn a_worker_proposal_is_consumed_by_render() {
         let mut app = EditorApp::new();
         app.assistant.settings.set_consent(true); // privacy gate: allow the send
+        stub_key_for_tests(&mut app); // key gate: the Submit gate now checks send_blocker
         app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
         ))));
@@ -3683,6 +3701,7 @@ mod tests {
     fn assistant_reject_leaves_the_canvas_untouched() {
         let mut app = EditorApp::new();
         app.assistant.settings.set_consent(true); // privacy gate: allow the send
+        stub_key_for_tests(&mut app); // key gate: the Submit gate now checks send_blocker
         let before = app.patch().to_doc().nodes.len();
         app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
@@ -3728,6 +3747,10 @@ mod tests {
             vb_ai::EXAMPLE_PATCH_RON,
         ))));
 
+        // A key is present throughout (the default Anthropic provider needs one); this test is
+        // about the privacy gates, which rank ahead of the key gate in send_blocker.
+        stub_key_for_tests(&mut app);
+
         // Consent is off by default → refused.
         app.handle_assistant_action(AssistantAction::Submit("go".to_owned()));
         assert!(!app.assistant.in_flight(), "no worker without consent");
@@ -3763,6 +3786,7 @@ mod tests {
     fn a_blank_model_blocks_the_send_with_a_clear_message() {
         let mut app = EditorApp::new();
         app.assistant.settings.set_consent(true); // privacy gate cleared
+        stub_key_for_tests(&mut app); // key gate cleared, so the model is the only blocker left
         app.assistant.settings.set_model("   "); // but no model picked
         app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
             vb_ai::EXAMPLE_PATCH_RON,
@@ -3781,6 +3805,47 @@ mod tests {
 
         // Picking a model lets the same request proceed.
         app.assistant.settings.set_model("qwen2.5-coder:14b");
+        app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
+        assert!(app.assistant.in_flight(), "now the request runs");
+        await_assistant(&mut app);
+    }
+
+    /// A key-requiring provider with no stored key is refused up front, with the same message the
+    /// Settings readiness line shows — the Submit gate defers to `send_blocker` rather than
+    /// spawning a worker that would fail with an auth error. A wired provider is not proof of a
+    /// key: a cloud provider reads the key store live at request time, so "a provider is
+    /// configured" never implies "a key is present" (000242).
+    #[cfg(feature = "assistant")]
+    #[test]
+    fn a_missing_key_blocks_the_send_for_a_cloud_provider() {
+        let mut app = EditorApp::new();
+        // An in-memory key store with NO key stored, and a key-requiring (cloud) provider.
+        app.assistant.keys = Box::new(vb_ai::MemoryKeyStore::new());
+        app.assistant
+            .settings
+            .select_provider(vb_ai::ProviderKind::OpenAiCompatible);
+        app.assistant.settings.set_model("gpt-ish");
+        app.assistant.settings.set_consent(true);
+        app.set_assistant_provider(std::sync::Arc::new(FixedProvider(reply_with(
+            vb_ai::EXAMPLE_PATCH_RON,
+        ))));
+        let before = app.patch().to_doc().nodes.len();
+
+        app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
+
+        assert!(!app.assistant.in_flight(), "no worker without a key");
+        assert_eq!(app.patch().to_doc().nodes.len(), before, "canvas untouched");
+        let status = app.assistant.status.as_deref().unwrap_or_default();
+        assert!(
+            status.contains("no API key"),
+            "unexpected status: {status:?}"
+        );
+
+        // Storing the key lets the same request proceed — Submit and the readiness line agree.
+        app.assistant
+            .settings
+            .store_key(app.assistant.keys.as_mut(), "sk-live")
+            .expect("store the key");
         app.handle_assistant_action(AssistantAction::Submit("build it".to_owned()));
         assert!(app.assistant.in_flight(), "now the request runs");
         await_assistant(&mut app);
@@ -3825,6 +3890,7 @@ mod tests {
     fn the_worker_request_uses_the_settings_model() {
         let mut app = EditorApp::new();
         app.assistant.settings.set_consent(true); // privacy gate: allow the send
+        stub_key_for_tests(&mut app); // key gate: the Submit gate now checks send_blocker
         app.assistant.settings.set_model("claude-custom-xyz");
         let seen = std::sync::Arc::new(std::sync::Mutex::new(None));
         app.set_assistant_provider(std::sync::Arc::new(RecordingProvider {

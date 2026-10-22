@@ -22,6 +22,20 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **The assistant's Submit gate now defers to `send_blocker`, so it agrees with the Settings
+  readiness line — including the key check (000242).** The editor's Submit handler hand-rolled a
+  *subset* of the readiness rule: it enforced the privacy policy (offline/consent, 000110) and a
+  blank model (000237) but **skipped the key check**, on the assumption — stated in a code comment —
+  that "a provider is configured, so the key precondition is met." That assumption is wrong: a cloud
+  `OpenAiProvider` holds a *key-store handle*, not a key, and reads the key live from the keychain at
+  request time, so a provider can be wired with no key stored. The result was a divergence — the
+  Settings line showed *"not ready: no API key"* while Submit still spawned a worker that then failed
+  with an auth error. Submit now calls `AssistantSettings::send_blocker` (the same single source of
+  truth the readiness line uses) and refuses up front with its message (*"cannot send: no API key for
+  the selected provider"*, etc.), spawning no worker. **Behavior change:** a key-requiring provider
+  with no stored key, previously allowed to try and fail, is now refused before sending. New editor
+  test `a_missing_key_blocks_the_send_for_a_cloud_provider`; the flow/privacy/model tests now make
+  the state genuinely sendable (a stubbed in-memory key) instead of relying on the old skip.
 - **Shared STFT overlap-add engine extracted to `vb_nodes::stft` (000220).** The `pitch-shifter`
   and `spectral-freeze` nodes each inlined the same short-time-Fourier scaffolding — a Hann-windowed
   analysis FIFO, the per-hop forward FFT, the inverse FFT with constant-overlap-add resynthesis, the
