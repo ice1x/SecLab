@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000242 — 🔐 **The Submit gate defers to `send_blocker`, closing a key-check divergence** —
+  the editor's Submit handler enforced privacy (000110) + blank model (000237) but **skipped the key
+  check**, assuming "provider configured → key present". Wrong: a cloud `OpenAiProvider` holds a
+  key-store handle and reads the key live at request time, so the Settings line could show *"no API
+  key"* while Submit spawned a worker that then 401'd. Submit now calls `send_blocker` (the single
+  source of truth the readiness line uses) and refuses up front. **Behavior change:** a key-requiring
+  provider with no key is now refused before sending (was: try + fail). New editor test; flow/privacy
+  tests stub an in-memory key to stay sendable 🧪
 - [x] 000241 — 🔌 **Each provider remembers its own endpoint** — completes 000238 (model) for the
   other provider-specific field. The endpoint override was one shared value `select_provider` never
   touched, so a custom local URL (`http://localhost:1234/…`) carried into the OpenAI-compatible
