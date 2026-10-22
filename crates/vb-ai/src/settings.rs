@@ -90,6 +90,46 @@ fn is_default_models(models: &RememberedModels) -> bool {
     *models == RememberedModels::default()
 }
 
+/// The last endpoint override chosen for **each** provider, so switching providers restores that
+/// provider's own base URL instead of leaking one into another (e.g. a `localhost` Ollama URL
+/// carried into the OpenAI-compatible cloud provider, which would silently point the cloud call
+/// at the local machine). `None` in a slot means "no override" — fall back to that provider's
+/// default endpoint. Mirrors [`RememberedModels`] for the other provider-specific field; the
+/// `Anthropic` slot exists for symmetry but is unused (its endpoint is fixed).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+struct RememberedEndpoints {
+    anthropic: Option<String>,
+    openai_compatible: Option<String>,
+    local: Option<String>,
+}
+
+impl RememberedEndpoints {
+    /// The remembered endpoint override for `provider` (`None` if none set).
+    fn get(&self, provider: ProviderKind) -> Option<&str> {
+        match provider {
+            ProviderKind::Anthropic => self.anthropic.as_deref(),
+            ProviderKind::OpenAiCompatible => self.openai_compatible.as_deref(),
+            ProviderKind::Local => self.local.as_deref(),
+        }
+    }
+
+    /// Records `endpoint` as `provider`'s override.
+    fn set(&mut self, provider: ProviderKind, endpoint: Option<String>) {
+        match provider {
+            ProviderKind::Anthropic => self.anthropic = endpoint,
+            ProviderKind::OpenAiCompatible => self.openai_compatible = endpoint,
+            ProviderKind::Local => self.local = endpoint,
+        }
+    }
+}
+
+/// Whether the per-provider endpoint memory is still empty — keeps it out of the serialized form
+/// until the user has actually set an override for some provider (so older files round-trip).
+fn is_default_endpoints(endpoints: &RememberedEndpoints) -> bool {
+    *endpoints == RememberedEndpoints::default()
+}
+
 /// The assistant Settings screen's state: the provider/model/sampling
 /// [`ProviderConfig`] and the [`PrivacySettings`]. Key presence is read live from a
 /// [`KeyStore`] — the key value is never stored here.
@@ -107,6 +147,11 @@ pub struct AssistantSettings {
     /// so a fresh settings file stays minimal and older files keep round-tripping unchanged.
     #[serde(skip_serializing_if = "is_default_models")]
     models: RememberedModels,
+    /// Per-provider endpoint memory (see [`RememberedEndpoints`]). Like [`models`](Self::models)
+    /// it is skipped while empty, so a fresh or older settings file stays minimal and keeps
+    /// round-tripping unchanged.
+    #[serde(skip_serializing_if = "is_default_endpoints")]
+    endpoints: RememberedEndpoints,
     /// Base URL override for the OpenAI-compatible and local providers (`None` = the
     /// provider's default endpoint: `api.openai.com` for OpenAI-compatible, Ollama's
     /// `localhost:11434` for local). This is what lets those providers cover third-party and
@@ -141,6 +186,7 @@ impl AssistantSettings {
             privacy,
             endpoint: None,
             models,
+            endpoints: RememberedEndpoints::default(),
         }
     }
 
@@ -155,11 +201,14 @@ impl AssistantSettings {
     pub fn set_endpoint(&mut self, url: impl Into<String>) {
         let url = url.into();
         let trimmed = url.trim();
-        self.endpoint = if trimmed.is_empty() {
+        let value = if trimmed.is_empty() {
             None
         } else {
             Some(trimmed.to_owned())
         };
+        // Remember it against the current provider so a later switch back restores it.
+        self.endpoints.set(self.config.provider, value.clone());
+        self.endpoint = value;
     }
 
     /// The provider/model/sampling config, ready to hand to the generation loop.
@@ -225,16 +274,21 @@ impl AssistantSettings {
     /// nothing to a local Ollama server, and vice versa), so switching saves the current
     /// model under the outgoing provider and loads the incoming one's remembered model. A
     /// provider with no model chosen yet comes back **blank**, which the readiness gate reports
-    /// as [`SendBlocker::NoModel`] rather than letting a mismatched id reach the server.
-    /// Selecting the already-current provider is a no-op.
+    /// as [`SendBlocker::NoModel`] rather than letting a mismatched id reach the server. The
+    /// endpoint override is swapped the same way (each provider keeps its own base URL, so a
+    /// local `localhost` URL never leaks into the cloud provider). Selecting the already-current
+    /// provider is a no-op.
     pub fn select_provider(&mut self, provider: ProviderKind) {
         if provider == self.config.provider {
             return;
         }
         self.models
             .set(self.config.provider, std::mem::take(&mut self.config.model));
+        self.endpoints
+            .set(self.config.provider, self.endpoint.take());
         self.config.provider = provider;
         self.config.model = self.models.get(provider).to_owned();
+        self.endpoint = self.endpoints.get(provider).map(str::to_owned);
     }
 
     /// Sets the model identifier for the current provider, remembering it so a later switch
@@ -560,6 +614,60 @@ mod tests {
         // Re-selecting the current provider is a no-op (does not blank the model).
         s.select_provider(ProviderKind::Local);
         assert_eq!(s.model(), "qwen2.5-coder:14b");
+    }
+
+    #[test]
+    fn switching_providers_keeps_an_endpoint_per_provider() {
+        // The endpoint override is provider-specific — a local server URL means nothing to a
+        // cloud provider — so, like the model (see switching_providers_keeps_a_model_per_provider),
+        // it must not leak across a provider switch. A custom local endpoint carried into the
+        // OpenAI-compatible provider would silently point the cloud call at localhost.
+        let mut s = AssistantSettings::new();
+
+        // Give the local provider a custom endpoint.
+        s.select_provider(ProviderKind::Local);
+        s.set_endpoint("http://localhost:1234/v1/chat/completions");
+        assert_eq!(
+            s.endpoint(),
+            Some("http://localhost:1234/v1/chat/completions")
+        );
+
+        // Switching to the cloud provider must NOT inherit the local URL — it falls back to the
+        // provider's own default (None).
+        s.select_provider(ProviderKind::OpenAiCompatible);
+        assert_eq!(
+            s.endpoint(),
+            None,
+            "a local URL must not leak into the cloud provider"
+        );
+
+        // Give the cloud provider its own gateway URL.
+        s.set_endpoint("https://gateway.example/v1/chat/completions");
+        assert_eq!(
+            s.endpoint(),
+            Some("https://gateway.example/v1/chat/completions")
+        );
+
+        // Back to local restores the local URL, untouched by the cloud pick.
+        s.select_provider(ProviderKind::Local);
+        assert_eq!(
+            s.endpoint(),
+            Some("http://localhost:1234/v1/chat/completions")
+        );
+
+        // And back to the cloud restores its gateway.
+        s.select_provider(ProviderKind::OpenAiCompatible);
+        assert_eq!(
+            s.endpoint(),
+            Some("https://gateway.example/v1/chat/completions")
+        );
+
+        // Re-selecting the current provider is a no-op (does not clear the endpoint).
+        s.select_provider(ProviderKind::OpenAiCompatible);
+        assert_eq!(
+            s.endpoint(),
+            Some("https://gateway.example/v1/chat/completions")
+        );
     }
 
     #[test]
