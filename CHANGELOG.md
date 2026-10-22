@@ -57,6 +57,19 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Each provider remembers its own endpoint, so a local URL can no longer leak into the cloud
+  provider (000241).** Completes what 000238 did for the model, for the other provider-specific
+  field. The endpoint override was a single shared value that `select_provider` never touched, so
+  setting a custom local URL (e.g. `http://localhost:1234/v1/chat/completions`) and then switching
+  to the OpenAI-compatible provider silently pointed the *cloud* call at localhost — a provider
+  mismatch of the same class as a stale model. `AssistantSettings` now keeps a per-provider endpoint
+  memory (`RememberedEndpoints`, mirroring `RememberedModels`): `select_provider` saves the outgoing
+  provider's override and restores the incoming provider's own (`None` → that provider's default
+  endpoint), and `set_endpoint` records it against the current provider. Switching back and forth
+  returns each provider to its own URL; re-selecting the current provider is a no-op. The memory
+  persists in `settings.ron` (field-level `#[serde(default)]`, omitted while still empty), so older
+  files load unchanged. Unit-tested in vb-ai (the per-provider round trip; the save/load persistence
+  round trip already covers the new field).
 - **The generation token budget is floored at 1, so it can no longer read "ready ✓" and then fail
   (000240).** `max_tokens` is sent to the provider verbatim — it is cloned into the request body of
   both the Anthropic and OpenAI-compatible senders (`"max_tokens": …`) and drives the budget

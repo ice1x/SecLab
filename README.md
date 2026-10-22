@@ -616,6 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000241 — 🔌 **Each provider remembers its own endpoint** — completes 000238 (model) for the
+  other provider-specific field. The endpoint override was one shared value `select_provider` never
+  touched, so a custom local URL (`http://localhost:1234/…`) carried into the OpenAI-compatible
+  provider silently pointed the cloud call at localhost. `AssistantSettings` now keeps a per-provider
+  endpoint memory (`RememberedEndpoints`, mirroring `RememberedModels`): `select_provider` saves the
+  outgoing override and restores the incoming provider's own (`None` → provider default), `set_endpoint`
+  records it against the current provider. Persists in `settings.ron` (`#[serde(default)]`, omitted
+  while empty), older files load unchanged. Unit-tested in vb-ai 🧪
 - [x] 000240 — 🔢 **The generation token budget is floored at 1** — `max_tokens` is cloned verbatim
   into both senders' request bodies (`"max_tokens": …`) and both APIs reject `0` (must be positive),
   yet the Settings panel's bare `DragValue` has no floor, so dragging to zero read "ready ✓" then
