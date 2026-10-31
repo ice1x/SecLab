@@ -22,6 +22,15 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Finish the rebrand in the `web/` demos (000246).** The earlier sweeps covered `.rs/.toml/.md/.yml`
+  but the browser demos' HTML and JavaScript were missed, so the old name lingered in user-facing
+  places: the page `<title>`s and `<h1>` ("VST_bomb — browser synth", "VST_bomb — editor"), the
+  launcher comments, and the AudioWorklet file `web/audio/vb-processor.js` (its very name carried the
+  `vb-` = Vst Bomb initials). Renamed `vb-processor.js` → `seclab-processor.js` (updating the
+  `fetch(...)` in `web/audio/app.js` and the `web/audio/README.md` references) and replaced the
+  remaining `VST_bomb` strings with `SecLab` in `web/editor/index.html`, `web/audio/index.html`,
+  `web/editor/app.js` and the renamed worklet. A full audit now finds no `VST_bomb`/`VstBomb`/`vb-*`
+  variant anywhere outside the CHANGELOG/README entries that document the rename itself.
 - **Rename the internal crates `vb-*` → `seclab-*` (000245).** The `vb-` prefix was the old brand's
   initials (**V**st **B**omb), so it kept the dropped name alive in every crate. All ten workspace
   crates are renamed — `vb-core`→`seclab-core`, `vb-nodes`→`seclab-nodes`, `vb-project`, `vb-runtime`,
