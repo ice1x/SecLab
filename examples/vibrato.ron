@@ -1,0 +1,76 @@
+(
+    version: 1,
+    nodes: [
+        (
+            id: (0),
+            node: (
+                kind: "lfo",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+        (
+            id: (1),
+            node: (
+                kind: "vco",
+                inputs: [
+                    (
+                        name: "pitch",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+        (
+            id: (2),
+            node: (
+                kind: "gain",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+    ],
+    edges: [
+        (
+            from_node: (0),
+            from_port: (0),
+            to_node: (1),
+            to_port: (0),
+        ),
+        (
+            from_node: (1),
+            from_port: (0),
+            to_node: (2),
+            to_port: (0),
+        ),
+    ],
+)

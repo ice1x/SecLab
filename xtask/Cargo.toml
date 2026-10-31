@@ -1,0 +1,18 @@
+[package]
+name = "xtask"
+description = "SecLab — build automation: bundle and export plugin builds."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug.git" }
+seclab-project.workspace = true
+seclab-nodes.workspace = true
+seclab-plugin = { path = "../crates/seclab-plugin" }
+
+[lints]
+workspace = true

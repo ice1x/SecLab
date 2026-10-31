@@ -1,0 +1,107 @@
+(
+    version: 1,
+    nodes: [
+        (
+            id: (0),
+            node: (
+                kind: "midi-in",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "gate",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                    (
+                        name: "pitch_hz",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                    (
+                        name: "velocity",
+                        direction: Output,
+                        signal: Control,
+                    ),
+                ],
+                feedback: false,
+            ),
+        ),
+        (
+            id: (1),
+            node: (
+                kind: "karplus",
+                inputs: [
+                    (
+                        name: "gate",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                    (
+                        name: "pitch",
+                        direction: Input,
+                        signal: Control,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                220.0,
+                0.996,
+                0.5,
+            ],
+        ),
+        (
+            id: (2),
+            node: (
+                kind: "reverb",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.5,
+                0.5,
+                0.25,
+            ],
+        ),
+    ],
+    edges: [
+        (
+            from_node: (0),
+            from_port: (0),
+            to_node: (1),
+            to_port: (0),
+        ),
+        (
+            from_node: (0),
+            from_port: (1),
+            to_node: (1),
+            to_port: (1),
+        ),
+        (
+            from_node: (1),
+            from_port: (0),
+            to_node: (2),
+            to_port: (0),
+        ),
+    ],
+)

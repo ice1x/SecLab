@@ -1,0 +1,92 @@
+# Rust / Cargo
+/target
+**/*.rs.bk
+# Note: Cargo.lock IS committed (workspace ships binaries).
+
+# Self-hosted GitHub Actions runner living inside the checkout (never commit it:
+# it contains credentials in .runner/.credentials and gigabytes of work dirs)
+/actions-runner/
+
+# Prerequisites
+*.d
+
+# Compiled Object files
+*.slo
+*.lo
+*.o
+*.obj
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Linker files
+*.ilk
+
+# Debugger Files
+*.pdb
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+*.so.*
+
+
+# Fortran module files
+*.mod
+*.smod
+
+# Compiled Static libraries
+*.lai
+*.la
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+
+# Build directories
+build/
+Build/
+build-*/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# Temporary files
+*.tmp
+*.log
+*.bak
+*.swp
+
+# vcpkg
+vcpkg_installed/
+
+# debug information files
+*.dwo
+
+# test output & cache
+Testing/
+.cache/
+
+# Editor-exported reusable macro modules (runtime output)
+/modules/
+*.vbmod.ron
+
+# Generated wasm-pack output for the browser-audio demo (built locally / in CI, see
+# web/audio/README.md). The source (html/js) is committed; the compiled wasm package is not.
+/web/audio/pkg-node/
+/web/audio/pkg-nomod/
+/web/audio/pkg/
+
+# Generated wasm-pack output for the browser editor host (see web/editor/README.md). The
+# source (html/js) is committed; the compiled wasm package is not.
+/web/editor/pkg/

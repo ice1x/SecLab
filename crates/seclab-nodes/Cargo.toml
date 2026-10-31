@@ -1,0 +1,14 @@
+[package]
+name = "seclab-nodes"
+description = "SecLab — DSP node library (oscillators, filters, envelopes, math, MIDI)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+seclab-core.workspace = true
+
+[lints]
+workspace = true

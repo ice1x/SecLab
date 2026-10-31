@@ -1,0 +1,66 @@
+(
+    version: 1,
+    nodes: [
+        (
+            id: (0),
+            node: (
+                kind: "oscillator",
+                inputs: [],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                2.0,
+                110.0,
+            ],
+            panel_pos: Some((0.0, 0.0)),
+            widgets: [
+                "switch",
+                "knob",
+            ],
+        ),
+        (
+            id: (1),
+            node: (
+                kind: "gain",
+                inputs: [
+                    (
+                        name: "in",
+                        direction: Input,
+                        signal: Audio,
+                    ),
+                ],
+                outputs: [
+                    (
+                        name: "out",
+                        direction: Output,
+                        signal: Audio,
+                    ),
+                ],
+                feedback: false,
+            ),
+            values: [
+                0.8,
+            ],
+            panel_pos: Some((1.0, 0.0)),
+            widgets: [
+                "slider",
+            ],
+            panel_color: Some("#88ccff"),
+        ),
+    ],
+    edges: [
+        (
+            from_node: (0),
+            from_port: (0),
+            to_node: (1),
+            to_port: (0),
+        ),
+    ],
+)

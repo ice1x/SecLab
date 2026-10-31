@@ -1,0 +1,517 @@
+//! The graph container: nodes, edges, and the connection rules between ports.
+
+use std::collections::HashMap;
+use std::fmt;
+
+use crate::node::{GraphNode, NodeId};
+use crate::port::{PortDirection, PortId};
+
+/// A directed connection from an output port to an input port.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub struct Edge {
+    /// Source node (the output side).
+    pub from_node: NodeId,
+    /// Index of the output port on `from_node`.
+    pub from_port: PortId,
+    /// Destination node (the input side).
+    pub to_node: NodeId,
+    /// Index of the input port on `to_node`.
+    pub to_port: PortId,
+}
+
+/// Reasons a graph mutation can be rejected.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum GraphError {
+    /// A referenced node does not exist in the graph.
+    UnknownNode(NodeId),
+    /// A referenced port index is out of range on the given node/side.
+    UnknownPort {
+        /// The node the port was looked up on.
+        node: NodeId,
+        /// The out-of-range port index.
+        port: PortId,
+        /// Which side (input/output) was addressed.
+        direction: PortDirection,
+    },
+    /// The output and input signal types are not compatible.
+    SignalMismatch,
+    /// The target input port already has an incoming edge (inputs are single-source).
+    InputAlreadyConnected {
+        /// The already-connected target node.
+        node: NodeId,
+        /// The already-connected target input port.
+        port: PortId,
+    },
+    /// The graph contains a cycle, so no valid processing order exists.
+    Cycle,
+}
+
+impl fmt::Display for GraphError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownNode(id) => write!(f, "unknown node {id:?}"),
+            Self::UnknownPort {
+                node,
+                port,
+                direction,
+            } => {
+                write!(f, "unknown {direction:?} port {port:?} on node {node:?}")
+            }
+            Self::SignalMismatch => write!(f, "incompatible signal types between ports"),
+            Self::InputAlreadyConnected { node, port } => {
+                write!(
+                    f,
+                    "input port {port:?} on node {node:?} is already connected"
+                )
+            }
+            Self::Cycle => write!(f, "graph contains a cycle"),
+        }
+    }
+}
+
+impl std::error::Error for GraphError {}
+
+/// A directed graph of typed nodes and the edges that wire their ports together.
+///
+/// The graph enforces the structural rules at connect time: referenced nodes/ports
+/// must exist, an output may only feed an input, the signal types must be compatible,
+/// and each input accepts a single source. Cycle detection and processing order are
+/// handled by later tasks (000015, 000016).
+#[derive(Debug, Default, Clone)]
+pub struct Graph {
+    next_id: u64,
+    nodes: HashMap<NodeId, GraphNode>,
+    edges: Vec<Edge>,
+}
+
+impl Graph {
+    /// Creates an empty graph.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Inserts a node and returns its freshly allocated identifier.
+    pub fn add_node(&mut self, node: GraphNode) -> NodeId {
+        let id = NodeId(self.next_id);
+        self.next_id += 1;
+        self.nodes.insert(id, node);
+        id
+    }
+
+    /// Returns the node for `id`, if present.
+    #[must_use]
+    pub fn node(&self, id: NodeId) -> Option<&GraphNode> {
+        self.nodes.get(&id)
+    }
+
+    /// Number of nodes currently in the graph.
+    #[must_use]
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
+
+    /// All edges currently in the graph.
+    #[must_use]
+    pub fn edges(&self) -> &[Edge] {
+        &self.edges
+    }
+
+    /// Iterates the ids of every node in the graph, in unspecified order.
+    pub fn node_ids(&self) -> impl Iterator<Item = NodeId> + '_ {
+        self.nodes.keys().copied()
+    }
+
+    /// Connects an output port to an input port, validating the connection.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GraphError`] if either node or port is unknown, the signal types are
+    /// incompatible, or the target input is already connected.
+    pub fn connect(
+        &mut self,
+        from_node: NodeId,
+        from_port: PortId,
+        to_node: NodeId,
+        to_port: PortId,
+    ) -> Result<Edge, GraphError> {
+        self.check_endpoints(from_node, from_port, to_node, to_port)?;
+        let edge = Edge {
+            from_node,
+            from_port,
+            to_node,
+            to_port,
+        };
+        self.edges.push(edge);
+        Ok(edge)
+    }
+
+    /// Checks whether [`Graph::connect`] would accept this edge *and* the result would
+    /// still have a valid processing order — without mutating the graph.
+    ///
+    /// This is stricter than `connect`: it also returns [`GraphError::Cycle`] if the
+    /// edge would close a loop. `connect` stays permissive there on purpose (project
+    /// files with cycles must be constructible so diagnostics can report them); live
+    /// editing goes through this check first so the user can never wire a patch the
+    /// engine cannot compile.
+    ///
+    /// # Errors
+    ///
+    /// Returns the same [`GraphError`] `connect` would, or [`GraphError::Cycle`] if
+    /// the edge would create one.
+    pub fn can_connect(
+        &self,
+        from_node: NodeId,
+        from_port: PortId,
+        to_node: NodeId,
+        to_port: PortId,
+    ) -> Result<(), GraphError> {
+        self.check_endpoints(from_node, from_port, to_node, to_port)?;
+        // Wiring into a feedback boundary may close a loop: it reads the previous
+        // block, so the loop is legal (and one block late) by construction.
+        if self.node(to_node).is_some_and(|n| n.feedback) {
+            return Ok(());
+        }
+        // The new edge runs from_node → to_node; it closes a loop iff from_node is
+        // already reachable from to_node (self-loops included).
+        if from_node == to_node || self.reaches(to_node, from_node) {
+            return Err(GraphError::Cycle);
+        }
+        Ok(())
+    }
+
+    /// Endpoint validation shared by [`Graph::connect`] and [`Graph::can_connect`]:
+    /// nodes and ports exist, signals are compatible, the input is free.
+    fn check_endpoints(
+        &self,
+        from_node: NodeId,
+        from_port: PortId,
+        to_node: NodeId,
+        to_port: PortId,
+    ) -> Result<(), GraphError> {
+        let source = self
+            .nodes
+            .get(&from_node)
+            .ok_or(GraphError::UnknownNode(from_node))?;
+        let out_signal = source
+            .outputs
+            .get(from_port.0)
+            .ok_or(GraphError::UnknownPort {
+                node: from_node,
+                port: from_port,
+                direction: PortDirection::Output,
+            })?
+            .signal;
+
+        let target = self
+            .nodes
+            .get(&to_node)
+            .ok_or(GraphError::UnknownNode(to_node))?;
+        let in_signal = target
+            .inputs
+            .get(to_port.0)
+            .ok_or(GraphError::UnknownPort {
+                node: to_node,
+                port: to_port,
+                direction: PortDirection::Input,
+            })?
+            .signal;
+
+        if !out_signal.compatible_with(in_signal) {
+            return Err(GraphError::SignalMismatch);
+        }
+
+        if self
+            .edges
+            .iter()
+            .any(|e| e.to_node == to_node && e.to_port == to_port)
+        {
+            return Err(GraphError::InputAlreadyConnected {
+                node: to_node,
+                port: to_port,
+            });
+        }
+        Ok(())
+    }
+
+    /// Whether `target` is reachable from `start` along existing edges (DFS).
+    fn reaches(&self, start: NodeId, target: NodeId) -> bool {
+        let mut stack = vec![start];
+        let mut seen = std::collections::HashSet::new();
+        while let Some(node) = stack.pop() {
+            if node == target {
+                return true;
+            }
+            if seen.insert(node) {
+                stack.extend(
+                    self.edges
+                        .iter()
+                        .filter(|e| e.from_node == node)
+                        .map(|e| e.to_node),
+                );
+            }
+        }
+        false
+    }
+
+    /// Removes the edge feeding `to_node`'s input `to_port`, if any, and returns it.
+    ///
+    /// After this the input is free and may be reconnected.
+    pub fn disconnect(&mut self, to_node: NodeId, to_port: PortId) -> Option<Edge> {
+        let pos = self
+            .edges
+            .iter()
+            .position(|e| e.to_node == to_node && e.to_port == to_port)?;
+        Some(self.edges.remove(pos))
+    }
+
+    /// Removes a node and every edge incident to it, returning the node if it existed.
+    pub fn remove_node(&mut self, id: NodeId) -> Option<GraphNode> {
+        let removed = self.nodes.remove(&id)?;
+        self.edges.retain(|e| e.from_node != id && e.to_node != id);
+        Some(removed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Graph, GraphError};
+    use crate::node::GraphNode;
+    use crate::port::{Port, PortId};
+    use crate::signal::SignalType;
+
+    fn osc() -> GraphNode {
+        GraphNode::new("osc", vec![], vec![Port::output("out", SignalType::Audio)])
+    }
+
+    fn gain() -> GraphNode {
+        GraphNode::new(
+            "gain",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        )
+    }
+
+    #[test]
+    fn add_node_assigns_unique_ids_and_counts() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        assert_ne!(a, b);
+        assert_eq!(g.node_count(), 2);
+        assert_eq!(g.node(a).unwrap().kind, "osc");
+    }
+
+    #[test]
+    fn connect_compatible_ports_succeeds() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        let edge = g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        assert_eq!(edge.from_node, a);
+        assert_eq!(edge.to_node, b);
+        assert_eq!(g.edges().len(), 1);
+    }
+
+    #[test]
+    fn connect_unknown_node_is_rejected() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let missing = crate::node::NodeId(999);
+        assert_eq!(
+            g.connect(a, PortId(0), missing, PortId(0)),
+            Err(GraphError::UnknownNode(missing))
+        );
+    }
+
+    #[test]
+    fn connect_unknown_port_is_rejected() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        // osc has a single output (index 0); index 1 is out of range.
+        assert!(matches!(
+            g.connect(a, PortId(1), b, PortId(0)),
+            Err(GraphError::UnknownPort { .. })
+        ));
+    }
+
+    #[test]
+    fn connect_signal_mismatch_is_rejected() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc()); // audio output
+        let ctrl = g.add_node(GraphNode::new(
+            "ctrl-sink",
+            vec![Port::input("cv", SignalType::Control)],
+            vec![],
+        ));
+        assert_eq!(
+            g.connect(a, PortId(0), ctrl, PortId(0)),
+            Err(GraphError::SignalMismatch)
+        );
+    }
+
+    #[test]
+    fn input_accepts_a_single_source() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(osc());
+        let sink = g.add_node(gain());
+        g.connect(a, PortId(0), sink, PortId(0)).unwrap();
+        assert_eq!(
+            g.connect(b, PortId(0), sink, PortId(0)),
+            Err(GraphError::InputAlreadyConnected {
+                node: sink,
+                port: PortId(0)
+            })
+        );
+    }
+
+    #[test]
+    fn disconnect_frees_the_input_for_reconnection() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(osc());
+        let sink = g.add_node(gain());
+        g.connect(a, PortId(0), sink, PortId(0)).unwrap();
+
+        let removed = g.disconnect(sink, PortId(0)).expect("edge exists");
+        assert_eq!(removed.from_node, a);
+        assert_eq!(g.edges().len(), 0);
+
+        // The input is free again, so a different source connects fine.
+        g.connect(b, PortId(0), sink, PortId(0))
+            .expect("reconnect after disconnect");
+        assert_eq!(g.edges().len(), 1);
+    }
+
+    #[test]
+    fn disconnect_unconnected_input_returns_none() {
+        let mut g = Graph::new();
+        let sink = g.add_node(gain());
+        assert_eq!(g.disconnect(sink, PortId(0)), None);
+    }
+
+    #[test]
+    fn remove_node_drops_incident_edges() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let mid = g.add_node(gain());
+        let sink = g.add_node(gain());
+        g.connect(a, PortId(0), mid, PortId(0)).unwrap();
+        g.connect(mid, PortId(0), sink, PortId(0)).unwrap();
+        assert_eq!(g.edges().len(), 2);
+
+        let removed = g.remove_node(mid).expect("node exists");
+        assert_eq!(removed.kind, "gain");
+        assert_eq!(g.node_count(), 2);
+        // Both edges touched `mid`, so both are gone.
+        assert_eq!(g.edges().len(), 0);
+    }
+
+    #[test]
+    fn remove_unknown_node_returns_none() {
+        let mut g = Graph::new();
+        assert_eq!(g.remove_node(crate::node::NodeId(42)), None);
+    }
+
+    #[test]
+    fn can_connect_accepts_what_connect_accepts_without_mutating() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        assert_eq!(g.can_connect(a, PortId(0), b, PortId(0)), Ok(()));
+        assert_eq!(g.edges().len(), 0, "dry-run must not add the edge");
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+    }
+
+    #[test]
+    fn can_connect_reports_the_same_endpoint_errors_as_connect() {
+        let mut g = Graph::new();
+        let a = g.add_node(osc());
+        let b = g.add_node(gain());
+        let ctl = g.add_node(GraphNode::new(
+            "adsr",
+            vec![Port::input("gate", SignalType::Control)],
+            vec![],
+        ));
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+
+        assert_eq!(
+            g.can_connect(crate::node::NodeId(99), PortId(0), b, PortId(0)),
+            Err(GraphError::UnknownNode(crate::node::NodeId(99)))
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), ctl, PortId(0)),
+            Err(GraphError::SignalMismatch)
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), b, PortId(0)),
+            Err(GraphError::InputAlreadyConnected {
+                node: b,
+                port: PortId(0)
+            })
+        );
+    }
+
+    #[test]
+    fn can_connect_rejects_edges_that_would_close_a_cycle() {
+        let mut g = Graph::new();
+        let a = g.add_node(gain());
+        let b = g.add_node(gain());
+        let c = g.add_node(gain());
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        g.connect(b, PortId(0), c, PortId(0)).unwrap();
+
+        // c → a would close a…b…c → a; a → a is a self-loop.
+        assert_eq!(
+            g.can_connect(c, PortId(0), a, PortId(0)),
+            Err(GraphError::Cycle)
+        );
+        assert_eq!(
+            g.can_connect(a, PortId(0), a, PortId(0)),
+            Err(GraphError::Cycle)
+        );
+        // A parallel forward edge into a free input is not a cycle.
+        let d = g.add_node(gain());
+        assert_eq!(g.can_connect(c, PortId(0), d, PortId(0)), Ok(()));
+    }
+
+    #[test]
+    fn connect_stays_permissive_about_cycles_for_diagnostics() {
+        // Project files with cycles must remain constructible; only can_connect is
+        // strict. has_cycle()/diagnostics report them afterwards.
+        let mut g = Graph::new();
+        let a = g.add_node(gain());
+        let b = g.add_node(gain());
+        g.connect(a, PortId(0), b, PortId(0)).unwrap();
+        g.connect(b, PortId(0), a, PortId(0))
+            .expect("connect still builds the cyclic graph");
+        assert!(g.has_cycle());
+    }
+
+    #[test]
+    fn can_connect_allows_loops_into_feedback_nodes() {
+        let mut g = Graph::new();
+        let amp = g.add_node(gain());
+        let fb = g.add_node(GraphNode::feedback_node(
+            "fb",
+            vec![Port::input("in", SignalType::Audio)],
+            vec![Port::output("out", SignalType::Audio)],
+        ));
+        g.connect(fb, PortId(0), amp, PortId(0)).unwrap();
+
+        // Closing the loop into the feedback input is fine…
+        assert_eq!(g.can_connect(amp, PortId(0), fb, PortId(0)), Ok(()));
+
+        // …but a loop over normal inputs only is still a cycle: c1 → c2, then
+        // closing c2 → c1 into c1's free input is rejected.
+        let c1 = g.add_node(gain());
+        let c2 = g.add_node(gain());
+        g.connect(c1, PortId(0), c2, PortId(0)).unwrap();
+        assert_eq!(
+            g.can_connect(c2, PortId(0), c1, PortId(0)),
+            Err(GraphError::Cycle)
+        );
+    }
+}
