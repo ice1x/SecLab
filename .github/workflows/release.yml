@@ -35,7 +35,7 @@ jobs:
       # Each command reuses the clap-wrapper checkout cached under target/ (see xtask), so
       # only the first run on a fresh machine clones/builds it.
       - name: build the CLAP bundle
-        run: cargo xtask bundle vb-plugin --release
+        run: cargo xtask bundle seclab-plugin --release
       - name: build the VST3 (clap-wrapper)
         run: cargo xtask bundle-vst3
       - name: build the AUv2 component (clap-wrapper)
@@ -66,10 +66,10 @@ jobs:
           rm -f "$archive"
           cd target/bundled
           zip -r -q "$archive" \
-            vb-plugin.clap \
-            vb-plugin.vst3 \
-            vb-plugin.component \
-            vb-plugin.app
+            seclab-plugin.clap \
+            seclab-plugin.vst3 \
+            seclab-plugin.component \
+            seclab-plugin.app
           echo "packaged $archive"
 
       - name: upload the macOS bundles artifact

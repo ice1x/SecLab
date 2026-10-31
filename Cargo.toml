@@ -1,22 +1,22 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/vb-core",
-    "crates/vb-nodes",
-    "crates/vb-project",
-    "crates/vb-runtime",
-    "crates/vb-engine",
-    "crates/vb-editor",
-    "crates/vb-standalone",
-    "crates/vb-plugin",
-    "crates/vb-ai",
-    "crates/vb-library",
+    "crates/seclab-core",
+    "crates/seclab-nodes",
+    "crates/seclab-project",
+    "crates/seclab-runtime",
+    "crates/seclab-engine",
+    "crates/seclab-editor",
+    "crates/seclab-standalone",
+    "crates/seclab-plugin",
+    "crates/seclab-ai",
+    "crates/seclab-library",
     "xtask",
 ]
 
 # Shared package metadata inherited by every crate via `field.workspace = true`.
 [workspace.package]
-version = "0.0.56"
+version = "0.0.57"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/ice1x/SecLab"
@@ -24,23 +24,23 @@ authors = ["ice1x"]
 
 # Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).
 [workspace.dependencies]
-vb-core = { path = "crates/vb-core" }
-vb-nodes = { path = "crates/vb-nodes" }
-vb-runtime = { path = "crates/vb-runtime" }
+seclab-core = { path = "crates/seclab-core" }
+seclab-nodes = { path = "crates/seclab-nodes" }
+seclab-runtime = { path = "crates/seclab-runtime" }
 # The nih-plug-free instrument core, shared by the plugin and the browser (WASM) audio
-# path. Split out of vb-plugin so it stays wasm32-portable — no host framework in its tree.
-vb-engine = { path = "crates/vb-engine" }
+# path. Split out of seclab-plugin so it stays wasm32-portable — no host framework in its tree.
+seclab-engine = { path = "crates/seclab-engine" }
 # default-features off at the workspace level so the plugin can embed `EditorApp` without
-# eframe/winit; consumers that run the editor as its own window (vb-standalone, the WASM
+# eframe/winit; consumers that run the editor as its own window (seclab-standalone, the WASM
 # build) opt back into `app` explicitly.
-vb-editor = { path = "crates/vb-editor", default-features = false }
+seclab-editor = { path = "crates/seclab-editor", default-features = false }
 cpal = "0.18"
 midir = "0.11"
 criterion = "0.8"
 libc = "0.2"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", default-features = false, features = ["assert_process_allocs"] }
-vb-project = { path = "crates/vb-project" }
-vb-ai = { path = "crates/vb-ai" }
+seclab-project = { path = "crates/seclab-project" }
+seclab-ai = { path = "crates/seclab-ai" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 egui = "0.31"

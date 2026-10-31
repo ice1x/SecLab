@@ -1,0 +1,22 @@
+[package]
+name = "seclab-runtime"
+description = "SecLab — real-time graph execution (buffers, parameters, MIDI)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+seclab-core.workspace = true
+
+[dev-dependencies]
+seclab-nodes.workspace = true
+criterion.workspace = true
+
+[[bench]]
+name = "graphs"
+harness = false
+
+[lints]
+workspace = true

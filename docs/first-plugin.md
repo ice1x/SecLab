@@ -27,7 +27,7 @@ fades in and out instead of clicking on. The **gain** node is the plugin's outpu
 
 ## Build it in the editor
 
-Open the editor (`cargo run -p vb-standalone`) and place six nodes on the canvas — the
+Open the editor (`cargo run -p seclab-standalone`) and place six nodes on the canvas — the
 node palette groups them by category:
 
 | Node | Category | Role |
@@ -74,8 +74,8 @@ The editor writes the patch as a `.ron` project file — the same format as the 
 build at your patch and compile the CLAP:
 
 ```bash
-# Build the CLAP (a libvb_plugin cdylib; rename to seclab.clap to load it in a host).
-cargo build -p vb-plugin --release
+# Build the CLAP (a libseclab_plugin cdylib; rename to seclab.clap to load it in a host).
+cargo build -p seclab-plugin --release
 
 # The plugin loads the patch named by VB_PATCH, falling back to a built-in default.
 VB_PATCH=examples/first_synth.ron <your host or clap-validator> …

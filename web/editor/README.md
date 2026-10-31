@@ -1,6 +1,6 @@
 # SecLab editor in the browser (WASM)
 
-A runnable web host for the editor: the same [`EditorApp`](../../crates/vb-editor/src/app.rs)
+A runnable web host for the editor: the same [`EditorApp`](../../crates/seclab-editor/src/app.rs)
 that opens a native window, painting into an HTML `<canvas>` through eframe's `WebRunner`
 (WebGL). This is the browser front-end for the WASM proof of concept
 ([000081](../../docs/wasm.md)) — graph editing, the palette (including the **library**
@@ -14,12 +14,12 @@ without sound.
 rustup target add wasm32-unknown-unknown
 cargo install wasm-pack   # once
 
-# From the repo root: compile vb-editor to a browser-loadable wasm package.
-wasm-pack build crates/vb-editor --target web \
-  --out-dir ../../web/editor/pkg --out-name vb_editor
+# From the repo root: compile seclab-editor to a browser-loadable wasm package.
+wasm-pack build crates/seclab-editor --target web \
+  --out-dir ../../web/editor/pkg --out-name seclab_editor
 ```
 
-`--out-dir` is relative to the crate (`crates/vb-editor`), so `../../web/editor/pkg`
+`--out-dir` is relative to the crate (`crates/seclab-editor`), so `../../web/editor/pkg`
 lands the package here. The compiled `pkg/` is git-ignored (like `web/audio/pkg*`); the
 source (`index.html`, `app.js`) is committed. Add `--dev` for a faster, unoptimized build.
 
@@ -36,7 +36,7 @@ python3 -m http.server --directory web/editor 8080
 
 `app.js` imports the wasm-pack module, `await init()`s it (fetch + instantiate
 `vb_editor_bg.wasm`), then calls the exported `start(canvas)` from
-[`crates/vb-editor/src/web.rs`](../../crates/vb-editor/src/web.rs), which hands the canvas to
+[`crates/seclab-editor/src/web.rs`](../../crates/seclab-editor/src/web.rs), which hands the canvas to
 eframe's `WebRunner`. Once the editor is painting, `app.js` sets `window.__vbEditorReady =
 true` (or an error string) — a headless readiness hook a browser/CI check can read without a
 human looking at the page.

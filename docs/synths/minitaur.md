@@ -45,7 +45,7 @@ through a two-channel mixer. The filter/envelope/LFO/glide topology is unchanged
 
 ## Current clone (`examples/minitaur.ron`) — what it is today
 
-Generated from `vb_engine::minitaur_patch()`. Graph (node id → kind, with stored values):
+Generated from `seclab_engine::minitaur_patch()`. Graph (node id → kind, with stored values):
 
 | id | kind | stored values | role |
 | --- | --- | --- | --- |
@@ -75,7 +75,7 @@ its two destinations (VCO LFO AMOUNT / VCF LFO AMOUNT) as on the hardware. Silen
 
 ## Faithful topology (000163 + 000201)
 
-`vb_engine::minitaur_patch()`, from which `examples/minitaur.ron` is generated:
+`seclab_engine::minitaur_patch()`, from which `examples/minitaur.ron` is generated:
 
 - **Two envelopes:** a filter `adsr` → `ladder.cutoff` (scaled by the ladder's `amount_oct`,
   the bi-polar per-octave "Envelope Amount") and a separate amp `adsr` → `vca.cv`.
@@ -97,7 +97,7 @@ the same LFO out to a second `cv-attenuvert(pitch-depth) → cv-add ← glide �
 depth, the **pitch depth ships at 0** (no vibrato) — the routing gives the panel a working
 VCO LFO AMOUNT knob without changing the shipped bass.
 
-000164 points `vb_engine::default_patch` (and the editor's starting patch) at
+000164 points `seclab_engine::default_patch` (and the editor's starting patch) at
 `minitaur_patch()`.
 
 ## Target graph

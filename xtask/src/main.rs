@@ -2,7 +2,7 @@
 //!
 //! Two commands:
 //!
-//! - `cargo xtask bundle vb-plugin --release` — nih-plug's bundler: compiles the
+//! - `cargo xtask bundle seclab-plugin --release` — nih-plug's bundler: compiles the
 //!   cdylib and wraps it into a loadable `.clap` bundle under `target/bundled/`.
 //! - `cargo xtask export <patch.vbp>` — the one-command patch export: validates the
 //!   project file (parse + migrate + full graph validation, so broken patches fail
@@ -17,7 +17,7 @@
 //!   `cargo install --git https://github.com/free-audio/clap-validator.git`).
 //! - `cargo xtask bundle-vst3` — builds the VST3 via clap-wrapper (cloned and
 //!   cached under `target/`; needs `cmake` and network on first run). The produced
-//!   `vb-plugin.vst3` dynamically loads `vb-plugin.clap` from the standard CLAP
+//!   `seclab-plugin.vst3` dynamically loads `seclab-plugin.clap` from the standard CLAP
 //!   locations, so install both: the `.clap` into `~/Library/Audio/Plug-Ins/CLAP`
 //!   and the `.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
 //! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
@@ -25,9 +25,9 @@
 //!   `auval -v aumu gWrp clAd`). Deterministically installs clap-wrapper's generated
 //!   AudioComponents plist (its own install is flaky) and rebrands the manufacturer to
 //!   `ice1x` so hosts list it as `ice1x: SecLab`.
-//! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
+//! - `cargo xtask bundle-standalone` — same, for a self-contained `seclab-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
-//!   editor standalone lives in `vb-standalone`).
+//!   editor standalone lives in `seclab-standalone`).
 //! - `cargo xtask validate-au` — builds+installs the AUv2 and runs Apple's `auval` on it
 //!   (reading its type/subtype/manufacturer from the Info.plist), the authoritative
 //!   AudioUnit check. It bundles the AU itself, so it needs no prior `bundle-auv2`.
@@ -84,8 +84,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let out = args
                 .next()
                 .ok_or("usage: cargo xtask demo-patch <out.vbp>")?;
-            let doc = vb_plugin::default_patch(&vb_nodes::Registry::with_builtins());
-            vb_project::save_to_path(&doc, Path::new(&out))?;
+            let doc = seclab_plugin::default_patch(&seclab_nodes::Registry::with_builtins());
+            seclab_project::save_to_path(&doc, Path::new(&out))?;
             println!("wrote {out}");
             Ok(())
         }
@@ -109,7 +109,7 @@ const VALIDATOR_EXCLUDES: &[&str] = &["state-reproducibility", "state-invalid-ra
 fn validate() -> Result<(), Box<dyn std::error::Error>> {
     nih_plug_xtask::main_with_args(
         "cargo xtask",
-        ["bundle", "vb-plugin", "--release"]
+        ["bundle", "seclab-plugin", "--release"]
             .into_iter()
             .map(String::from),
     )?;
@@ -156,9 +156,9 @@ impl WrappedFormat {
 
     fn artifact(self) -> &'static str {
         match self {
-            Self::Vst3 => "vb-plugin.vst3",
-            Self::Auv2 => "vb-plugin.component",
-            Self::Standalone => "vb-plugin.app",
+            Self::Vst3 => "seclab-plugin.vst3",
+            Self::Auv2 => "seclab-plugin.component",
+            Self::Standalone => "seclab-plugin.app",
         }
     }
 
@@ -186,7 +186,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     // never opens a window on a headless runner.
     nih_plug_xtask::main_with_args(
         "cargo xtask",
-        ["bundle", "vb-plugin", "--release", "--features", "gui"]
+        ["bundle", "seclab-plugin", "--release", "--features", "gui"]
             .into_iter()
             .map(String::from),
     )?;
@@ -213,7 +213,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
         .arg(&build_dir)
         .args([
             "-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=ON",
-            "-DCLAP_WRAPPER_OUTPUT_NAME=vb-plugin",
+            "-DCLAP_WRAPPER_OUTPUT_NAME=seclab-plugin",
             "-DCMAKE_BUILD_TYPE=Release",
             // Match the Rust cdylib's architecture: an x86_64 cmake (Rosetta)
             // would otherwise build a wrapper that cannot dlopen our clap.
@@ -277,7 +277,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
 }
 
 /// The AU "Manufacturer: Plugin" display name hosts (Logic, GarageBand) group the component
-/// under. Mirrors vb-plugin's `VENDOR` / `NAME`; overrides clap-wrapper's hardcoded
+/// under. Mirrors seclab-plugin's `VENDOR` / `NAME`; overrides clap-wrapper's hardcoded
 /// "cleveraudio.org: <output>" default (see `bundle_wrapped`).
 const AU_DISPLAY_NAME: &str = "ice1x: SecLab";
 
@@ -374,7 +374,7 @@ fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
     let component = workspace_root()?
         .join("target")
         .join("bundled")
-        .join("vb-plugin.component");
+        .join("seclab-plugin.component");
     let plist = component.join("Contents").join("Info.plist");
     if !plist.exists() {
         return Err(format!(
@@ -413,7 +413,7 @@ fn copy_tree(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
 /// Validates `patch`, bundles the release plugin, installs the patch as a resource.
 fn export(patch: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Fail early on anything the engine would refuse later.
-    let doc = vb_project::open_path(patch)
+    let doc = seclab_project::open_path(patch)
         .map_err(|e| format!("patch '{}' is not exportable: {e}", patch.display()))?;
     println!(
         "patch ok: {} nodes, {} edges",
@@ -424,7 +424,7 @@ fn export(patch: &Path) -> Result<(), Box<dyn std::error::Error>> {
     // 2. Build the release bundle via nih-plug's bundler.
     nih_plug_xtask::main_with_args(
         "cargo xtask",
-        ["bundle", "vb-plugin", "--release"]
+        ["bundle", "seclab-plugin", "--release"]
             .into_iter()
             .map(String::from),
     )?;
@@ -579,14 +579,14 @@ mod tests {
     #[test]
     fn au_name_command_sets_the_first_audiocomponents_name() {
         let args = au_set_name_args(
-            Path::new("/b/vb-plugin.component/Contents/Info.plist"),
+            Path::new("/b/seclab-plugin.component/Contents/Info.plist"),
             AU_DISPLAY_NAME,
         );
         assert_eq!(args[0], "-c");
         // Key path then the raw value (spaces and the colon in "ice1x: SecLab" are fine —
         // PlistBuddy takes the rest of the -c string verbatim as the value).
         assert_eq!(args[1], "Set :AudioComponents:0:name ice1x: SecLab");
-        assert_eq!(args[2], "/b/vb-plugin.component/Contents/Info.plist");
+        assert_eq!(args[2], "/b/seclab-plugin.component/Contents/Info.plist");
     }
 
     #[test]
@@ -625,7 +625,7 @@ mod tests {
     fn host_testing_checklist_names_every_produced_bundle() {
         let doc = include_str!("../../docs/host-testing.md");
         // The CLAP is produced by the plain bundler; the other three by the wrapper.
-        let mut artifacts = vec!["vb-plugin.clap"];
+        let mut artifacts = vec!["seclab-plugin.clap"];
         for format in [
             WrappedFormat::Vst3,
             WrappedFormat::Auv2,

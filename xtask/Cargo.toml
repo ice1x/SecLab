@@ -10,9 +10,9 @@ publish = false
 
 [dependencies]
 nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug.git" }
-vb-project.workspace = true
-vb-nodes.workspace = true
-vb-plugin = { path = "../crates/vb-plugin" }
+seclab-project.workspace = true
+seclab-nodes.workspace = true
+seclab-plugin = { path = "../crates/seclab-plugin" }
 
 [lints]
 workspace = true
