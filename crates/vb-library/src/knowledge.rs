@@ -47,7 +47,7 @@ fn kg_node(
         title,
         body,
         body_html: String::new(),
-        properties: Properties(props),
+        properties: Properties::from(props),
     }
 }
 
@@ -380,7 +380,6 @@ impl Library {
                 .map(|p| {
                     let signal = p
                         .properties
-                        .0
                         .get("signal")
                         .and_then(|v| v.as_str())
                         .unwrap_or("");
@@ -399,7 +398,6 @@ impl Library {
                 .map(|p| {
                     let get = |key: &str| {
                         p.properties
-                            .0
                             .get(key)
                             .and_then(serde_json::Value::as_f64)
                             .unwrap_or(0.0)

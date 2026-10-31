@@ -80,7 +80,7 @@ pub(crate) fn new_node(node_kind: &str, title: &str) -> NewNode {
         title: title.to_owned(),
         body: String::new(),
         body_html: String::new(),
-        properties: Properties(HashMap::new()),
+        properties: Properties::from(HashMap::new()),
     }
 }
 
@@ -91,7 +91,7 @@ pub(crate) fn new_edge(from_id: u64, to_id: u64, edge_kind: &str) -> NewEdge {
         to_id,
         kind: edge_kind.to_owned(),
         weight: 1.0,
-        properties: Properties(HashMap::new()),
+        properties: Properties::from(HashMap::new()),
     }
 }
 

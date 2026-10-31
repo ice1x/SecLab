@@ -82,7 +82,7 @@ pub fn import_patch(
         // The description lives in the node body, which drevo indexes for FTS.
         body: description.to_owned(),
         body_html: String::new(),
-        properties: Properties(props),
+        properties: Properties::from(props),
     })?;
 
     for node_kind in &kinds {

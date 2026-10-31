@@ -48,7 +48,7 @@ fn a_preset_links_to_its_patch_and_stores_values() {
     assert_eq!(owner.title, "Bass");
 
     // Values stored in properties (as f32, so compare with a tolerance).
-    let values = &preset.properties.0["values"];
+    let values = &preset.properties["values"];
     assert!((values["gain"].as_f64().unwrap() - 0.8).abs() < 1e-6);
     assert!((values["cutoff"].as_f64().unwrap() - 1200.0).abs() < 1e-3);
 }
