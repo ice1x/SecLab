@@ -616,6 +616,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000244 — 🔧 **Adapt `vb-library` to the drevo 0.2.0 `Properties` API** — the sibling `drevo`
+  checkout bumped `drevo-core` 0.1.1 → 0.2.0, reshaping `Properties` from a `HashMap` tuple-struct
+  into an opaque sorted map (no `Properties(map)` ctor, no `.0`). Migrated the five construction sites
+  to `Properties::from(map)` and the read sites to `.get(key)` / `props[key]` (now `Index<&str>`),
+  in `src/` and the integration tests. Keeps the non-blocking `library / drevo` job green; no other
+  crate affected (drevo is behind the opt-in `library` feature) 🧪
 - [x] 000243 — 🏷️ **Rename the project `VST_bomb` → `SecLab`** — dropped "VST" (Steinberg trademark)
   for **SecLab** (the author's own music project since 2014). Repo renamed to `ice1x/SecLab`; swept
   across app/window title, in-editor version label, plugin `NAME`/`CLAP_ID` (`com.ice1x.seclab`),

@@ -16,7 +16,6 @@ use crate::library::{kind, Library};
 /// Pulls the node kinds a patch was imported with out of its `kinds` property.
 fn patch_kinds(node: &Node) -> Vec<String> {
     node.properties
-        .0
         .get("kinds")
         .and_then(|v| v.as_array())
         .map(|arr| {

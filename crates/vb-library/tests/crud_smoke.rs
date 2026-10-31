@@ -16,7 +16,7 @@ fn patch_node(title: &str) -> NewNode {
         title: title.to_owned(),
         body: String::new(),
         body_html: String::new(),
-        properties: Properties(HashMap::new()),
+        properties: Properties::from(HashMap::new()),
     }
 }
 
@@ -73,13 +73,13 @@ fn stored_properties_round_trip() {
         title: "Tagged".to_owned(),
         body: "notes".to_owned(),
         body_html: String::new(),
-        properties: Properties(props),
+        properties: Properties::from(props),
     };
 
     let created = db.create_node(node).expect("create");
     let fetched = db.get_node(created.id).unwrap();
     assert_eq!(
-        fetched.properties.0.get("author").unwrap(),
+        fetched.properties.get("author").unwrap(),
         &serde_json::json!("ice")
     );
     assert_eq!(fetched.body, "notes");

@@ -53,7 +53,7 @@ fn importing_a_patch_stores_summary_metadata() {
     assert_eq!(patch.kind, kind::PATCH);
     assert_eq!(patch.title, "My Synth");
 
-    let props = &patch.properties.0;
+    let props = &patch.properties;
     assert_eq!(props["node_count"], serde_json::json!(3));
     assert_eq!(props["edge_count"], serde_json::json!(2));
     assert_eq!(props["format_version"], serde_json::json!(FORMAT_VERSION));

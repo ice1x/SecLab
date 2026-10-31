@@ -22,6 +22,16 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Adapt `vb-library` to the drevo 0.2.0 `Properties` API (000244).** The sibling `drevo` checkout
+  the optional `library` feature builds against bumped `drevo-core` 0.1.1 → 0.2.0, which reshaped
+  `Properties` from a tuple-struct wrapping a `HashMap` into an opaque sorted map: the tuple
+  constructor `Properties(map)` and the `.0` field no longer exist. `vb-library` is migrated to the
+  new surface — `Properties::from(map)` (via the provided `From<HashMap<String, Value>>`) at the five
+  construction sites, and direct `.properties.get(key)` / `properties[key]` (it now implements
+  `Index<&str>`) in place of `.properties.0…` at the read sites, across `src/` and the integration
+  tests. Honours the standing rule to adapt `vb-library` to the current drevo rather than pin an old
+  version; the non-blocking `library / drevo` CI job builds and its CRUD/round-trip suite passes
+  again. No change to any other crate (drevo is behind the opt-in `library` feature).
 - **Project renamed `VST_bomb` → `SecLab` (000243).** The public-facing name dropped "VST" (a
   Steinberg trademark) in favour of **SecLab** (the author's own music project since 2014). The GitHub
   repository was renamed to `ice1x/SecLab` (old URLs redirect). Renamed across product surfaces: the

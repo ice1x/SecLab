@@ -31,7 +31,7 @@ impl Library {
             .map(|(k, v)| ((*k).to_owned(), serde_json::json!(v)))
             .collect();
         let mut node = new_node(kind::PRESET, name);
-        node.properties = Properties(HashMap::from([(
+        node.properties = Properties::from(HashMap::from([(
             "values".to_owned(),
             serde_json::Value::Object(map.into_iter().collect()),
         )]));
