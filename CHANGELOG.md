@@ -22,6 +22,11 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
+  public launch, the only remaining occurrences of the old brand (and its crate-prefix initials) were
+  the rename-documenting entries in this changelog and `docs/backlog.md`. Those entries were rewritten
+  in neutral wording — describing what each rename produced rather than what it replaced — so a full
+  case-insensitive audit of the tree now finds zero occurrences of the previous name in any variant.
 - **Slim the README; move the plan and design docs out of it (000248).** The README had grown past
   1100 lines, dominated by the full task backlog and a long AI-assistant design essay. The roadmap and
   task checklist now live in [`docs/backlog.md`](docs/backlog.md), and the goals, stack & key
@@ -41,24 +46,23 @@ Two independent version numbers matter in this project:
   GPL/AGPL obligation in the shipping tree, so the strict license is compatible. README's license
   section and tree are updated.
 - **Finish the rebrand in the `web/` demos (000246).** The earlier sweeps covered `.rs/.toml/.md/.yml`
-  but the browser demos' HTML and JavaScript were missed, so the old name lingered in user-facing
-  places: the page `<title>`s and `<h1>` ("VST_bomb — browser synth", "VST_bomb — editor"), the
-  launcher comments, and the AudioWorklet file `web/audio/vb-processor.js` (its very name carried the
-  `vb-` = Vst Bomb initials). Renamed `vb-processor.js` → `seclab-processor.js` (updating the
-  `fetch(...)` in `web/audio/app.js` and the `web/audio/README.md` references) and replaced the
-  remaining `VST_bomb` strings with `SecLab` in `web/editor/index.html`, `web/audio/index.html`,
-  `web/editor/app.js` and the renamed worklet. A full audit now finds no `VST_bomb`/`VstBomb`/`vb-*`
-  variant anywhere outside the CHANGELOG/README entries that document the rename itself.
-- **Rename the internal crates `vb-*` → `seclab-*` (000245).** The `vb-` prefix was the old brand's
-  initials (**V**st **B**omb), so it kept the dropped name alive in every crate. All ten workspace
-  crates are renamed — `vb-core`→`seclab-core`, `vb-nodes`→`seclab-nodes`, `vb-project`, `vb-runtime`,
-  `vb-engine`, `vb-editor`, `vb-standalone`, `vb-plugin`, `vb-ai`, `vb-library` — directories, package
-  names, `[workspace]` members and `[workspace.dependencies]`, every inter-crate dependency, and all
-  Rust paths (`vb_core`→`seclab_core`, …) plus the cdylib (`libvb_plugin`→`libseclab_plugin`). The CI
-  and release workflows move with them (`cargo xtask bundle seclab-plugin`, `cargo test -p
-  seclab-library`), and the CLAP/VST3/AU bundle filenames become `seclab-plugin.{clap,vst3,component,app}`.
-  `xtask` keeps its name (no brand in it). Mechanical rename only — no behavioural change; the full
-  workspace, `assistant-net`, `library` and `gui` builds, tests, clippy and fmt all pass.
+  but the browser demos' HTML and JavaScript were missed, so the previous name lingered in user-facing
+  places: the page `<title>`s and `<h1>`, the launcher comments, and an AudioWorklet file under
+  `web/audio/` whose filename still carried the old brand's initials. The worklet was renamed to
+  `seclab-processor.js` (updating the `fetch(...)` in `web/audio/app.js` and the `web/audio/README.md`
+  references) and the remaining strings became `SecLab` in `web/editor/index.html`,
+  `web/audio/index.html`, `web/editor/app.js` and the renamed worklet. A full audit finds no trace of
+  the previous name anywhere in the tree.
+- **Rename the internal crates to the `seclab-*` prefix (000245).** The previous prefix was the old
+  brand's initials, so it kept the dropped name alive in every crate. All ten workspace crates are
+  renamed — `seclab-core`, `seclab-nodes`, `seclab-project`, `seclab-runtime`, `seclab-engine`,
+  `seclab-editor`, `seclab-standalone`, `seclab-plugin`, `seclab-ai`, `seclab-library` — directories,
+  package names, `[workspace]` members and `[workspace.dependencies]`, every inter-crate dependency,
+  and all Rust paths (`seclab_core`, …) plus the cdylib (`libseclab_plugin`). The CI and release
+  workflows move with them (`cargo xtask bundle seclab-plugin`, `cargo test -p seclab-library`), and
+  the CLAP/VST3/AU bundle filenames become `seclab-plugin.{clap,vst3,component,app}`. `xtask` keeps its
+  name (no brand in it). Mechanical rename only — no behavioural change; the full workspace,
+  `assistant-net`, `library` and `gui` builds, tests, clippy and fmt all pass.
 - **Adapt `seclab-library` to the drevo 0.2.0 `Properties` API (000244).** The sibling `drevo` checkout
   the optional `library` feature builds against bumped `drevo-core` 0.1.1 → 0.2.0, which reshaped
   `Properties` from a tuple-struct wrapping a `HashMap` into an opaque sorted map: the tuple
@@ -69,19 +73,18 @@ Two independent version numbers matter in this project:
   tests. Honours the standing rule to adapt `seclab-library` to the current drevo rather than pin an old
   version; the non-blocking `library / drevo` CI job builds and its CRUD/round-trip suite passes
   again. No change to any other crate (drevo is behind the opt-in `library` feature).
-- **Project renamed `VST_bomb` → `SecLab` (000243).** The public-facing name dropped "VST" (a
-  Steinberg trademark) in favour of **SecLab** (the author's own music project since 2014). The GitHub
-  repository was renamed to `ice1x/SecLab` (old URLs redirect). Renamed across product surfaces: the
-  app/window title and the in-editor version label, the plugin's nih-plug `NAME` ("SecLab", what hosts
-  display) and `CLAP_ID` (`com.ice1x.seclab`), the plugin struct `VstBomb`/`VstBombParams` →
-  `SecLab`/`SecLabParams`, every doc/README/CHANGELOG/CONTRIBUTING mention and GitHub link, crate
-  `description` fields, the node-reference header (`docs/nodes.md`), and the CI release-artifact name.
-  **Data/identity relocation (safe pre-release, no shipped users):** the OS keychain service
-  (`"VST_bomb"` → `"SecLab"`) and the on-disk modules/settings directory (`…/VST_bomb/modules` →
-  `…/SecLab/modules`) moved with the brand, so any locally stored dev key or settings start fresh under
-  the new name. **Unchanged:** the internal crate names (`seclab-core`, `seclab-ai`, …) and the CLAP bundle
-  filename (`seclab-plugin.clap`, derived from the package name), so the required clap-validator gate is
-  unaffected. All tests pass under the new strings.
+- **Rename the project to `SecLab` (000243).** The public-facing name dropped "VST" (a Steinberg
+  trademark) in favour of **SecLab** (the author's own music project since 2014). The GitHub repository
+  was renamed to `ice1x/SecLab` (old URLs redirect). Renamed across product surfaces: the app/window
+  title and the in-editor version label, the plugin's nih-plug `NAME` ("SecLab", what hosts display)
+  and `CLAP_ID` (`com.ice1x.seclab`), the plugin struct (now `SecLab`/`SecLabParams`), every
+  doc/README/CHANGELOG/CONTRIBUTING mention and GitHub link, crate `description` fields, the
+  node-reference header (`docs/nodes.md`), and the CI release-artifact name. **Data/identity relocation
+  (safe pre-release, no shipped users):** the OS keychain service and the on-disk modules/settings
+  directory (now `…/SecLab/modules`) moved with the brand, so any locally stored dev key or settings
+  start fresh under the new name. **Unchanged:** the internal crate names (`seclab-core`, `seclab-ai`,
+  …) and the CLAP bundle filename (`seclab-plugin.clap`, derived from the package name), so the
+  required clap-validator gate is unaffected. All tests pass under the new strings.
 - **The assistant's Submit gate now defers to `send_blocker`, so it agrees with the Settings
   readiness line — including the key check (000242).** The editor's Submit handler hand-rolled a
   *subset* of the readiness rule: it enforced the privacy policy (offline/consent, 000110) and a
