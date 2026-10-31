@@ -66,7 +66,7 @@ SecLab/
 │  ├─ seclab-standalone/  # standalone app (cpal + editor)
 │  └─ seclab-plugin/      # CLAP export (nih-plug), VST3/AU build via clap-wrapper
 ├─ README.md          # project overview + task backlog
-└─ LICENSE            # Apache-2.0
+└─ LICENSE            # PolyForm Strict 1.0.0
 ```
 
 ## 🚀 Quick start (grows as development proceeds)
@@ -616,6 +616,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000247 — 📄 **Relicense Apache-2.0 → PolyForm Strict 1.0.0** — ahead of going public, swap the
+  placeholder Apache license for PolyForm Strict (source-available, not open-source: read-only, no
+  use/modify/redistribute/commercialize). `LICENSE` holds the verbatim PolyForm text + licensor
+  copyright; new `NOTICE` covers third-party (permissive) deps and the CLAP/VST3-SDK format terms;
+  `Cargo.toml` `license` → `LicenseRef-PolyForm-Strict-1.0.0`. Dependency-license audit confirmed no
+  GPL/AGPL mines, so the strict license is compatible 🧪
 - [x] 000246 — 🧹 **Finish the rebrand in the `web/` demos** — the HTML/JS of the browser demos were
   missed by the earlier sweeps, leaving `VST_bomb` in page titles/`<h1>` and launcher comments, and
   the worklet file named `vb-processor.js`. Renamed it to `seclab-processor.js` (fixing the `fetch`
@@ -1119,4 +1125,7 @@ their own numbers.
 
 ## 📄 License
 
-Apache-2.0 — see [`LICENSE`](LICENSE).
+**PolyForm Strict License 1.0.0** — source-available, not open-source: you may read the
+code, but using, modifying, redistributing or commercializing it is not permitted. See
+[`LICENSE`](LICENSE) for the full terms and [`NOTICE`](NOTICE) for third-party components
+(which remain under their own, permissive licenses).

@@ -22,6 +22,17 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Relicense from Apache-2.0 to PolyForm Strict License 1.0.0 (000247).** Ahead of making the
+  repository public, the placeholder Apache-2.0 license is replaced with **PolyForm Strict 1.0.0** —
+  a source-available, non-open-source license: the code may be read, but using, modifying,
+  redistributing or commercializing it is not permitted (noncommercial/personal study excepted per the
+  license text). `LICENSE` now carries the verbatim PolyForm Strict text plus the licensor copyright;
+  a new `NOTICE` records that third-party dependencies remain under their own (permissive) licenses and
+  names the plugin-format terms (CLAP first-party; VST3/AU via clap-wrapper + the Steinberg VST3 SDK).
+  The workspace `license` field becomes `LicenseRef-PolyForm-Strict-1.0.0` (a valid SPDX custom
+  reference; the crates are not published to crates.io). A dependency-license audit confirmed no
+  GPL/AGPL obligation in the shipping tree, so the strict license is compatible. README's license
+  section and tree are updated.
 - **Finish the rebrand in the `web/` demos (000246).** The earlier sweeps covered `.rs/.toml/.md/.yml`
   but the browser demos' HTML and JavaScript were missed, so the old name lingered in user-facing
   places: the page `<title>`s and `<h1>` ("VST_bomb — browser synth", "VST_bomb — editor"), the

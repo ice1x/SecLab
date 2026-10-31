@@ -3537,7 +3537,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-ai"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "keyring",
  "reqwest",
@@ -3551,14 +3551,14 @@ dependencies = [
 
 [[package]]
 name = "seclab-core"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "seclab-editor"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "console_error_panic_hook",
  "eframe",
@@ -3576,7 +3576,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-engine"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "seclab-core",
  "seclab-nodes",
@@ -3587,7 +3587,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-library"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "drevo",
  "seclab-core",
@@ -3598,14 +3598,14 @@ dependencies = [
 
 [[package]]
 name = "seclab-nodes"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "seclab-core",
 ]
 
 [[package]]
 name = "seclab-plugin"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "libc",
  "nih_plug",
@@ -3621,7 +3621,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-project"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "ron",
  "seclab-core",
@@ -3630,7 +3630,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-runtime"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "criterion",
  "seclab-core",
@@ -3639,7 +3639,7 @@ dependencies = [
 
 [[package]]
 name = "seclab-standalone"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "cpal",
  "eframe",
@@ -5413,7 +5413,7 @@ checksum = "e450f9b2ed1dff33c94c12589a87338689467b9c4f5d8a5710bd09a847d2c8a7"
 
 [[package]]
 name = "xtask"
-version = "0.0.58"
+version = "0.0.59"
 dependencies = [
  "nih_plug_xtask",
  "seclab-nodes",
