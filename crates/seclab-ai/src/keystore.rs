@@ -1,6 +1,6 @@
 //! BYOK key storage: where a user's LLM provider API keys live.
 //!
-//! Keys are secrets. The hard rule (see the README's design pillars) is that they never
+//! Keys are secrets. The hard rule (see the design pillars in `docs/overview.md`) is that they never
 //! touch project files, RON, or telemetry — they exist only in a [`KeyStore`], which the
 //! Settings UI reads and writes. Two backends implement the trait: [`MemoryKeyStore`], an
 //! ephemeral in-session store (the tested reference, and the dev/offline default), and —

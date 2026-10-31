@@ -1,7 +1,7 @@
 //! Voltage-controlled filter: a biquad whose cutoff a control signal sweeps.
 //!
 //! This is the filter side of modulation (the [`crate::Vca`] is the amplitude side), and
-//! the node the README's MVP scenario assumes — "an LFO on cutoff". It wraps a
+//! the node the MVP scenario in `docs/overview.md` assumes — "an LFO on cutoff". It wraps a
 //! [`crate::Biquad`] and, once per block, retunes its cutoff from a control input:
 //! `cutoff = clamp(base_hz * 2^(amount_oct * cv))`. The audio then flows through the filter
 //! as usual. With the control input unconnected (silence) the cutoff sits at `base_hz`, so

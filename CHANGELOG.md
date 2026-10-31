@@ -22,6 +22,13 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Slim the README; move the plan and design docs out of it (000248).** The README had grown past
+  1100 lines, dominated by the full task backlog and a long AI-assistant design essay. The roadmap and
+  task checklist now live in [`docs/backlog.md`](docs/backlog.md), and the goals, stack & key
+  decisions, principles and assistant design in [`docs/overview.md`](docs/overview.md); the README is
+  now a ~45-line landing page (what it is, quick start, documentation links, license). No content was
+  lost — it was moved verbatim — and two source doc-comments that referenced "the README's design
+  pillars / MVP scenario" were repointed at `docs/overview.md`. The CHANGELOG stays its own file.
 - **Relicense from Apache-2.0 to PolyForm Strict License 1.0.0 (000247).** Ahead of making the
   repository public, the placeholder Apache-2.0 license is replaced with **PolyForm Strict 1.0.0** —
   a source-available, non-open-source license: the code may be read, but using, modifying,
