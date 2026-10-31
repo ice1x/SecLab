@@ -1,18 +1,18 @@
 // Headless end-to-end test of the WASM audio boundary (backlog 000083).
 //
-// Verifies the compiled `vb-engine` wasm module through its generated JS bindings — the
+// Verifies the compiled `seclab-engine` wasm module through its generated JS bindings — the
 // exact Rust → wasm → JS path the browser AudioWorklet uses — without a browser: build the
 // synth, feed MIDI, pull render blocks, and assert the audio behaves.
 //
 // Prerequisite (also what CI runs):
-//   wasm-pack build ../../crates/vb-engine --target nodejs --out-dir web/audio/pkg-node --out-name vb_engine
+//   wasm-pack build ../../crates/seclab-engine --target nodejs --out-dir web/audio/pkg-node --out-name seclab_engine
 // Then:  node web/audio/test/smoke.mjs
 import assert from 'node:assert';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const { WasmSynth } = await import(join(here, '..', 'pkg-node', 'vb_engine.js'));
+const { WasmSynth } = await import(join(here, '..', 'pkg-node', 'seclab_engine.js'));
 
 const SR = 48000;
 const block = WasmSynth.blockSize();
