@@ -1,6 +1,6 @@
 # Running the editor in a browser (WASM)
 
-The VST_bomb editor is platform-agnostic [egui](https://github.com/emilk/egui): the same
+The SecLab editor is platform-agnostic [egui](https://github.com/emilk/egui): the same
 [`EditorApp`](../crates/vb-editor/src/app.rs) that opens a native window also runs in a
 browser through eframe's `WebRunner`, which paints into an HTML `<canvas>` via WebGL. This
 is a **proof of concept** (backlog 000081) — it establishes the web build path. Audio does

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to VST_bomb are documented here. The format follows
+All notable changes to SecLab are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Versioning
@@ -22,6 +22,19 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Project renamed `VST_bomb` → `SecLab` (000243).** The public-facing name dropped "VST" (a
+  Steinberg trademark) in favour of **SecLab** (the author's own music project since 2014). The GitHub
+  repository was renamed to `ice1x/SecLab` (old URLs redirect). Renamed across product surfaces: the
+  app/window title and the in-editor version label, the plugin's nih-plug `NAME` ("SecLab", what hosts
+  display) and `CLAP_ID` (`com.ice1x.seclab`), the plugin struct `VstBomb`/`VstBombParams` →
+  `SecLab`/`SecLabParams`, every doc/README/CHANGELOG/CONTRIBUTING mention and GitHub link, crate
+  `description` fields, the node-reference header (`docs/nodes.md`), and the CI release-artifact name.
+  **Data/identity relocation (safe pre-release, no shipped users):** the OS keychain service
+  (`"VST_bomb"` → `"SecLab"`) and the on-disk modules/settings directory (`…/VST_bomb/modules` →
+  `…/SecLab/modules`) moved with the brand, so any locally stored dev key or settings start fresh under
+  the new name. **Unchanged:** the internal crate names (`vb-core`, `vb-ai`, …) and the CLAP bundle
+  filename (`vb-plugin.clap`, derived from the package name), so the required clap-validator gate is
+  unaffected. All tests pass under the new strings.
 - **The assistant's Submit gate now defers to `send_blocker`, so it agrees with the Settings
   readiness line — including the key check (000242).** The editor's Submit handler hand-rolled a
   *subset* of the readiness rule: it enforced the privacy policy (offline/consent, 000110) and a
@@ -550,7 +563,7 @@ Two independent version numbers matter in this project:
   `Result<Node>` (a `NodeNotFound` error, not `Ok(None)`); the file backup helpers wrap
   `export_json` / `import_json` with `std::fs` (I/O → `DrevoError::Io`). No public `vb-library`
   API changed; the `library` feature stays off by default, so the required workspace gates are
-  untouched. Honors the standing rule to adapt VST_bomb to the current drevo, never to pin an
+  untouched. Honors the standing rule to adapt SecLab to the current drevo, never to pin an
   old drevo branch.
 - **Factory patch (`vb-engine`) / Minitaur** — the two VCOs now **hide `base_hz` from the
   panel**. `base_hz` is a `pitch-osc` resting-only fallback (the frequency held when no note
@@ -564,7 +577,7 @@ Two independent version numbers matter in this project:
 - **Library (`vb-library`)** — **track drevo's redb-backend removal.** drevo retired its redb
   on-disk backend (drevo epic #444), so `drevo::db::Drevo::open`, `Drevo::migrate` and
   `MigrationDirection` no longer exist and the embedded `Drevo` handle is **in-memory only**.
-  This left the whole VST_bomb workspace unable to resolve (Cargo resolves an optional
+  This left the whole SecLab workspace unable to resolve (Cargo resolves an optional
   path-dependency's manifest even when its feature is off), which turned **every** required CI
   check red — `vb-library`'s `drevo` dependency requested the now-missing `redb-backend`
   feature. Adapted `vb-library` to the current drevo: dropped the `redb-backend` feature
@@ -719,8 +732,8 @@ Two independent version numbers matter in this project:
   The relative default resolves against the process working directory, which in a plugin is the
   host DAW's — so the browser could never find the user's saved modules and exports landed in an
   unpredictable spot. `module::user_modules_dir()` resolves the platform data folder
-  (`~/Library/Application Support/VST_bomb/modules` on macOS, `%APPDATA%\VST_bomb\modules` on
-  Windows, `$XDG_DATA_HOME`/`~/.local/share/VST_bomb/modules` elsewhere; relative fallback on WASM),
+  (`~/Library/Application Support/SecLab/modules` on macOS, `%APPDATA%\SecLab\modules` on
+  Windows, `$XDG_DATA_HOME`/`~/.local/share/SecLab/modules` elsewhere; relative fallback on WASM),
   and both the plugin and the standalone app point the editor at it via the new
   `EditorApp::set_modules_dir`, so a macro saved in one is browsable in the other.
 - **Editor (`vb-editor`)** — the Panel view no longer clips wide modules off the right edge.
@@ -1045,7 +1058,7 @@ editor, plugin export, and the AI assistant from the ground up. Highlights by ar
   flakily, so some builds produced a bundle with an `APPL` plist and no registration
   (`auval` "didn't find the component"). `bundle-auv2` now installs the generated plist
   deterministically and rebrands the manufacturer, so the AU validates (`auval` succeeds)
-  and hosts list it as **`ice1x: VST_bomb`** instead of clap-wrapper's default
+  and hosts list it as **`ice1x: SecLab`** instead of clap-wrapper's default
   `cleveraudio.org: vb-plugin`.
 
 ### Changed
@@ -1072,4 +1085,4 @@ editor, plugin export, and the AI assistant from the ground up. Highlights by ar
   drifting implementation. No behavioural change; native/wasm builds, tests, clippy
   (`-D warnings`), and the `gui` build all stay green.
 
-[Unreleased]: https://github.com/ice1x/VST_bomb/commits/main
+[Unreleased]: https://github.com/ice1x/SecLab/commits/main

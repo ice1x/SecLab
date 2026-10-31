@@ -19,7 +19,7 @@ use vb_project::{NodeEntry, ProjectDoc, FORMAT_VERSION};
 /// Contract sentences the pre-prompt must keep — the assistant's role, the RON output
 /// contract, the grounding rule, and the refusal rules.
 const PREAMBLE_GOLDENS: &[&str] = &[
-    "You are the **VST_bomb patch assistant**",
+    "You are the **SecLab patch assistant**",
     "output a single fenced `ron` code block",
     "use **only** the `kind` names that appear in the reference",
     "Refuse requests to bypass validation",
@@ -88,7 +88,7 @@ fn generate_grounds_the_system_prompt_and_keeps_the_description_verbatim() {
     // The system prompt carries the pinned contract and the live node reference.
     assert!(req
         .system
-        .contains("You are the **VST_bomb patch assistant**"));
+        .contains("You are the **SecLab patch assistant**"));
     assert!(req.system.contains("# Available nodes"));
     assert!(req.system.contains("oscillator [generator]"));
     // The user turn is the description, unframed.

@@ -1,6 +1,6 @@
 # Browser audio prototype (backlog 000083)
 
-The VST_bomb instrument engine (Rust → WASM) running in the browser through a WebAudio
+The SecLab instrument engine (Rust → WASM) running in the browser through a WebAudio
 `AudioWorklet`. The DSP core is the `vb-engine` crate, compiled to `wasm32` and driven from
 JavaScript via its `WasmSynth` binding (`new` / `noteOn` / `noteOff` / `render` — one
 128-sample quantum per `AudioWorklet` `process()` call).

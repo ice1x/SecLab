@@ -1,13 +1,13 @@
 # Releasing
 
-How a VST_bomb release is built, packaged, and (optionally) signed. This covers backlog
+How a SecLab release is built, packaged, and (optionally) signed. This covers backlog
 [000090](../README.md) (release bundles in CI) and [000092](../README.md) (export the synth
 to VST3 + AU).
 
 ## What a release contains
 
 The four macOS bundles the build produces under `target/bundled/`, packaged into one zip
-(`VST_bomb-<tag>-macos.zip`):
+(`SecLab-<tag>-macos.zip`):
 
 | Bundle | Format | Install location |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ bundles on:
 
 It runs on the self-hosted macOS/ARM64 runner, calls the existing `cargo xtask`
 bundle commands (reusing the cached clap-wrapper checkout), zips the four bundles, and
-uploads them as the **`VST_bomb-macos-bundles`** workflow artifact. It does **not** create a
+uploads them as the **`SecLab-macos-bundles`** workflow artifact. It does **not** create a
 public GitHub Release — download the artifact from the run and attach it to a release
 yourself when you are ready to publish.
 
@@ -63,7 +63,7 @@ flow.
 1. Update the version and [CHANGELOG.md](../CHANGELOG.md).
 2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 3. The Release workflow builds, (optionally) signs, and uploads the bundles artifact.
-4. Download `VST_bomb-macos-bundles`, verify it loads (`auval -v aumu gWrp clAd`,
+4. Download `SecLab-macos-bundles`, verify it loads (`auval -v aumu gWrp clAd`,
    clap-validator, or a DAW), and attach the zip to a GitHub Release.
 
 ## Building locally

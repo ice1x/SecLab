@@ -13,7 +13,7 @@ use vb_project::ProjectDoc;
 use crate::provider::{AiError, AiProvider, ChatRequest, Message, ProviderConfig};
 
 /// System framing for the critic: grounded, Occam-first, bullet-only.
-const CRITIC_PREAMBLE: &str = "You are a critical patch reviewer for VST_bomb. Apply \
+const CRITIC_PREAMBLE: &str = "You are a critical patch reviewer for SecLab. Apply \
 Occam's razor: argue for the simplest design that still meets the goal. Flag redundant \
 nodes or routing, a node that earns its place poorly, and any real trade-off worth \
 stating — but do not invent problems. Be grounded in the node reference below. Reply as \

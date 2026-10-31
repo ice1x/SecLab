@@ -1,6 +1,6 @@
 [package]
 name = "vb-engine"
-description = "VST_bomb — build a runnable audio engine from a serialized patch. nih-plug-free, so it compiles to wasm32 for the browser (WebAudio/AudioWorklet)."
+description = "SecLab — build a runnable audio engine from a serialized patch. nih-plug-free, so it compiles to wasm32 for the browser (WebAudio/AudioWorklet)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

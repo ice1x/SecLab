@@ -1,6 +1,6 @@
 # Adding your own node
 
-VST_bomb's DSP library is open: a node is just a type that implements one trait plus a
+SecLab's DSP library is open: a node is just a type that implements one trait plus a
 small descriptor telling the registry how to build it. This guide walks through adding a
 custom node end to end. The complete, compile-tested version of everything below lives in
 [`crates/vb-nodes/tests/custom_node.rs`](../crates/vb-nodes/tests/custom_node.rs) — the

@@ -1,4 +1,4 @@
-//! `vb-nodes` — the DSP node library for VST_bomb.
+//! `vb-nodes` — the DSP node library for SecLab.
 //!
 //! Concrete nodes that implement [`vb_core::Processor`]: oscillators, filters,
 //! envelopes, math and routing. Each node is a small, independently tested unit that

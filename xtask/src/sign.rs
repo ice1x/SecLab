@@ -149,12 +149,12 @@ mod tests {
 
     #[test]
     fn notarytool_submit_targets_the_archive_and_profile_and_waits() {
-        let args = notarytool_submit_args(Path::new("/b/x.app.zip"), "vstbomb-notary");
+        let args = notarytool_submit_args(Path::new("/b/x.app.zip"), "seclab-notary");
         assert_eq!(args[0], "notarytool");
         assert_eq!(args[1], "submit");
         assert_eq!(args[2], "/b/x.app.zip");
         let p = args.iter().position(|a| a == "--keychain-profile").unwrap();
-        assert_eq!(args[p + 1], "vstbomb-notary");
+        assert_eq!(args[p + 1], "seclab-notary");
         assert!(
             args.contains(&"--wait".to_owned()),
             "must block on the result"

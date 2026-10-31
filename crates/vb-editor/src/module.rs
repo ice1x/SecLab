@@ -174,10 +174,10 @@ pub fn list_modules(dir: &Path) -> Vec<PathBuf> {
 
 /// The per-user directory where saved macro modules live, shared by the standalone app and the
 /// plugin so a module saved in one is browsable in the other. Resolves to the platform data root
-/// plus `VST_bomb/modules`:
-/// - macOS: `$HOME/Library/Application Support/VST_bomb/modules`
-/// - Windows: `%APPDATA%\VST_bomb\modules`
-/// - other Unix: `$XDG_DATA_HOME/VST_bomb/modules`, else `$HOME/.local/share/VST_bomb/modules`
+/// plus `SecLab/modules`:
+/// - macOS: `$HOME/Library/Application Support/SecLab/modules`
+/// - Windows: `%APPDATA%\SecLab\modules`
+/// - other Unix: `$XDG_DATA_HOME/SecLab/modules`, else `$HOME/.local/share/SecLab/modules`
 ///
 /// When no data root can be resolved (WASM, or a sandbox with no env), it falls back to the
 /// relative `modules`. The default `EditorApp` keeps that relative path (so tests stay isolated);
@@ -189,13 +189,13 @@ pub fn user_modules_dir() -> PathBuf {
     modules_dir_from(data_root())
 }
 
-/// Composes the modules directory from an optional data `root` — `root/VST_bomb/modules`, or the
+/// Composes the modules directory from an optional data `root` — `root/SecLab/modules`, or the
 /// relative `modules` when there is no root. Split out from [`user_modules_dir`] so the mapping is
 /// unit-tested without touching the process environment.
 #[must_use]
 fn modules_dir_from(root: Option<PathBuf>) -> PathBuf {
     match root {
-        Some(root) => root.join("VST_bomb").join("modules"),
+        Some(root) => root.join("SecLab").join("modules"),
         None => PathBuf::from("modules"),
     }
 }
@@ -258,8 +258,8 @@ mod tests {
         // A resolved data root nests the app's modules folder under it.
         let dir = modules_dir_from(Some(PathBuf::from("/data/root")));
         assert!(dir.is_absolute());
-        assert!(dir.ends_with("VST_bomb/modules"), "got {dir:?}");
-        assert_eq!(dir, PathBuf::from("/data/root/VST_bomb/modules"));
+        assert!(dir.ends_with("SecLab/modules"), "got {dir:?}");
+        assert_eq!(dir, PathBuf::from("/data/root/SecLab/modules"));
 
         // No data root (WASM / no env) → the relative fallback so a project-root launch still works.
         assert_eq!(modules_dir_from(None), PathBuf::from("modules"));

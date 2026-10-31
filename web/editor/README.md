@@ -1,4 +1,4 @@
-# VST_bomb editor in the browser (WASM)
+# SecLab editor in the browser (WASM)
 
 A runnable web host for the editor: the same [`EditorApp`](../../crates/vb-editor/src/app.rs)
 that opens a native window, painting into an HTML `<canvas>` through eframe's `WebRunner`

@@ -1,6 +1,6 @@
 [package]
 name = "vb-editor"
-description = "VST_bomb — egui node editor (canvas, wires, inspector, undo)."
+description = "SecLab — egui node editor (canvas, wires, inspector, undo)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

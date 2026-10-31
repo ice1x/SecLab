@@ -16,10 +16,10 @@ members = [
 
 # Shared package metadata inherited by every crate via `field.workspace = true`.
 [workspace.package]
-version = "0.0.54"
+version = "0.0.55"
 edition = "2021"
 license = "Apache-2.0"
-repository = "https://github.com/ice1x/VST_bomb"
+repository = "https://github.com/ice1x/SecLab"
 authors = ["ice1x"]
 
 # Shared dependencies land here as the project grows (nih-plug, egui, cpal, …).

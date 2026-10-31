@@ -1,6 +1,6 @@
 # Signing and notarizing the macOS bundles
 
-To open a VST_bomb plugin or the standalone app on **another** Mac, the bundle must be
+To open a SecLab plugin or the standalone app on **another** Mac, the bundle must be
 code-signed with an Apple **Developer ID** certificate and **notarized** by Apple.
 Otherwise Gatekeeper blocks it ("cannot be opened because the developer cannot be
 verified", or a silent failure to load in the host). Locally-built, unsigned bundles run
@@ -47,11 +47,11 @@ cargo xtask bundle-standalone
    [app-specific password](https://support.apple.com/en-us/102654) for your Apple ID:
 
    ```bash
-   xcrun notarytool store-credentials vstbomb-notary \
+   xcrun notarytool store-credentials seclab-notary \
      --apple-id you@example.com --team-id TEAMID
    ```
 
-   `vstbomb-notary` is then your `NOTARY_PROFILE`.
+   `seclab-notary` is then your `NOTARY_PROFILE`.
 
 ## Sign
 
@@ -79,7 +79,7 @@ codesign --verify --deep --strict --verbose=2 target/bundled/vb-plugin.vst3
 ## Notarize
 
 ```bash
-export NOTARY_PROFILE=vstbomb-notary
+export NOTARY_PROFILE=seclab-notary
 cargo xtask notarize
 ```
 

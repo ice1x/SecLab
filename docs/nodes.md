@@ -1,4 +1,4 @@
-# VST_bomb node reference
+# SecLab node reference
 
 Auto-generated from the registry — do not edit by hand.
 

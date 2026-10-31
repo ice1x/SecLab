@@ -40,7 +40,7 @@ use crate::error::ProjectError;
 
 /// First line of every rendering; also the version marker. v2 adds the optional
 /// presentation fields (`values`/`widgets`/`pos`/`color`/`hidden`) to a node line.
-const HEADER: &str = "# VST_bomb patch prompt v2";
+const HEADER: &str = "# SecLab patch prompt v2";
 
 /// Short tag for a signal type used in the prompt text.
 fn type_tag(signal: SignalType) -> &'static str {

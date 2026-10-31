@@ -1,6 +1,6 @@
 [package]
 name = "vb-project"
-description = "VST_bomb — project serialization (graph format, save/load, versions)."
+description = "SecLab — project serialization (graph format, save/load, versions)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

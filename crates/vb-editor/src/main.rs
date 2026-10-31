@@ -1,4 +1,4 @@
-//! Launches the VST_bomb node editor window.
+//! Launches the SecLab node editor window.
 //!
 //! Only meaningful for the native standalone build (the `app` feature). On `wasm32` the
 //! editor is booted from JavaScript through [`vb_editor::web::start`], and when `app` is

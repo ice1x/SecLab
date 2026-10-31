@@ -67,7 +67,7 @@ pub fn node_reference_markdown(registry: &Registry) -> String {
     });
 
     let mut out = String::from(
-        "# VST_bomb node reference\n\n\
+        "# SecLab node reference\n\n\
          Auto-generated from the registry — do not edit by hand.\n",
     );
 
@@ -94,7 +94,7 @@ mod tests {
     fn markdown_covers_every_kind_grouped_by_category() {
         let registry = Registry::with_builtins();
         let md = node_reference_markdown(&registry);
-        assert!(md.starts_with("# VST_bomb node reference"));
+        assert!(md.starts_with("# SecLab node reference"));
         for kind in registry.kinds() {
             assert!(
                 md.contains(&format!("### {kind}\n")),

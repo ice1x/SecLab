@@ -116,7 +116,7 @@ pub struct KeychainStore {
 
 #[cfg(feature = "keychain")]
 impl KeychainStore {
-    /// A store filing keys under `service` (e.g. `"VST_bomb"`), one entry per provider.
+    /// A store filing keys under `service` (e.g. `"SecLab"`), one entry per provider.
     #[must_use]
     pub fn new(service: impl Into<String>) -> Self {
         Self {

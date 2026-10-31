@@ -1,6 +1,6 @@
 [package]
 name = "vb-core"
-description = "VST_bomb — graph model, port types, scheduler, sample processing."
+description = "SecLab — graph model, port types, scheduler, sample processing."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

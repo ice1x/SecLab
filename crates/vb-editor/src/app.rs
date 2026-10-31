@@ -83,7 +83,7 @@ struct AssistantHost {
     /// The Settings view-model the panel edits — provider/model/sampling + privacy. Its
     /// [`AssistantSettings::config`] is the single source the worker snapshots per request.
     settings: AssistantSettings,
-    /// BYOK key storage: the OS keychain (service `"VST_bomb"`) under `assistant-net`, else an
+    /// BYOK key storage: the OS keychain (service `"SecLab"`) under `assistant-net`, else an
     /// in-session in-memory store. Read/written only through the Settings panel.
     keys: Box<dyn KeyStore>,
     /// Scratch buffer for the masked key field in the Settings panel.
@@ -112,7 +112,7 @@ impl AssistantHost {
         // otherwise a key lives only for the session (still enough to drive an injected
         // provider in the base build/tests).
         #[cfg(feature = "assistant-net")]
-        let keys: Box<dyn KeyStore> = Box::new(vb_ai::keystore::KeychainStore::new("VST_bomb"));
+        let keys: Box<dyn KeyStore> = Box::new(vb_ai::keystore::KeychainStore::new("SecLab"));
         #[cfg(not(feature = "assistant-net"))]
         let keys: Box<dyn KeyStore> = Box::new(vb_ai::MemoryKeyStore::new());
         Self {
@@ -1604,10 +1604,10 @@ impl EditorApp {
             let timeout = std::time::Duration::from_secs(60);
             let provider = self.assistant.settings.provider();
             let result = match provider {
-                vb_ai::ProviderKind::Anthropic => self.set_assistant_anthropic("VST_bomb", timeout),
+                vb_ai::ProviderKind::Anthropic => self.set_assistant_anthropic("SecLab", timeout),
                 vb_ai::ProviderKind::OpenAiCompatible => {
                     let endpoint = self.assistant.settings.endpoint().map(str::to_owned);
-                    self.set_assistant_openai("VST_bomb", timeout, endpoint.as_deref())
+                    self.set_assistant_openai("SecLab", timeout, endpoint.as_deref())
                 }
                 vb_ai::ProviderKind::Local => {
                     // Keyless, on-machine: the endpoint override is the local server URL
@@ -2065,9 +2065,9 @@ impl EditorApp {
                 // identifiable. The crate version is frozen pre-1.0, so the git SHA (with a `+`
                 // when the tree is dirty) is what actually changes build-to-build — it tells you at
                 // a glance whether the freshly-installed bundle is really the one running.
-                ui.label("VST_bomb");
+                ui.label("SecLab");
                 ui.weak(concat!("v", env!("CARGO_PKG_VERSION")))
-                    .on_hover_text("VST_bomb version (crate version)");
+                    .on_hover_text("SecLab version (crate version)");
                 ui.weak(concat!("· ", env!("VB_GIT_SHA")))
                     .on_hover_text(concat!(
                         "build ",
@@ -2586,12 +2586,12 @@ impl eframe::App for EditorApp {
 pub fn run() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("VST_bomb")
+            .with_title("SecLab")
             .with_inner_size([1280.0, 800.0]),
         ..Default::default()
     };
     eframe::run_native(
-        "VST_bomb",
+        "SecLab",
         options,
         Box::new(|_cc| Ok(Box::new(EditorApp::new()))),
     )

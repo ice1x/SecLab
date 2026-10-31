@@ -11,7 +11,7 @@ use vb_project::ProjectDoc;
 use crate::provider::{AiError, AiProvider, ChatRequest, Message, ProviderConfig};
 
 /// System framing for an explanation: grounded, prose-only, musician-facing.
-const EXPLAIN_PREAMBLE: &str = "You are the VST_bomb patch assistant. Explain patches and \
+const EXPLAIN_PREAMBLE: &str = "You are the SecLab patch assistant. Explain patches and \
 nodes to a musician in plain, concise language: what the thing does, how the audio and \
 control signals flow through it, and what each node contributes. Be accurate and grounded \
 in the node reference below — do not invent nodes or behaviour. Output prose only; never \

@@ -62,7 +62,7 @@ jobs:
           version="${GITHUB_REF_NAME:-dev}"
           dist="target/dist"
           mkdir -p "$dist"
-          archive="$PWD/$dist/VST_bomb-${version}-macos.zip"
+          archive="$PWD/$dist/SecLab-${version}-macos.zip"
           rm -f "$archive"
           cd target/bundled
           zip -r -q "$archive" \
@@ -75,6 +75,6 @@ jobs:
       - name: upload the macOS bundles artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VST_bomb-macos-bundles
+          name: SecLab-macos-bundles
           path: target/dist/*.zip
           if-no-files-found: error
