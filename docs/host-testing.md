@@ -20,10 +20,10 @@ cargo xtask bundle-standalone
 
 | Bundle | Copy to |
 | --- | --- |
-| `vb-plugin.clap` | `~/Library/Audio/Plug-Ins/CLAP/` |
-| `vb-plugin.vst3` | `~/Library/Audio/Plug-Ins/VST3/` |
-| `vb-plugin.component` | `~/Library/Audio/Plug-Ins/Components/` |
-| `vb-plugin.app` | run directly (standalone) |
+| `seclab-plugin.clap` | `~/Library/Audio/Plug-Ins/CLAP/` |
+| `seclab-plugin.vst3` | `~/Library/Audio/Plug-Ins/VST3/` |
+| `seclab-plugin.component` | `~/Library/Audio/Plug-Ins/Components/` |
+| `seclab-plugin.app` | run directly (standalone) |
 
 For distribution to another machine, sign and notarize first — see
 [`docs/signing.md`](signing.md). On the build machine, unsigned bundles load fine.
@@ -33,11 +33,11 @@ For distribution to another machine, sign and notarize first — see
 - [ ] **CLAP** — `cargo xtask validate` passes (bundles + runs `clap-validator`).
 - [ ] **AU** — `auval -v aumu gWrp clAd` reports the AU as valid (`auval` ships with macOS).
 - [ ] **VST3 / CLAP** — optionally run [`pluginval`](https://github.com/Tracktion/pluginval)
-      at strictness 8+ over `vb-plugin.vst3`.
+      at strictness 8+ over `seclab-plugin.vst3`.
 
 ## 2. Standalone smoke test
 
-- [ ] `vb-plugin.app` launches and shows the editor window (the run-view: patch summary +
+- [ ] `seclab-plugin.app` launches and shows the editor window (the run-view: patch summary +
       parameters).
 - [ ] Audio device opens; the default patch produces sound.
 - [ ] Quitting and relaunching is clean (no crash, no stuck audio thread).

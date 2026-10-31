@@ -16,10 +16,10 @@ The four bundles the build produces under `target/bundled/`:
 
 | Bundle | Install location |
 | --- | --- |
-| `vb-plugin.clap` | `~/Library/Audio/Plug-Ins/CLAP/` |
-| `vb-plugin.vst3` | `~/Library/Audio/Plug-Ins/VST3/` |
-| `vb-plugin.component` (AU) | `~/Library/Audio/Plug-Ins/Components/` |
-| `vb-plugin.app` (standalone) | `/Applications/` |
+| `seclab-plugin.clap` | `~/Library/Audio/Plug-Ins/CLAP/` |
+| `seclab-plugin.vst3` | `~/Library/Audio/Plug-Ins/VST3/` |
+| `seclab-plugin.component` (AU) | `~/Library/Audio/Plug-Ins/Components/` |
+| `seclab-plugin.app` (standalone) | `/Applications/` |
 
 Build them first (see [the xtask docs](../xtask/src/main.rs)):
 
@@ -64,8 +64,8 @@ For each bundle this runs, in effect:
 
 ```bash
 codesign --force --deep --options runtime --timestamp \
-  --sign "$DEVELOPER_ID" target/bundled/vb-plugin.vst3
-codesign --verify --deep --strict --verbose=2 target/bundled/vb-plugin.vst3
+  --sign "$DEVELOPER_ID" target/bundled/seclab-plugin.vst3
+codesign --verify --deep --strict --verbose=2 target/bundled/seclab-plugin.vst3
 ```
 
 - `--options runtime` enables the **hardened runtime**, which notarization requires.
@@ -87,10 +87,10 @@ For each **already-signed** bundle this runs, in effect:
 
 ```bash
 # notarytool needs an archive, not a raw bundle directory
-ditto -c -k --keepParent target/bundled/vb-plugin.vst3 target/bundled/vb-plugin.vst3.zip
-xcrun notarytool submit target/bundled/vb-plugin.vst3.zip \
+ditto -c -k --keepParent target/bundled/seclab-plugin.vst3 target/bundled/seclab-plugin.vst3.zip
+xcrun notarytool submit target/bundled/seclab-plugin.vst3.zip \
   --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple target/bundled/vb-plugin.vst3
+xcrun stapler staple target/bundled/seclab-plugin.vst3
 ```
 
 `--wait` blocks until Apple returns `Accepted` or `Invalid`. On `Invalid`, inspect the log:
@@ -107,11 +107,11 @@ end user does not need a network round-trip to Apple on first launch. The interm
 
 ```bash
 # Signature is valid and sealed
-codesign --verify --deep --strict --verbose=2 target/bundled/vb-plugin.vst3
+codesign --verify --deep --strict --verbose=2 target/bundled/seclab-plugin.vst3
 # Notarization ticket is stapled
-xcrun stapler validate target/bundled/vb-plugin.vst3
+xcrun stapler validate target/bundled/seclab-plugin.vst3
 # Gatekeeper acceptance (use the app for a clearer verdict)
-spctl --assess --type execute --verbose target/bundled/vb-plugin.app
+spctl --assess --type execute --verbose target/bundled/seclab-plugin.app
 ```
 
 ## Troubleshooting

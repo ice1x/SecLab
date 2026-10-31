@@ -1,0 +1,26 @@
+[package]
+name = "seclab-standalone"
+description = "SecLab — standalone app (cpal + editor)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+seclab-core.workspace = true
+seclab-nodes.workspace = true
+seclab-runtime.workspace = true
+# The standalone runs the editor as its own eframe window, so it needs the `app` feature
+# (off by default at the workspace level, where the plugin wants it off). `assistant-net`
+# turns on the AI assistant chat + Settings panels with the real network providers (reqwest)
+# and the OS keychain, so a user can run a cloud or a local (Ollama/LM Studio/llama.cpp) model
+# from the app.
+seclab-editor = { workspace = true, features = ["app", "assistant-net"] }
+cpal.workspace = true
+midir.workspace = true
+egui.workspace = true
+eframe.workspace = true
+
+[lints]
+workspace = true

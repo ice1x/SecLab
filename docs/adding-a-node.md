@@ -3,10 +3,10 @@
 SecLab's DSP library is open: a node is just a type that implements one trait plus a
 small descriptor telling the registry how to build it. This guide walks through adding a
 custom node end to end. The complete, compile-tested version of everything below lives in
-[`crates/vb-nodes/tests/custom_node.rs`](../crates/vb-nodes/tests/custom_node.rs) — the
+[`crates/seclab-nodes/tests/custom_node.rs`](../crates/seclab-nodes/tests/custom_node.rs) — the
 guide and that test are kept in step, so the code here is known to compile and run. A
 companion test,
-[`crates/vb-plugin/tests/custom_node_engine.rs`](../crates/vb-plugin/tests/custom_node_engine.rs),
+[`crates/seclab-plugin/tests/custom_node_engine.rs`](../crates/seclab-plugin/tests/custom_node_engine.rs),
 proves the same custom node also survives the project-document build path the plugin and
 editor use (`ProjectDoc` → `engine_from_doc`), and that an *unregistered* kind is a build
 error rather than a silent drop.
@@ -16,12 +16,12 @@ audio output, one `amount` parameter.
 
 ## 1. Implement `Processor`
 
-A node's DSP is a [`vb_core::Processor`]. `process` is called once per block with the
+A node's DSP is a [`seclab_core::Processor`]. `process` is called once per block with the
 input channels and a place to write the outputs; `reset` clears any internal state
 between runs (ours is stateless).
 
 ```rust
-use vb_core::{ProcessContext, Processor};
+use seclab_core::{ProcessContext, Processor};
 
 struct Drive {
     amount: f32,
@@ -52,14 +52,14 @@ Conventions worth following:
 
 ## 2. Describe it
 
-A [`vb_nodes::NodeDescriptor`] tells the registry how to build the node — its ports, its
+A [`seclab_nodes::NodeDescriptor`] tells the registry how to build the node — its ports, its
 default processor, its parameters, and how to build a processor from stored parameter
 values. **The factories are plain `fn` pointers**, so use free functions or *non-capturing*
 closures (a closure that captures nothing coerces to `fn`).
 
 ```rust
-use vb_core::{GraphNode, Parameter, Port, SignalType};
-use vb_nodes::NodeDescriptor;
+use seclab_core::{GraphNode, Parameter, Port, SignalType};
+use seclab_nodes::NodeDescriptor;
 
 fn drive_descriptor() -> NodeDescriptor {
     NodeDescriptor::new(
@@ -94,11 +94,11 @@ truncated list still builds a working node.
 
 Enum-like choices (a waveform, a filter type) are modelled as *stepped float* parameters
 for now — e.g. `Parameter::new("waveform", 0.0, 3.0, 0.0)` — and mapped back to the enum
-inside the factory. See the built-ins in `crates/vb-nodes/src/registry.rs` for examples.
+inside the factory. See the built-ins in `crates/seclab-nodes/src/registry.rs` for examples.
 
 ## 3. Register it
 
-Add the descriptor to a [`vb_nodes::Registry`]. Start from `with_builtins()` to keep every
+Add the descriptor to a [`seclab_nodes::Registry`]. Start from `with_builtins()` to keep every
 stock node, or from `new()` for an empty set.
 
 ```rust
@@ -111,19 +111,19 @@ it, and the project loader can build it by name.
 
 ## 4. Use it
 
-Nodes built from the registry drop straight into a [`vb_core::Graph`] and run in the
+Nodes built from the registry drop straight into a [`seclab_core::Graph`] and run in the
 engine:
 
 ```rust
 use std::collections::HashMap;
-use vb_core::{Engine, Graph, PortId, ProcessContext, Processor};
+use seclab_core::{Engine, Graph, PortId, ProcessContext, Processor};
 
 let mut graph = Graph::new();
 let osc = graph.add_node(registry.graph_node("oscillator").unwrap());
 let drive = graph.add_node(registry.graph_node("drive").unwrap());
 graph.connect(osc, PortId(0), drive, PortId(0)).unwrap();
 
-let ctx = vb_nodes::BuildContext::default();
+let ctx = seclab_nodes::BuildContext::default();
 let mut procs: HashMap<_, Box<dyn Processor>> = HashMap::new();
 procs.insert(osc, registry.processor("oscillator").unwrap());
 procs.insert(drive, registry.get("drive").unwrap().processor_with(&ctx, &[8.0]));
@@ -143,9 +143,9 @@ That is the whole extension surface — implement, describe, register, use.
 - [ ] If the node ships as a built-in, add it to `builtins()` and regenerate
       `docs/nodes.md` (there is a sync test).
 
-[`vb_core::Processor`]: ../crates/vb-core
-[`vb_nodes::NodeDescriptor`]: ../crates/vb-nodes/src/registry.rs
-[`vb_nodes::Registry`]: ../crates/vb-nodes/src/registry.rs
-[`crate::Vca`]: ../crates/vb-nodes/src/vca.rs
-[`crate::Vcf`]: ../crates/vb-nodes/src/vcf.rs
-[`crate::Vco`]: ../crates/vb-nodes/src/vco.rs
+[`seclab_core::Processor`]: ../crates/seclab-core
+[`seclab_nodes::NodeDescriptor`]: ../crates/seclab-nodes/src/registry.rs
+[`seclab_nodes::Registry`]: ../crates/seclab-nodes/src/registry.rs
+[`crate::Vca`]: ../crates/seclab-nodes/src/vca.rs
+[`crate::Vcf`]: ../crates/seclab-nodes/src/vcf.rs
+[`crate::Vco`]: ../crates/seclab-nodes/src/vco.rs

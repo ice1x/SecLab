@@ -88,7 +88,7 @@ pub fn stapler_args(bundle: &Path) -> Vec<String> {
 }
 
 /// The archive path for a bundle: the bundle path with `.zip` appended (e.g.
-/// `vb-plugin.vst3` → `vb-plugin.vst3.zip`), so it sits next to the bundle.
+/// `seclab-plugin.vst3` → `seclab-plugin.vst3.zip`), so it sits next to the bundle.
 #[must_use]
 pub fn archive_path_for(bundle: &Path) -> PathBuf {
     let mut name = bundle.as_os_str().to_owned();
@@ -172,8 +172,8 @@ mod tests {
     #[test]
     fn archive_path_appends_zip_next_to_the_bundle() {
         assert_eq!(
-            archive_path_for(Path::new("/b/vb-plugin.vst3")),
-            PathBuf::from("/b/vb-plugin.vst3.zip")
+            archive_path_for(Path::new("/b/seclab-plugin.vst3")),
+            PathBuf::from("/b/seclab-plugin.vst3.zip")
         );
     }
 
@@ -181,7 +181,12 @@ mod tests {
     fn signable_bundles_lists_only_known_extensions_sorted() {
         let dir = std::env::temp_dir().join(format!("vbsign-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
-        for name in ["vb-plugin.vst3", "vb-plugin.clap", "notes.txt", "readme.md"] {
+        for name in [
+            "seclab-plugin.vst3",
+            "seclab-plugin.clap",
+            "notes.txt",
+            "readme.md",
+        ] {
             std::fs::create_dir_all(dir.join(name)).unwrap();
         }
         // A plain file with a signable-looking extension is fine too — extension is the key.
@@ -192,7 +197,10 @@ mod tests {
             .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
-        assert_eq!(names, vec!["vb-plugin.clap", "vb-plugin.vst3", "z.app"]);
+        assert_eq!(
+            names,
+            vec!["seclab-plugin.clap", "seclab-plugin.vst3", "z.app"]
+        );
 
         std::fs::remove_dir_all(&dir).unwrap();
     }

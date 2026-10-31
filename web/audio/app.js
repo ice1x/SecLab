@@ -3,7 +3,7 @@
 // The synth runs entirely inside the AudioWorklet (the real-time audio thread). This file
 // only fetches the wasm, assembles the worklet module, wires a QWERTY keyboard to MIDI
 // note messages, and exposes a headless-verifiable self-test.
-const GLUE = 'pkg-nomod/vb_engine.js';
+const GLUE = 'pkg-nomod/seclab_engine.js';
 const WASM = 'pkg-nomod/vb_engine_bg.wasm';
 
 // QWERTY → MIDI (roughly one octave from 'a', with the black keys on the upper row).

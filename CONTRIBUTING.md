@@ -11,7 +11,7 @@ small and reviewable.
   ship with tests. See [Testing](#testing).
 - **SOLID.** The engine, nodes, UI and export are separated by clear interfaces (traits).
   Nodes plug into the engine as extensions; keep dependencies pointing inward toward
-  `vb-core`. Don't reach across layers.
+  `seclab-core`. Don't reach across layers.
 - **Green before push.** `fmt`, `clippy -D warnings` and `test` must pass locally before
   every commit, and in CI before merge.
 
@@ -19,13 +19,13 @@ small and reviewable.
 
 ```
 crates/
-  vb-core/        graph model, port types, scheduler, sample processing
-  vb-nodes/       DSP node library
-  vb-project/     project serialization (RON)
-  vb-runtime/     real-time graph execution
-  vb-editor/      egui node editor
-  vb-standalone/  standalone app (binary)
-  vb-plugin/      CLAP export / VST3-AU packaging
+  seclab-core/        graph model, port types, scheduler, sample processing
+  seclab-nodes/       DSP node library
+  seclab-project/     project serialization (RON)
+  seclab-runtime/     real-time graph execution
+  seclab-editor/      egui node editor
+  seclab-standalone/  standalone app (binary)
+  seclab-plugin/      CLAP export / VST3-AU packaging
 ```
 
 ## Local checks
@@ -46,7 +46,7 @@ warning level both in CI and in-tree via `[workspace.lints]`, so a warning is an
 - **Unit tests** live next to the code (`#[cfg(test)] mod tests { … }`), written first.
 - **Integration tests** go in a crate's `tests/` directory and exercise realistic
   workflows once a feature works.
-- Real-time code (`vb-runtime`) must be tested for **no allocations/locks** on the audio
+- Real-time code (`seclab-runtime`) must be tested for **no allocations/locks** on the audio
   path where practical.
 
 ## Branches & commits

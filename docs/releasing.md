@@ -11,10 +11,10 @@ The four macOS bundles the build produces under `target/bundled/`, packaged into
 
 | Bundle | Format | Install location |
 | --- | --- | --- |
-| `vb-plugin.clap` | CLAP | `~/Library/Audio/Plug-Ins/CLAP/` |
-| `vb-plugin.vst3` | VST3 (clap-wrapper) | `~/Library/Audio/Plug-Ins/VST3/` |
-| `vb-plugin.component` | AUv2 (clap-wrapper) | `~/Library/Audio/Plug-Ins/Components/` |
-| `vb-plugin.app` | wrapped standalone | `/Applications/` |
+| `seclab-plugin.clap` | CLAP | `~/Library/Audio/Plug-Ins/CLAP/` |
+| `seclab-plugin.vst3` | VST3 (clap-wrapper) | `~/Library/Audio/Plug-Ins/VST3/` |
+| `seclab-plugin.component` | AUv2 (clap-wrapper) | `~/Library/Audio/Plug-Ins/Components/` |
+| `seclab-plugin.app` | wrapped standalone | `/Applications/` |
 
 The VST3 and AU dynamically load the CLAP from the standard locations, so install the
 `.clap` alongside them. Each bundle already carries the MVP synth's default patch (the
@@ -71,9 +71,9 @@ flow.
 The same bundles, without CI:
 
 ```bash
-cargo xtask bundle vb-plugin --release   # CLAP
+cargo xtask bundle seclab-plugin --release   # CLAP
 cargo xtask bundle-vst3                   # VST3
 cargo xtask bundle-auv2                   # AUv2
 cargo xtask bundle-standalone             # standalone .app
-# → target/bundled/{vb-plugin.clap,.vst3,.component,.app}
+# → target/bundled/{seclab-plugin.clap,.vst3,.component,.app}
 ```

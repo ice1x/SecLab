@@ -58,13 +58,13 @@ safe Rust and opening the road to WASM.
 ```
 SecLab/
 ├─ crates/
-│  ├─ vb-core/        # graph model, port types, scheduler, sample processing
-│  ├─ vb-nodes/       # DSP node library (osc, filters, envelopes, math, MIDI)
-│  ├─ vb-project/     # project serialization (graph format, save/load, versions)
-│  ├─ vb-runtime/     # real-time graph execution (buffers, parameters, MIDI)
-│  ├─ vb-editor/      # egui node editor (canvas, wires, inspector, undo)
-│  ├─ vb-standalone/  # standalone app (cpal + editor)
-│  └─ vb-plugin/      # CLAP export (nih-plug), VST3/AU build via clap-wrapper
+│  ├─ seclab-core/        # graph model, port types, scheduler, sample processing
+│  ├─ seclab-nodes/       # DSP node library (osc, filters, envelopes, math, MIDI)
+│  ├─ seclab-project/     # project serialization (graph format, save/load, versions)
+│  ├─ seclab-runtime/     # real-time graph execution (buffers, parameters, MIDI)
+│  ├─ seclab-editor/      # egui node editor (canvas, wires, inspector, undo)
+│  ├─ seclab-standalone/  # standalone app (cpal + editor)
+│  └─ seclab-plugin/      # CLAP export (nih-plug), VST3/AU build via clap-wrapper
 ├─ README.md          # project overview + task backlog
 └─ LICENSE            # Apache-2.0
 ```
@@ -73,7 +73,7 @@ SecLab/
 
 ```bash
 # run the standalone editor
-cargo run -p vb-standalone
+cargo run -p seclab-standalone
 
 # tests / lint / format (required before every commit)
 cargo test
@@ -126,7 +126,7 @@ add API key ──▶ describe the device ──▶ critique & clarify ──▶
                         └──────────── iterate in chat ◀───────────────┘
                                                                       │ accept
                                                                       ▼
-                                                    validate (vb-core) ──▶ audition
+                                                    validate (seclab-core) ──▶ audition
                                                     live in the editor ──▶ export
                                                     VST3 / AU / CLAP bundle
 ```
@@ -143,7 +143,7 @@ add API key ──▶ describe the device ──▶ critique & clarify ──▶
    an auto-generated node reference (from the registry: kinds, ports, parameters,
    categories — 000086) compressed into a compact "node card" corpus that fits the
    context window. It can only propose nodes that exist; the schema it emits is the
-   same RON `ProjectDoc` the editor loads, so `vb-core` validation is the hard gate —
+   same RON `ProjectDoc` the editor loads, so `seclab-core` validation is the hard gate —
    an invalid proposal never reaches the canvas, it goes back to the model with the
    validator's issue list until it converges or the assistant admits defeat.
    *Beyond MVP, grounding upgrades from a static card corpus to a **knowledge graph in
@@ -216,7 +216,7 @@ the definition of done.
 
 ### Epic 1 — Project infrastructure & CI
 
-- [x] 000001 — Initialize the Cargo workspace (`Cargo.toml` with members: `vb-core`, `vb-nodes`, `vb-project`, `vb-runtime`, `vb-editor`, `vb-standalone`, `vb-plugin`)
+- [x] 000001 — Initialize the Cargo workspace (`Cargo.toml` with members: `seclab-core`, `seclab-nodes`, `seclab-project`, `seclab-runtime`, `seclab-editor`, `seclab-standalone`, `seclab-plugin`)
 - [x] 000002 — Update `.gitignore` for Rust (`/target`, `Cargo.lock` policy, `*.rs.bk`)
 - [x] 000003 — Set up `rustfmt.toml` and `clippy` (deny warnings) as the repo standard
 - [x] 000004 — Set up CI (GitHub Actions): `cargo test`, `cargo clippy -D warnings`, `cargo fmt --check`
@@ -227,7 +227,7 @@ the definition of done.
 - [x] 000009 — Set up `cargo-nextest` (optional) for fast test runs — [`.config/nextest.toml`](.config/nextest.toml) (default + `ci` profiles; targeted auto-retries for the load-sensitive timing tests)
 - [x] 000010 — Set up test coverage measurement (`cargo-llvm-cov`) in CI — non-blocking advisory `coverage` job in [ci.yml](.github/workflows/ci.yml) (baseline ~85% line coverage)
 
-### Epic 2 — Core: DSP graph engine (`vb-core`)
+### Epic 2 — Core: DSP graph engine (`seclab-core`)
 
 - [x] 000011 — Design the data model: `Node`, `Port`, `Edge`, `Graph` (interfaces/traits, SOLID) 🧪
 - [x] 000012 — Port types and compatibility rules: `Audio`, `Control/CV`, `Event/MIDI` 🧪
@@ -243,7 +243,7 @@ the definition of done.
 - [x] 000022 — Graph diagnostics: clear errors (incompatible ports, dangling inputs) 🧪
 - [x] 000023 — Core benchmarks (`criterion`) on typical graphs
 
-### Epic 3 — Node library (`vb-nodes`)
+### Epic 3 — Node library (`seclab-nodes`)
 
 - [x] 000024 — Generator: oscillator (sine/saw/square/triangle) with anti-aliasing 🧪
 - [x] 000025 — Noise generator (white/pink) 🧪
@@ -264,7 +264,7 @@ the definition of done.
 - [x] 000132 — VCF node (voltage-controlled filter): a biquad whose cutoff a control input sweeps (`cutoff = base_hz + amount_hz·cv`) — the README MVP's "LFO on cutoff", with a live filter-sweep example 🧪
 - [x] 000133 — VCO node (control-modulated oscillator pitch): an oscillator whose frequency a control input sweeps exponentially (`freq = base_hz·2^(amount_oct·cv)`, 1 V/oct) — the pitch leg of modulation alongside VCA/VCF, so an LFO/envelope can vibrato or sweep pitch, with a live vibrato example 🧪
 
-### Epic 4 — Node editor / UI (`vb-editor`, egui)
+### Epic 4 — Node editor / UI (`seclab-editor`, egui)
 
 - [x] 000039 — `egui` window shell + infinite canvas (pan/zoom) 🧪
 - [x] 000040 — Node rendering (title, ports, body, selection) 🧪
@@ -280,7 +280,7 @@ the definition of done.
 - [x] 000050 — Grid/alignment/auto-layout of nodes 🧪
 - [x] 000051 — Theme and "better than Reaktor" styling (visual polish)
 
-### Epic 5 — Project serialization (`vb-project`)
+### Epic 5 — Project serialization (`seclab-project`)
 
 > Layer separation: **a single exported patch** = a flat RON file (embedded into the
 > plugin, no DB dependency). The editor's **patch/preset/module library** = optional
@@ -293,7 +293,7 @@ the definition of done.
 - [x] 000055 — Export/import a single macro-node as a reusable module 🧪
 - [x] 000056 — Validate a loaded file (robustness to corrupt/foreign data) 🧪
 
-### Epic 6 — Standalone audio runtime (`vb-runtime`, `vb-standalone`)
+### Epic 6 — Standalone audio runtime (`seclab-runtime`, `seclab-standalone`)
 
 - [x] 000057 — RT graph executor: no allocations/locks in the audio thread 🧪
 - [x] 000058 — Double buffering / thread-safe delivery of graph edits into the RT thread 🧪
@@ -303,7 +303,7 @@ the definition of done.
 - [x] 000062 — Wire editor + runtime together: graph changes are "audible" in real time 🧪
 - [x] 000063 — Monitor CPU load and xruns 🧪
 
-### Epic 7 — Plugin export (`vb-plugin`: CLAP → VST3/AU)
+### Epic 7 — Plugin export (`seclab-plugin`: CLAP → VST3/AU)
 
 - [x] 000064 — `nih-plug` plugin scaffold, **CLAP** export, load the serialized graph 🧪
 - [x] 000065 — Route plugin parameters (host automation) into graph parameters 🧪
@@ -341,9 +341,9 @@ the definition of done.
 
 ### Epic 9 — WebUI (future)
 
-- [x] 000081 — Build `vb-editor` to **WASM** (egui/eframe web target) — proof of concept
+- [x] 000081 — Build `seclab-editor` to **WASM** (egui/eframe web target) — proof of concept
 - [x] 000082 — Edit the graph in the browser (no audio) with serialization
-- [x] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM) — the nih-plug-free [`vb-engine`](crates/vb-engine) core compiles to wasm; a runnable AudioWorklet demo + headless Node smoke test live in [`web/audio`](web/audio) 🧪
+- [x] 000083 — Audio prototype in the browser via WebAudio/AudioWorklet (engine in WASM) — the nih-plug-free [`seclab-engine`](crates/seclab-engine) core compiles to wasm; a runnable AudioWorklet demo + headless Node smoke test live in [`web/audio`](web/audio) 🧪
 - [x] 000084 — Define the web/native runtime boundary and a shared project format
 
 ### Epic 10 — Documentation, examples, release
@@ -351,10 +351,10 @@ the definition of done.
 - [x] 000085 — User guide: build your first plugin (osc→filter→envelope→out) — [docs/first-plugin.md](docs/first-plugin.md), backed by the tested `examples/first_synth.ron` patch
 - [x] 000086 — Node reference (auto-generated from the registry: categories, ports, parameters)
 - [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo, LFO filter sweep) 🧪
-- [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/vb-nodes/tests/custom_node.rs` 🧪
+- [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/seclab-nodes/tests/custom_node.rs` 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
 - [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI — **macOS leg wired**: [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the CLAP/VST3/AU/standalone bundles on a `v*` tag (or manual dispatch) via the existing `cargo xtask` commands, zips them, and uploads a `SecLab-macos-bundles` artifact; code-signing/notarization run only when the `DEVELOPER_ID`/`NOTARY_PROFILE` secrets are set (see [docs/releasing.md](docs/releasing.md)). Linux/Windows legs await the runner-billing fix (blocking `cross-platform.yml` too)
-- [x] 000091 — Versioning and CHANGELOG — [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog; documents the crate SemVer vs. the separate project format version), guarded by a test tying it to `vb_project::FORMAT_VERSION` 🧪
+- [x] 000091 — Versioning and CHANGELOG — [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog; documents the crate SemVer vs. the separate project format version), guarded by a test tying it to `seclab_project::FORMAT_VERSION` 🧪
 - [x] 000092 — MVP release: working export of a minimal synth to VST3 + AU — `cargo xtask bundle-vst3` / `bundle-auv2` wrap the CLAP into loadable VST3/AU bundles carrying the default synth patch; the AU passes Apple's `auval` in CI (`au validate` job) and the VST3/CLAP pass `clap-validator`; the release workflow packages both (see [docs/releasing.md](docs/releasing.md)) 🧪
 
 ### Epic 11 — Patch/preset library on drevo (optional)
@@ -373,11 +373,11 @@ the definition of done.
 > (ref: drevo [#202](https://github.com/ice1x/drevo/issues/202),
 > [#251](https://github.com/ice1x/drevo/issues/251), [#48](https://github.com/ice1x/drevo/issues/48)).
 
-- [x] 000093 — Integration assessment: add `drevo` as a dependency behind the `library` feature flag, CRUD smoke test — new `vb-library` crate; drevo embedded via its direct Rust API (`redb-backend`, no Bolt), opt-in `--features library`; CRUD + JSON-properties smoke test green 🧪
-- [x] 000094 — Storage schema: `Patch` / `MacroNode` / `Preset` nodes, `uses` / `derived-from` / `tagged` edges — typed `Library` layer over drevo (`vb-library/src/library.rs`) with `kind`/`rel` vocabularies and kind-scoped traversals 🧪
+- [x] 000093 — Integration assessment: add `drevo` as a dependency behind the `library` feature flag, CRUD smoke test — new `seclab-library` crate; drevo embedded via its direct Rust API (`redb-backend`, no Bolt), opt-in `--features library`; CRUD + JSON-properties smoke test green 🧪
+- [x] 000094 — Storage schema: `Patch` / `MacroNode` / `Preset` nodes, `uses` / `derived-from` / `tagged` edges — typed `Library` layer over drevo (`seclab-library/src/library.rs`) with `kind`/`rel` vocabularies and kind-scoped traversals 🧪
 - [x] 000095 — Import a patch (RON) → write metadata and links into drevo (RON stays the source of truth) — `import_patch(ProjectDoc)` stores summary metadata (node/edge counts, kinds, format version) + `tagged` links to `kind:*` facets; `patches_with_node_kind` queries them 🧪
 - [x] 000096 — Full-text search over the library (name, tags, description) via drevo's FTS/BM25 — `Library::search` / `search_patches` (BM25, trigram); patch descriptions stored in the FTS-indexed body 🧪
-- [x] 000097 — UI: library browser in the editor (list/search/filter by tags, insert a macro-node onto the canvas) — `LibraryBrowser` view-model (`vb-editor/src/library.rs`: case-insensitive name search + AND tag facets + `all_tags` chips) rendered by `library_browser_ui` (`library_panel.rs`) in the palette's `library` section; clicking an entry calls `import_module_by_name` to drop the saved macro onto the canvas. Items load from `modules_dir` (`refresh_library`) and reload keeps the live filters. Covered end-to-end headlessly: disk→list→filter, import→macro node on canvas (`node_count +1`, `is_macro`, selected), full-frame render with the section 🧪
+- [x] 000097 — UI: library browser in the editor (list/search/filter by tags, insert a macro-node onto the canvas) — `LibraryBrowser` view-model (`seclab-editor/src/library.rs`: case-insensitive name search + AND tag facets + `all_tags` chips) rendered by `library_browser_ui` (`library_panel.rs`) in the palette's `library` section; clicking an entry calls `import_module_by_name` to drop the saved macro onto the canvas. Items load from `modules_dir` (`refresh_library`) and reload keeps the live filters. Covered end-to-end headlessly: disk→list→filter, import→macro node on canvas (`node_count +1`, `is_macro`, selected), full-frame render with the section 🧪
 - [x] 000098 — Store preset banks and "preset → patch" links in drevo — `add_preset_for` (values + `derived-from` link), `create_bank`/`add_to_bank` (`contains`), and `presets_for_patch`/`patch_of_preset`/`presets_in_bank` queries 🧪
 - [x] 000099 — 🧩 Verify the `library` layer builds to WASM (shared path with Epic 9)
 - [x] 000100 — Library export/backup and drevo schema migrations — `Library::export_json`/`import_json` (idempotent JSON snapshots) + `migrate` (up/down) pass-through 🧪
@@ -388,7 +388,7 @@ the definition of done.
 > human + assistant pair. The foundation (000101–000102) is laid early, in parallel with
 > the core. Default models — **Claude (Anthropic)** behind a provider abstraction.
 > Principle: **AI proposes — the user applies**; edits go through undoable commands with
-> preview, the engine (`vb-core`) stays the source of truth and validator.
+> preview, the engine (`seclab-core`) stays the source of truth and validator.
 >
 > **The assistant's knowledge base = the same embedded drevo** (vector+FTS+auto-embedding,
 > direct Rust API `db.rs`), not a separate vector store. Access is hidden behind a
@@ -397,7 +397,7 @@ the definition of done.
 
 - [x] 000101 — 🏗️ LLM provider abstraction (`AiProvider` trait), Claude by default, model/key config 🧪
 - [x] 000102 — 🏗️ Text/JSON representation of the graph for LLM context (prompt serialization, round-trip) 🧪
-- [x] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `vb-core` 🧪
+- [x] 000103 — NL → patch: generate a graph from a description, mandatory validation of the result via `seclab-core` 🧪
 - [x] 000104 — NL edit of an existing graph: the assistant returns a diff, preview before applying 🧪
 - [x] 000105 — Apply assistant edits as undoable commands (shared stack with manual editing) 🧪
 - [x] 000106 — Suggestions: next node, auto-fix incompatible/dangling connections 🧪
@@ -417,7 +417,7 @@ the definition of done.
 - [x] 000117 — Skill: "design a synth/effect from a description" (guided questions → draft graph) 🧪
 - [x] 000118 — Skill: "explain / repair an existing patch" (uses validator issues as input) 🧪
 - [x] 000119 — Critic pass (Occam's razor): review request + draft for redundant nodes/routing, surface trade-offs as short bullets 🧪
-- [x] 000120 — Propose→validate→repair loop: every proposal gated by `vb-core`/`vb-project` validation, issues fed back to the model until convergence (with retry cap) 🧪
+- [x] 000120 — Propose→validate→repair loop: every proposal gated by `seclab-core`/`seclab-project` validation, issues fed back to the model until convergence (with retry cap) 🧪
 - [x] 000121 — Context compression: structural graph summary + running "session brief" distillation of earlier turns 🧪
 - [x] 000122 — 🧩 Token/cost budget guard: estimate and report per-exchange usage, warn before large sends 🧪
 - [x] 000123 — "What will be sent?" inspector: show the exact outgoing payload before the first request of a session
@@ -536,7 +536,7 @@ values), so a preset can pin exact knob settings, not just a graph.
 - [x] 000160 — 🧩 **Showcase example patches** for the new nodes — `examples/supersaw_lead.ron`
   (supersaw → ladder → note-gated VCA), `examples/fm_ep.ron` (2-operator FM electric piano),
   `examples/auto_wah.ron` (saw drone → tremolo → envelope-follower-swept VCF); each wired into
-  the `vb-plugin` examples manifest with a targeted engine test 🧪
+  the `seclab-plugin` examples manifest with a targeted engine test 🧪
 - [x] 000161 — 🧩 **AudioUnit validation gate** — `cargo xtask validate-au` reads the built
   `.component`'s codes and runs Apple's `auval` (authoritative AU check: format negotiation,
   render at all sample rates, params, MIDI); a non-blocking CI `au validate` job builds the
@@ -607,7 +607,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   through `sample-hold` into a stepped, pseudo-random `ladder` cutoff — the classic sci-fi
   burble). All note-gated, in the example manifest + factory palette, each with a behavioural
   test 🧪
-- [x] 000220 — 🛠️ **Extract a shared STFT overlap-add engine (`vb_nodes::stft`)** — `pitch-shifter`
+- [x] 000220 — 🛠️ **Extract a shared STFT overlap-add engine (`seclab_nodes::stft`)** — `pitch-shifter`
   and `spectral-freeze` each inlined the same short-time-Fourier scaffolding (Hann analysis FIFO,
   per-hop forward FFT, inverse FFT + constant-overlap-add, FIFO/accumulator shifts, latency-matched
   dry delay), differing only in the spectral transform between analysis and synthesis. That now
@@ -616,7 +616,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
-- [x] 000244 — 🔧 **Adapt `vb-library` to the drevo 0.2.0 `Properties` API** — the sibling `drevo`
+- [x] 000245 — 🏷️ **Rename the internal crates `vb-*` → `seclab-*`** — `vb` was the old brand's
+  initials (Vst Bomb), keeping the dropped name in every crate. All ten crates renamed (`vb-core` →
+  `seclab-core`, … `vb-ai`/`vb-library`/`vb-plugin`): directories, package names, workspace
+  members/deps, inter-crate deps, Rust paths (`vb_core` → `seclab_core`), the cdylib
+  (`libvb_plugin` → `libseclab_plugin`), CI/release commands, and the bundle filenames
+  (`seclab-plugin.{clap,vst3,component,app}`). `xtask` keeps its name. Mechanical, no behaviour change;
+  all builds/tests/clippy/fmt pass 🧪
+- [x] 000244 — 🔧 **Adapt `seclab-library` to the drevo 0.2.0 `Properties` API** — the sibling `drevo`
   checkout bumped `drevo-core` 0.1.1 → 0.2.0, reshaping `Properties` from a `HashMap` tuple-struct
   into an opaque sorted map (no `Properties(map)` ctor, no `.0`). Migrated the five construction sites
   to `Properties::from(map)` and the read sites to `.get(key)` / `props[key]` (now `Index<&str>`),
@@ -627,7 +634,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   across app/window title, in-editor version label, plugin `NAME`/`CLAP_ID` (`com.ice1x.seclab`),
   plugin structs (`VstBomb`→`SecLab`), all docs/README/links, crate descriptions, the `docs/nodes.md`
   header, and the CI artifact name. Keychain service and the modules/settings dir moved with the brand
-  (safe pre-release). Internal crate names (`vb-*`) and the CLAP bundle filename (`vb-plugin.clap`)
+  (safe pre-release). Internal crate names (`vb-*`) and the CLAP bundle filename (`seclab-plugin.clap`)
   left unchanged, so the clap-validator gate is unaffected 🧪
 - [x] 000242 — 🔐 **The Submit gate defers to `send_blocker`, closing a key-check divergence** —
   the editor's Submit handler enforced privacy (000110) + blank model (000237) but **skipped the key
@@ -644,13 +651,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   endpoint memory (`RememberedEndpoints`, mirroring `RememberedModels`): `select_provider` saves the
   outgoing override and restores the incoming provider's own (`None` → provider default), `set_endpoint`
   records it against the current provider. Persists in `settings.ron` (`#[serde(default)]`, omitted
-  while empty), older files load unchanged. Unit-tested in vb-ai 🧪
+  while empty), older files load unchanged. Unit-tested in seclab-ai 🧪
 - [x] 000240 — 🔢 **The generation token budget is floored at 1** — `max_tokens` is cloned verbatim
   into both senders' request bodies (`"max_tokens": …`) and both APIs reject `0` (must be positive),
   yet the Settings panel's bare `DragValue` has no floor, so dragging to zero read "ready ✓" then
   failed server-side — the same ready-but-fails trap as 000237–000239, for sampling. `set_max_tokens`
   now floors at 1 (mirroring `set_temperature`'s clamp); only the lower bound is clamped since the
-  upper is model-dependent. Unit-tested in vb-ai 🧪
+  upper is model-dependent. Unit-tested in seclab-ai 🧪
 - [x] 000239 — ✂️ **The model identifier is trimmed before it is stored and sent** — a model id is
   cloned verbatim into the request body (`"model": …`), yet `set_model` kept it raw while readiness
   only trimmed to test for *emptiness*, so a pasted `"qwen2.5-coder:14b "` (stray trailing space) read
@@ -658,7 +665,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   blank (000237) or mismatched (000238) model. `AssistantSettings::set_model` now trims its input (into
   both the live config and the per-provider memory), as `store_key`/`set_endpoint` already do, and
   `with` trims a model restored from an older `settings.ron`; a whitespace-only value collapses to
-  empty → "no model selected". Unit-tested in vb-ai 🧪
+  empty → "no model selected". Unit-tested in seclab-ai 🧪
 - [x] 000238 — 🎛️ **Each provider remembers its own model** — provider model ids are not
   interchangeable (a `claude-…` id means nothing to Ollama), but selecting a new provider used to
   leave the old model behind, so a keyless local server read "ready ✓" and then failed server-side
@@ -666,14 +673,14 @@ values), so a preset can pin exact knob settings, not just a graph.
   saves the outgoing model and restores the incoming provider's own (blank → "no model selected", per
   000237); `set_model` records it against the current provider. Switching back and forth returns to
   each provider's own model; persisted in `settings.ron` (field `#[serde(default)]`, omitted while
-  all-blank, so older files load unchanged). Unit-tested in vb-ai and the editor 🧪
+  all-blank, so older files load unchanged). Unit-tested in seclab-ai and the editor 🧪
 - [x] 000237 — 🚦 **Readiness flags a missing model and the send refuses one** — the keyless local
   provider needs no key, so once online and consented the only remaining gate is a chosen model; a
-  blank model id otherwise sails through to a confusing server-side rejection. `vb_ai::SendBlocker`
+  blank model id otherwise sails through to a confusing server-side rejection. `seclab_ai::SendBlocker`
   gains `NoModel`, `AssistantSettings::send_blocker` returns it (after the privacy/key gates) for a
   blank model, so the Settings readiness line reads *"not ready: no model selected"*; the editor's
   Submit handler mirrors it with *"cannot send: no model selected"*, spawning no worker. Pure
-  view-model logic, unit-tested in vb-ai and at the editor layer (send guard + the panel branch) 🧪
+  view-model logic, unit-tested in seclab-ai and at the editor layer (send guard + the panel branch) 🧪
 - [x] 000236 — 🧲 **Settings offers the local server's models as one-click picks** — building on
   000235, the assistant Settings panel gains a **"↻ fetch"** button for the local provider that
   queries the configured server (blank → Ollama) and lists its installed models as selectable chips,
@@ -681,7 +688,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   `SettingsAction::FetchModels` → `EditorApp::fetch_assistant_models` (keyless `LocalProvider`, under
   `assistant-net`); the fetched list lives on `AssistantHost::models`. Panel branches tested headless;
   the live fetch follows the gated-but-untested network pattern 🧪
-- [x] 000235 — 📋 **The local provider can list its installed models** — `vb_ai::LocalProvider::list_models`
+- [x] 000235 — 📋 **The local provider can list its installed models** — `seclab_ai::LocalProvider::list_models`
   queries the local server's `GET /v1/models` (every OpenAI-compatible server exposes it beside
   `/chat/completions`) and returns the installed model ids, so a UI can offer them as a picklist
   instead of making the user type `qwen2.5-coder:14b`. New pure helpers `openai::models_url` (derives
@@ -690,13 +697,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   `MockTransport`. No Settings-panel wiring yet — a model picklist is the follow-up 🧪
 - [x] 000234 — 🎚️ **Local-server endpoint presets + provider-aware model hints in Settings** — with the
   local provider selected, one-click preset buttons (Ollama / LM Studio / llama.cpp) fill the endpoint
-  with each backend's default URL, from a new `vb_ai::LocalBackend::ALL`; no more remembering
+  with each backend's default URL, from a new `seclab_ai::LocalBackend::ALL`; no more remembering
   `localhost:11434/v1/chat/completions`. The model placeholder adapts per provider (`e.g.
   qwen2.5-coder:14b` for local). Pure UI/view-model, offline tests 🧪
 - [x] 000233 — 💬 **The AI assistant is live in the standalone app (chat + Settings, persisted)** — the
   NL→patch assistant, the Settings view-model, `settings.ron` persistence and the local keyless
   provider all existed behind the `assistant` feature, which no shipping binary enabled, so the panels
-  were unreachable outside tests. `vb-standalone` now builds `vb-editor` with `assistant-net`: the chat
+  were unreachable outside tests. `seclab-standalone` now builds `seclab-editor` with `assistant-net`: the chat
   and provider/model/endpoint/privacy Settings panels render in the real app with the live network
   providers and the OS keychain. `EditorApp::load_assistant_settings` restores the saved choices from
   `settings.ron` at startup, and "apply / connect" saves them (never the key). So: open the app, pick
@@ -714,11 +721,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   keychain read. Cloud providers unchanged. Offline tests 🧪
 - [x] 000231 — ⚙️ **Assistant settings persist to `settings.ron` — keys stay in the keychain** — the
   Settings view-model (provider, model, token budget, temperature, endpoint override, offline/consent
-  policy) was in-memory only, so every restart reset the provider/model choice. A new `vb_ai::persist`
+  policy) was in-memory only, so every restart reset the provider/model choice. A new `seclab_ai::persist`
   module reads/writes those choices as RON: `save_settings(dir, &settings)` / `load_settings(dir)`, where
   a missing file is the normal first-run default and a corrupt file errors rather than silently resetting.
-  The directory is the caller's (the apps pass `user_modules_dir()`), keeping `vb-ai` free of
-  platform-path logic and of a `vb-editor` dependency. **No key is ever written** — `AssistantSettings`
+  The directory is the caller's (the apps pass `user_modules_dir()`), keeping `seclab-ai` free of
+  platform-path logic and of a `seclab-editor` dependency. **No key is ever written** — `AssistantSettings`
   holds none (it reads presence from the `KeyStore`; the secret stays in the OS keychain), and a test
   saves with a key configured then asserts the on-disk bytes never contain it. Pure filesystem + RON, no
   network 🧪
@@ -731,13 +738,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   (`patch_issues`) now runs a **panel-coherence** gate: widget labels must be known, `widgets`/`values`
   must not outnumber the kind's parameters, every value must sit inside its registry `min..max`, hidden
   indices must exist, and `panel_color` must be `#rrggbb` — an incoherent panel is fed back for repair.
-  The valid-label set lives once as `vb_project::VALID_WIDGET_LABELS` (a `vb-editor` test pins its
+  The valid-label set lives once as `seclab_project::VALID_WIDGET_LABELS` (a `seclab-editor` test pins its
   `WidgetKind` enum to the same set). Fully offline tests 🧪
 - [x] 000229 — 🤖 **The assistant authors the control panel, not just the graph** (prompt v2) — the
   NL→patch contract was structure-only (kinds/ports/edges), so a generated patch arrived as a bare
   graph with an auto-gridded default panel the model never chose. `NodeEntry` already carried the
   interface (`values`/`widgets`/`panel_pos`/`panel_color`/`panel_hidden`, optional via serde) and
-  `from_ron` already accepted it — only the contract was silent. `vb-ai`'s prompt is now `system_v2.md`
+  `from_ron` already accepted it — only the contract was silent. `seclab-ai`'s prompt is now `system_v2.md`
   (`PROMPT_VERSION` → 2) with a **"Designing the interface"** section documenting each field and the
   five valid widget labels (`knob`/`slider`/`fader`/`switch`/`xy-pad`); the embedded example is
   enriched to demonstrate them and regenerated from the graph API; the generate/edit pipeline passes
@@ -779,7 +786,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   the pitch, so `amount = 0` is a faithful round-trip and `amount → 1` smears transients and blooms a
   note into a long, clean decaying tail after the input stops — a reverb-like "spectral smear". Tails
   stay clean because each bin holds its last audible phase advance through silence instead of rotating
-  on numerical noise. Fourth node on the shared `vb_nodes::stft` engine (000220), reusing the
+  on numerical noise. Fourth node on the shared `seclab_nodes::stft` engine (000220), reusing the
   `spectral-freeze` phase-vocoder structure with continuous smoothing instead of a hard freeze. Params
   `amount` (0..0.999) / `mix`, `effect` category, `latency_frames`, live `set_params`. Unit-tested
   (no-blur reconstructs; a burst→silence leaves a 440 Hz tail that grows with `amount`; silence/dry/
@@ -789,7 +796,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   Destroying phase coherence removes all pitch, but the preserved magnitude envelope keeps the timbre
   — a sung vowel becomes the same vowel whispered. DAFX (Zölzer) `ft = abs(f)·exp(i·rand)`; the phase
   comes from a seeded xorshift32 PRNG (same seed as `noise`) so renders are deterministic and `reset`
-  replays. Third node on the shared `vb_nodes::stft` engine (000220), memoryless per frame but for the
+  replays. Third node on the shared `seclab_nodes::stft` engine (000220), memoryless per frame but for the
   PRNG. Single `mix` param, `effect` category, `latency_frames`, live `set_params`. Unit-tested on the
   law (a 440 Hz tone's tonality ≈1 collapses to ≈0.0005 while energy stays in-band) + determinism +
   silence/dry/bounded + registry test. `docs/nodes.md` regenerated 🧪
@@ -799,7 +806,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   STEP_SIZE` (≈187.5 Hz at 48 kHz) and its harmonics **regardless of input pitch**, while the timbre
   (magnitude envelope) is preserved — a monotone, buzzy robot. DAFX (Zölzer) `r = abs(f)`; the
   reference `fftshift` that centres the zero-phase pulse is folded into the frequency domain as the
-  `(-1)^k` half-frame shift. Second node on the shared `vb_nodes::stft` engine (000220), memoryless
+  `(-1)^k` half-frame shift. Second node on the shared `seclab_nodes::stft` engine (000220), memoryless
   per frame like `spectral-gate`. Single `mix` param, `effect` category, `latency_frames`, live
   `set_params`. Unit-tested on the DSP law (output autocorrelation at lag `STEP_SIZE` ≈1 while the dry
   tone is not; a different input pitch gives the same hop period) + silence/dry/bounded + registry
@@ -808,7 +815,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   gate decision is made **per bin**, not on the whole signal. Each frame keeps only the bins within
   `threshold_db` of that frame's loudest bin and zeroes the rest, so a tone over a hiss floor comes
   out clean and, pushed harder, a sound is stripped to its strongest partials (threshold is
-  peak-relative, so it tracks level). First node on the shared `vb_nodes::stft` engine (000220) —
+  peak-relative, so it tracks level). First node on the shared `seclab_nodes::stft` engine (000220) —
   the whole thing is one ~15-line transform, no phase state, proving the refactor's payoff. Params
   `threshold_db` (−120..0) / `mix`, `effect` category, `latency_frames`, live `set_params`.
   Unit-tested (near-open reconstructs, −40 dB partial gated at −30 dB and returns at −50 dB, dry mix,
@@ -817,7 +824,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   spectrum and sustains it indefinitely (an instant of sound → endless pad). `freeze` control low =
   faithful STFT resynthesis of the input; `freeze` high = holds the last magnitude spectrum and
   keeps advancing each bin's phase, so the drone rings on through silence and ignores later input.
-  Same STFT overlap-add engine as the pitch shifter on the shared `vb_nodes::fft`; unfrozen the
+  Same STFT overlap-add engine as the pitch shifter on the shared `seclab_nodes::fft`; unfrozen the
   synthesis phase telescopes back to the true phase (reconstruction), frozen it rotates the held
   magnitudes at their captured pitch. Input 0 audio + input 1 `freeze` control, param `mix`,
   `effect` category, `latency_frames`, live `set_params`. Unit-tested: faithful unfrozen
@@ -827,7 +834,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   effect imprinting the spectral envelope of a **modulator** (voice) onto a **carrier** (synth).
   Modulator → band-pass bank → per-band envelope followers; carrier → same bank, each band gated by
   its modulator envelope, summed. 16 log-spaced constant-Q bands (80 Hz–7 kHz; Moog-16 band count,
-  log spacing per MFOS), each an RBJ band-pass on the shared `vb_nodes::biquad` core (reuses the
+  log spacing per MFOS), each an RBJ band-pass on the shared `seclab_nodes::biquad` core (reuses the
   000215 refactor), per-band Q derived from the spacing so bands tile. Params `release_ms` / `mix`,
   `effect` category, live `set_params`. A processing utility (two audio ins) → no factory patch,
   like the EQ nodes. Unit-tested for the vocoder law (flat carrier takes the modulator's band, and
@@ -848,10 +855,10 @@ values), so a preset can pin exact knob settings, not just a graph.
   re-accumulated → inverse FFT + overlap-add (bins past Nyquist dropped = frequency-domain
   anti-aliasing). Params `semitones` (±12) / `mix` (dry path latency-matched), `effect` category,
   reports `latency_frames`, live `set_params`. Ships a self-contained in-place radix-2 FFT
-  (`vb_nodes::fft`) — no FFT dependency — verified against a naïve DFT. Primary source: Bernsee,
+  (`seclab_nodes::fft`) — no FFT dependency — verified against a naïve DFT. Primary source: Bernsee,
   "Pitch Shifting Using the Fourier Transform" + `smbPitchShift.cpp`. Unit-tested for unit-gain
   reconstruction, octave up/down, dry-mix pitch preservation; `docs/nodes.md` regenerated 🧪
-- [x] 000215 — 🛠️ **Extract a shared Direct Form I biquad core (`vb_nodes::biquad`)** — the four
+- [x] 000215 — 🛠️ **Extract a shared Direct Form I biquad core (`seclab_nodes::biquad`)** — the four
   RBJ cookbook nodes (`filter`/`Biquad`, `shelf-eq`, `peak-eq`, `allpass`) each inlined the same
   normalised-`Coeffs` struct, the `x1/x2/y1/y2` delay state, the per-sample difference equation and
   `reset`. That duplicated arithmetic now lives once in `BiquadCoeffs::normalized` (the one `/a0`)
@@ -938,7 +945,7 @@ values), so a preset can pin exact knob settings, not just a graph.
   RNG for deterministic tests) shape the texture from smooth pad to glitchy cloud. A new synthesis
   class. Unit-tested for finite/audible output, silence-without-input, density-adds-energy,
   pitch-brightens-the-output, and reset 🧪
-- [x] 000177 — 🧩 **End-to-end interface tests** (`vb-editor/tests/e2e_interface.rs`) — headless
+- [x] 000177 — 🧩 **End-to-end interface tests** (`seclab-editor/tests/e2e_interface.rs`) — headless
   journeys driving `EditorApp` through the **same public API the plugin/standalone UI calls**:
   the launch seed, camera hit-testing (click-to-select, drag-to-wire), the inspector's parameter
   edits, and the project RON export/import buttons. Covers the launch invariant (the canvas must
@@ -1021,8 +1028,8 @@ per-widget styling and a saved layout in the project.
   load (format stays version 1, forward- and backward-compatible). `PatchView::to_doc` writes them,
   `apply_doc` restores them (positions into `panel_positions`, labels back into each slot's
   `WidgetKind` via `WidgetKind::from_label`), so saving and reopening a project brings the panel
-  back exactly. Tested: a placed + retyped panel round-trips through the RON in both `vb-project`
-  (field round-trip / omitted-when-default) and `vb-editor` (end-to-end export → import). *(Follow-up:
+  back exactly. Tested: a placed + retyped panel round-trips through the RON in both `seclab-project`
+  (field round-trip / omitted-when-default) and `seclab-editor` (end-to-end export → import). *(Follow-up:
   capture live view-only panel edits into the plugin's DAW-saved state; then per-widget styling.)* 🧪
 - [x] 000186 — 🧩 **Plugin saves in-window panel edits into the DAW project** — the plugin used to
   serialize its host state from a `patch_ron` frozen at load, so *any* in-window edit (and a
@@ -1067,7 +1074,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   LFO, bare `add` mixer) with the gap list and the target graph. No new DSP nodes needed —
   `attenuvert` already covers the filter-EG amount, LFO depth, and per-osc level. Baseline
   locked by a `minitaur_is_silent_at_rest_and_sings_on_a_note` test ([#204](https://github.com/ice1x/SecLab/issues/204)) 🧪
-- [x] 000163 — **Faithful Minitaur voice** — `vb_engine::minitaur_patch()` (from which
+- [x] 000163 — **Faithful Minitaur voice** — `seclab_engine::minitaur_patch()` (from which
   `examples/minitaur.ron` is generated, kept in sync by an anti-drift test): **separate filter
   and amp envelopes**, a **leveled oscillator mix** (per-osc `attenuvert`), glide, pinned
   values; tests assert silent at rest, audible + bass on a note, and pitch tracking. The LFO is
@@ -1079,7 +1086,7 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   `lfo → cv-attenuvert(depth) → cv-add ← filter-EG → ladder.cutoff` in `minitaur_patch`; LFO
   depth 0 by default (clean bass, wobble on demand). Closes gap 2 from
   [docs/synths/minitaur.md](docs/synths/minitaur.md) ([#211](https://github.com/ice1x/SecLab/issues/211)) 🧪
-- [x] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` delegates to
+- [x] 000164 — **Make Minitaur the default patch** — `seclab_engine::default_patch` delegates to
   `minitaur_patch`, so the plugin/DAW ships the Minitaur bass; the editor's starting patch
   loads the same voice from the committed `examples/minitaur.ron` (auto-laid-out), so the
   standalone opens on it too — both silent-until-note. Fixed a real bug found here:

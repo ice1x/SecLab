@@ -2,10 +2,10 @@
 //
 // The whole editor — canvas, palette (incl. the library section), inspector, undo — is
 // platform-agnostic egui, so this is the same `EditorApp` that runs natively; only the
-// launcher differs. `pkg/vb_editor.js` is produced by wasm-pack `--target web`
-// (see README.md); it exports the async `start(canvas)` from crates/vb-editor/src/web.rs
+// launcher differs. `pkg/seclab_editor.js` is produced by wasm-pack `--target web`
+// (see README.md); it exports the async `start(canvas)` from crates/seclab-editor/src/web.rs
 // plus a default init that fetches and instantiates the wasm module.
-import init, { start } from './pkg/vb_editor.js';
+import init, { start } from './pkg/seclab_editor.js';
 
 const loading = document.getElementById('loading');
 const canvas = document.getElementById('vb-canvas');

@@ -1,7 +1,7 @@
 # Browser audio prototype (backlog 000083)
 
 The SecLab instrument engine (Rust → WASM) running in the browser through a WebAudio
-`AudioWorklet`. The DSP core is the `vb-engine` crate, compiled to `wasm32` and driven from
+`AudioWorklet`. The DSP core is the `seclab-engine` crate, compiled to `wasm32` and driven from
 JavaScript via its `WasmSynth` binding (`new` / `noteOn` / `noteOff` / `render` — one
 128-sample quantum per `AudioWorklet` `process()` call).
 
@@ -27,7 +27,7 @@ Build the `no-modules` package the worklet loads, then serve this directory:
 
 ```bash
 # from the repo root
-wasm-pack build crates/vb-engine --target no-modules --out-dir ../../web/audio/pkg-nomod --out-name vb_engine
+wasm-pack build crates/seclab-engine --target no-modules --out-dir ../../web/audio/pkg-nomod --out-name seclab_engine
 python3 -m http.server --directory web/audio 8099
 # open http://localhost:8099 — click "Start audio", then play with a s d f … / w e t y u
 ```
@@ -42,7 +42,7 @@ Build the Node-target package and run the smoke test — no browser required:
 
 ```bash
 # from the repo root
-wasm-pack build crates/vb-engine --target nodejs --out-dir ../../web/audio/pkg-node --out-name vb_engine
+wasm-pack build crates/seclab-engine --target nodejs --out-dir ../../web/audio/pkg-node --out-name seclab_engine
 node web/audio/test/smoke.mjs
 ```
 

@@ -1,0 +1,29 @@
+[package]
+name = "seclab-engine"
+description = "SecLab — build a runnable audio engine from a serialized patch. nih-plug-free, so it compiles to wasm32 for the browser (WebAudio/AudioWorklet)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+# `cdylib` so the wasm32 build links to a loadable `.wasm` module for the AudioWorklet;
+# `lib` so the native workspace (seclab-plugin, seclab-standalone) links it as a normal crate.
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+seclab-core.workspace = true
+seclab-nodes.workspace = true
+seclab-runtime.workspace = true
+seclab-project.workspace = true
+
+# WASM (browser) audio path only — see src/wasm.rs (backlog 000083). These compile solely
+# for the wasm32 target, so the native build (and every native test) is untouched. The
+# module exports a `WasmSynth` the AudioWorklet drives: build from a patch, feed MIDI,
+# pull one 128-sample quantum per `process()` call.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
+
+[lints]
+workspace = true
