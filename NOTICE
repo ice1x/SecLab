@@ -1,0 +1,34 @@
+SecLab
+Copyright (c) 2026 ice1x
+
+This product is licensed under the PolyForm Strict License 1.0.0 (see LICENSE).
+That license covers the first-party code in this repository only.
+
+Third-party components
+----------------------
+
+SecLab is built with third-party open-source software that is NOT covered by the
+PolyForm Strict License and remains under its own terms. Those licenses continue
+to apply to their respective components, and nothing in LICENSE overrides them.
+
+The Rust dependency tree is permissively licensed (MIT, Apache-2.0, ISC, BSD and
+similar); an audit found no copyleft (GPL/AGPL) obligation in the dependencies
+compiled into the shipping build. A full, machine-generated manifest of every
+dependency and its license can be produced with `cargo about` (or `cargo
+license`) and should accompany binary distributions.
+
+Notable components and their own licenses:
+
+  - nih-plug (CLAP plugin framework) ......................... ISC
+  - egui / eframe (editor UI) ............................... MIT OR Apache-2.0
+  - Rust standard crates (serde, etc.) ...................... MIT OR Apache-2.0
+
+Plugin formats
+--------------
+
+SecLab exports to the CLAP format (first-party, via nih-plug's CLAP export).
+VST3 and Audio Unit bundles are produced by clap-wrapper together with the
+Steinberg VST3 SDK, which carry their own license terms (the VST3 SDK is dual
+GPLv3 / Steinberg proprietary). "VST" is a trademark of Steinberg Media
+Technologies GmbH; references to VST3/AU here name those formats only and claim
+no affiliation or endorsement.
