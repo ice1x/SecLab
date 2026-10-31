@@ -434,6 +434,12 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000249 — 🧹 **Scrub the previous project name from `CHANGELOG.md` and `docs/backlog.md`** — after
+  the history was squashed for the public launch, the rename-documenting entries (000243 / 000245 /
+  000246) still spelled out the old brand and its crate-prefix initials — the only place the name
+  survived. Rewrote those entries in neutral wording (what each rename produced, not what it replaced)
+  so a full case-insensitive audit of the tree finds zero occurrences of the previous name in any
+  variant. Docs-only
 - [x] 000248 — 📝 **Slim the README; move the plan and design out of it** — the README had grown to
   ~1130 lines, dominated by the full task backlog plus a long design essay. Moved the roadmap + task
   checklist here to [`backlog.md`](backlog.md) and the goals / stack & key decisions / principles /
@@ -448,29 +454,28 @@ values), so a preset can pin exact knob settings, not just a graph.
   `Cargo.toml` `license` → `LicenseRef-PolyForm-Strict-1.0.0`. Dependency-license audit confirmed no
   GPL/AGPL mines, so the strict license is compatible 🧪
 - [x] 000246 — 🧹 **Finish the rebrand in the `web/` demos** — the HTML/JS of the browser demos were
-  missed by the earlier sweeps, leaving `VST_bomb` in page titles/`<h1>` and launcher comments, and
-  the worklet file named `vb-processor.js`. Renamed it to `seclab-processor.js` (fixing the `fetch`
-  and README refs) and swapped the remaining `VST_bomb` → `SecLab` in the web HTML/JS. Final audit:
-  no old-name variant anywhere outside the CHANGELOG/README rename history 🧪
-- [x] 000245 — 🏷️ **Rename the internal crates `vb-*` → `seclab-*`** — `vb` was the old brand's
-  initials (Vst Bomb), keeping the dropped name in every crate. All ten crates renamed (`vb-core` →
-  `seclab-core`, … `vb-ai`/`vb-library`/`vb-plugin`): directories, package names, workspace
-  members/deps, inter-crate deps, Rust paths (`vb_core` → `seclab_core`), the cdylib
-  (`libvb_plugin` → `libseclab_plugin`), CI/release commands, and the bundle filenames
-  (`seclab-plugin.{clap,vst3,component,app}`). `xtask` keeps its name. Mechanical, no behaviour change;
-  all builds/tests/clippy/fmt pass 🧪
+  missed by the earlier sweeps, leaving the previous name in page titles/`<h1>` and launcher comments,
+  and a worklet file whose name still carried the old brand's initials. Renamed it to
+  `seclab-processor.js` (fixing the `fetch` and README refs) and swapped the remaining strings to
+  `SecLab` in the web HTML/JS. Final audit: no trace of the previous name anywhere in the tree 🧪
+- [x] 000245 — 🏷️ **Rename the internal crates to the `seclab-*` prefix** — the previous prefix was
+  the old brand's initials, keeping the dropped name in every crate. All ten crates renamed
+  (`seclab-core`, … `seclab-ai`/`seclab-library`/`seclab-plugin`): directories, package names,
+  workspace members/deps, inter-crate deps, Rust paths (`seclab_core`), the cdylib (`libseclab_plugin`),
+  CI/release commands, and the bundle filenames (`seclab-plugin.{clap,vst3,component,app}`). `xtask`
+  keeps its name. Mechanical, no behaviour change; all builds/tests/clippy/fmt pass 🧪
 - [x] 000244 — 🔧 **Adapt `seclab-library` to the drevo 0.2.0 `Properties` API** — the sibling `drevo`
   checkout bumped `drevo-core` 0.1.1 → 0.2.0, reshaping `Properties` from a `HashMap` tuple-struct
   into an opaque sorted map (no `Properties(map)` ctor, no `.0`). Migrated the five construction sites
   to `Properties::from(map)` and the read sites to `.get(key)` / `props[key]` (now `Index<&str>`),
   in `src/` and the integration tests. Keeps the non-blocking `library / drevo` job green; no other
   crate affected (drevo is behind the opt-in `library` feature) 🧪
-- [x] 000243 — 🏷️ **Rename the project `VST_bomb` → `SecLab`** — dropped "VST" (Steinberg trademark)
-  for **SecLab** (the author's own music project since 2014). Repo renamed to `ice1x/SecLab`; swept
-  across app/window title, in-editor version label, plugin `NAME`/`CLAP_ID` (`com.ice1x.seclab`),
-  plugin structs (`VstBomb`→`SecLab`), all docs/README/links, crate descriptions, the `docs/nodes.md`
+- [x] 000243 — 🏷️ **Rename the project to `SecLab`** — dropped "VST" (Steinberg trademark) for
+  **SecLab** (the author's own music project since 2014). Repo renamed to `ice1x/SecLab`; swept across
+  app/window title, in-editor version label, plugin `NAME`/`CLAP_ID` (`com.ice1x.seclab`), the plugin
+  structs (now `SecLab`/`SecLabParams`), all docs/README/links, crate descriptions, the `docs/nodes.md`
   header, and the CI artifact name. Keychain service and the modules/settings dir moved with the brand
-  (safe pre-release). Internal crate names (`vb-*`) and the CLAP bundle filename (`seclab-plugin.clap`)
+  (safe pre-release). The internal crate names and the CLAP bundle filename (`seclab-plugin.clap`) were
   left unchanged, so the clap-validator gate is unaffected 🧪
 - [x] 000242 — 🔐 **The Submit gate defers to `send_blocker`, closing a key-check divergence** —
   the editor's Submit handler enforced privacy (000110) + blank model (000237) but **skipped the key
