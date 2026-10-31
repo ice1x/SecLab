@@ -26,12 +26,12 @@ async function start() {
   //   1. text-polyfill.js — AudioWorkletGlobalScope has no TextEncoder/TextDecoder,
   //      which the wasm-bindgen glue needs.
   //   2. the wasm-bindgen `no-modules` glue (defines the `wasm_bindgen` global).
-  //   3. vb-processor.js — our AudioWorkletProcessor, which uses `wasm_bindgen`.
+  //   3. seclab-processor.js — our AudioWorkletProcessor, which uses `wasm_bindgen`.
   // They are concatenated into one Blob because AudioWorkletGlobalScope supports neither
   // ES `import` nor `importScripts`.
   const [polyfillText, processorText] = await Promise.all([
     fetch('text-polyfill.js').then((r) => r.text()),
-    fetch('vb-processor.js').then((r) => r.text()),
+    fetch('seclab-processor.js').then((r) => r.text()),
   ]);
   const blob = new Blob([polyfillText, '\n', glueText, '\n', processorText], { type: 'application/javascript' });
   await ctx.audioWorklet.addModule(URL.createObjectURL(blob));

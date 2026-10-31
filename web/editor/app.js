@@ -1,4 +1,4 @@
-// Boots the VST_bomb editor (Rust → WASM, eframe's WebRunner) into the page's <canvas>.
+// Boots the SecLab editor (Rust → WASM, eframe's WebRunner) into the page's <canvas>.
 //
 // The whole editor — canvas, palette (incl. the library section), inspector, undo — is
 // platform-agnostic egui, so this is the same `EditorApp` that runs natively; only the

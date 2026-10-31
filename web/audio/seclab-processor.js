@@ -1,4 +1,4 @@
-// AudioWorkletProcessor for the VST_bomb WASM synth. This file is CONCATENATED after the
+// AudioWorkletProcessor for the SecLab WASM synth. This file is CONCATENATED after the
 // wasm-bindgen `no-modules` glue at load time, so `wasm_bindgen` is in scope here.
 class VbSynthProcessor extends AudioWorkletProcessor {
   constructor(options) {

@@ -11,12 +11,12 @@ JavaScript via its `WasmSynth` binding (`new` / `noteOn` / `noteOff` / `render` 
 | --- | --- | --- |
 | `index.html` | main thread | demo page: Start button, self-test, QWERTY keyboard |
 | `app.js` | main thread | loads the wasm, assembles the worklet module, maps keys → MIDI |
-| `vb-processor.js` | audio thread | the `AudioWorkletProcessor`: owns the synth, renders each quantum |
+| `seclab-processor.js` | audio thread | the `AudioWorkletProcessor`: owns the synth, renders each quantum |
 | `text-polyfill.js` | audio thread | minimal `TextEncoder`/`TextDecoder` (absent from `AudioWorkletGlobalScope`) |
 | `test/smoke.mjs` | Node | headless end-to-end test of the wasm audio boundary |
 
 The worklet module is assembled at runtime by concatenating `text-polyfill.js` + the
-wasm-bindgen `no-modules` glue + `vb-processor.js` into one Blob, because
+wasm-bindgen `no-modules` glue + `seclab-processor.js` into one Blob, because
 `AudioWorkletGlobalScope` supports neither ES `import` nor `importScripts`. The wasm bytes
 are handed to the processor via `processorOptions` and instantiated with
 `wasm_bindgen.initSync`.

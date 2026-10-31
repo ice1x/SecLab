@@ -616,6 +616,11 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000246 — 🧹 **Finish the rebrand in the `web/` demos** — the HTML/JS of the browser demos were
+  missed by the earlier sweeps, leaving `VST_bomb` in page titles/`<h1>` and launcher comments, and
+  the worklet file named `vb-processor.js`. Renamed it to `seclab-processor.js` (fixing the `fetch`
+  and README refs) and swapped the remaining `VST_bomb` → `SecLab` in the web HTML/JS. Final audit:
+  no old-name variant anywhere outside the CHANGELOG/README rename history 🧪
 - [x] 000245 — 🏷️ **Rename the internal crates `vb-*` → `seclab-*`** — `vb` was the old brand's
   initials (Vst Bomb), keeping the dropped name in every crate. All ten crates renamed (`vb-core` →
   `seclab-core`, … `vb-ai`/`vb-library`/`vb-plugin`): directories, package names, workspace
