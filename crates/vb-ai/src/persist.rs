@@ -198,7 +198,7 @@ mod tests {
     fn save_creates_missing_parent_directories() {
         let base = temp_dir("mkdir");
         // A nested path whose parents do not exist yet.
-        let dir = base.join("VST_bomb").join("modules");
+        let dir = base.join("SecLab").join("modules");
         save_settings(&dir, &AssistantSettings::new()).expect("save creates the tree");
         assert!(settings_path(&dir).exists());
 

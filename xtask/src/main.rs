@@ -24,7 +24,7 @@
 //!   into `~/Library/Audio/Plug-Ins/Components`, validate with
 //!   `auval -v aumu gWrp clAd`). Deterministically installs clap-wrapper's generated
 //!   AudioComponents plist (its own install is flaky) and rebrands the manufacturer to
-//!   `ice1x` so hosts list it as `ice1x: VST_bomb`.
+//!   `ice1x` so hosts list it as `ice1x: SecLab`.
 //! - `cargo xtask bundle-standalone` — same, for a self-contained `vb-plugin.app`
 //!   hosting the CLAP through RtAudio/RtMidi (the wrapper's simple runner; our own
 //!   editor standalone lives in `vb-standalone`).
@@ -279,7 +279,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
 /// The AU "Manufacturer: Plugin" display name hosts (Logic, GarageBand) group the component
 /// under. Mirrors vb-plugin's `VENDOR` / `NAME`; overrides clap-wrapper's hardcoded
 /// "cleveraudio.org: <output>" default (see `bundle_wrapped`).
-const AU_DISPLAY_NAME: &str = "ice1x: VST_bomb";
+const AU_DISPLAY_NAME: &str = "ice1x: SecLab";
 
 /// Locates clap-wrapper's generated AU `Info.plist` under the AUv2 build dir — the file in
 /// a `*-build-helper-output/` subdirectory named `auv2_Info.plist`. This is the
@@ -583,9 +583,9 @@ mod tests {
             AU_DISPLAY_NAME,
         );
         assert_eq!(args[0], "-c");
-        // Key path then the raw value (spaces and the colon in "ice1x: VST_bomb" are fine —
+        // Key path then the raw value (spaces and the colon in "ice1x: SecLab" are fine —
         // PlistBuddy takes the rest of the -c string verbatim as the value).
-        assert_eq!(args[1], "Set :AudioComponents:0:name ice1x: VST_bomb");
+        assert_eq!(args[1], "Set :AudioComponents:0:name ice1x: SecLab");
         assert_eq!(args[2], "/b/vb-plugin.component/Contents/Info.plist");
     }
 
@@ -611,12 +611,12 @@ mod tests {
 
     #[test]
     fn au_display_name_is_manufacturer_then_plugin() {
-        // Hosts split on ": " → manufacturer "ice1x", plugin "VST_bomb".
+        // Hosts split on ": " → manufacturer "ice1x", plugin "SecLab".
         let (manufacturer, plugin) = AU_DISPLAY_NAME
             .split_once(": ")
             .expect("Manufacturer: Plugin");
         assert_eq!(manufacturer, "ice1x");
-        assert_eq!(plugin, "VST_bomb");
+        assert_eq!(plugin, "SecLab");
     }
 
     /// The real-host testing checklist must name every bundle the build produces, so the

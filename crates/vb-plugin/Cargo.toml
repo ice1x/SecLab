@@ -1,6 +1,6 @@
 [package]
 name = "vb-plugin"
-description = "VST_bomb — CLAP export (nih-plug), VST3/AU build via clap-wrapper."
+description = "SecLab — CLAP export (nih-plug), VST3/AU build via clap-wrapper."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

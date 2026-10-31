@@ -1,4 +1,4 @@
-//! `vb-plugin` — the VST_bomb patch as a CLAP instrument (nih-plug).
+//! `vb-plugin` — the SecLab patch as a CLAP instrument (nih-plug).
 //!
 //! The scaffold (task 000064): a nih-plug plugin that loads a serialized project —
 //! the path in the `VB_PATCH` environment variable, or the built-in default patch —
@@ -8,7 +8,7 @@
 //! embedded GUI are the next Epic 7 tasks.
 //!
 //! Build the CLAP with `cargo build -p vb-plugin --release`; the resulting
-//! `libvb_plugin` cdylib renamed to `vb_bomb.clap` is a loadable CLAP bundle (the
+//! `libvb_plugin` cdylib renamed to `seclab.clap` is a loadable CLAP bundle (the
 //! one-command bundler is task 000072).
 
 #[cfg(feature = "gui")]
@@ -34,9 +34,9 @@ use vb_runtime::{engine_swap, EngineReceiver};
 
 pub use vb_engine::{default_patch, engine_from_doc, engine_from_doc_with_values, BuildError};
 
-/// The VST_bomb instrument plugin.
-pub struct VstBomb {
-    params: Arc<VstBombParams>,
+/// The SecLab instrument plugin.
+pub struct SecLab {
+    params: Arc<SecLabParams>,
     /// The project this instance plays. Shared with the rebuild executor and
     /// replaceable when a state load restores a different patch.
     doc: Arc<Mutex<Arc<ProjectDoc>>>,
@@ -73,14 +73,14 @@ struct BoundParam {
 /// the patch has. IDs are stable across sessions (`n<node-id>_<param-index>`), which
 /// also gives host preset state save/restore for free via nih-plug's serializer.
 #[derive(Default)]
-pub struct VstBombParams {
+pub struct SecLabParams {
     bound: Vec<BoundParam>,
     /// The patch itself, serialized as RON — persisted inside the host's preset
     /// state so a saved DAW project carries the whole graph, not just knob values.
     patch_ron: Mutex<String>,
 }
 
-impl VstBombParams {
+impl SecLabParams {
     /// The patch stored in this state, if it parses and validates.
     #[must_use]
     pub fn stored_patch(&self) -> Option<ProjectDoc> {
@@ -221,7 +221,7 @@ impl VstBombParams {
 }
 
 /// Parameters whose value changed between two per-node value snapshots (each a node id →
-/// values in registry `params()` order, the shape [`VstBombParams::values_by_node`] and
+/// values in registry `params()` order, the shape [`SecLabParams::values_by_node`] and
 /// [`ProjectDoc`] both use): returns `(node, index, new_value)` for each.
 ///
 /// Drives the plugin's editor→host parameter write-through so **only** the knob the user
@@ -252,7 +252,7 @@ pub fn changed_values(
 // SAFETY: `param_map` returns one entry per `FloatParam` owned by `self.bound`; the
 // pointers live exactly as long as `self`, ids are unique per construction, and the
 // vector is never mutated after the plugin hands the Arc to the wrapper.
-unsafe impl Params for VstBombParams {
+unsafe impl Params for SecLabParams {
     fn param_map(&self) -> Vec<(String, ParamPtr, String)> {
         self.bound
             .iter()
@@ -335,11 +335,11 @@ fn load_patch(registry: &Registry) -> ProjectDoc {
         .unwrap_or_else(|| default_patch(registry))
 }
 
-impl Default for VstBomb {
+impl Default for SecLab {
     fn default() -> Self {
         let registry = Registry::with_builtins();
         let doc = load_patch(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
         let built_values = params.bound.iter().map(|b| b.param.value()).collect();
         let (tx, rx) = engine_swap();
         Self {
@@ -372,10 +372,10 @@ impl Default for VstBomb {
 #[cfg(any(feature = "gui", test))]
 const EDITOR_SIZE: (u32, u32) = (1120, 720);
 
-impl Plugin for VstBomb {
-    const NAME: &'static str = "VST_bomb";
+impl Plugin for SecLab {
+    const NAME: &'static str = "SecLab";
     const VENDOR: &'static str = "ice1x";
-    const URL: &'static str = "https://github.com/ice1x/VST_bomb";
+    const URL: &'static str = "https://github.com/ice1x/SecLab";
     const EMAIL: &'static str = "tunodnb@gmail.com";
     const VERSION: &'static str = env!("CARGO_PKG_VERSION");
 
@@ -484,7 +484,7 @@ impl Plugin for VstBomb {
                 true
             }
             Err(err) => {
-                nih_error!("VST_bomb: patch failed to compile: {err}");
+                nih_error!("SecLab: patch failed to compile: {err}");
                 false
             }
         }
@@ -584,12 +584,11 @@ impl Plugin for VstBomb {
     }
 }
 
-impl ClapPlugin for VstBomb {
-    const CLAP_ID: &'static str = "com.ice1x.vst-bomb";
-    const CLAP_DESCRIPTION: Option<&'static str> =
-        Some("Node-graph synthesizer built with VST_bomb");
-    const CLAP_MANUAL_URL: Option<&'static str> = Some("https://github.com/ice1x/VST_bomb");
-    const CLAP_SUPPORT_URL: Option<&'static str> = Some("https://github.com/ice1x/VST_bomb/issues");
+impl ClapPlugin for SecLab {
+    const CLAP_ID: &'static str = "com.ice1x.seclab";
+    const CLAP_DESCRIPTION: Option<&'static str> = Some("Node-graph synthesizer built with SecLab");
+    const CLAP_MANUAL_URL: Option<&'static str> = Some("https://github.com/ice1x/SecLab");
+    const CLAP_SUPPORT_URL: Option<&'static str> = Some("https://github.com/ice1x/SecLab/issues");
     const CLAP_FEATURES: &'static [ClapFeature] = &[
         ClapFeature::Instrument,
         ClapFeature::Synthesizer,
@@ -698,7 +697,7 @@ fn process_in_quanta(
     }
 }
 
-nih_export_clap!(VstBomb);
+nih_export_clap!(SecLab);
 
 #[cfg(test)]
 mod tests {
@@ -846,7 +845,7 @@ mod tests {
 
     #[test]
     fn the_plugin_constructs_with_the_default_patch() {
-        let plugin = VstBomb::default();
+        let plugin = SecLab::default();
         let doc = plugin.doc.lock().unwrap().clone();
         assert!(!doc.nodes.is_empty(), "default patch has nodes to play");
         assert!(plugin.engine.is_none(), "engine waits for initialize");
@@ -907,7 +906,7 @@ mod tests {
     fn params_mirror_the_patch_and_have_stable_unique_ids() {
         let registry = Registry::with_builtins();
         let doc = sample_voice_doc(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
 
         // osc (waveform, freq_hz) + svf (cutoff_hz, q) + adsr (a, d, s, r) +
         // vca (bias, amount) = 10 knobs; midi-in contributes none.
@@ -925,7 +924,7 @@ mod tests {
     fn value_snapshot_groups_by_node_in_registry_order() {
         let registry = Registry::with_builtins();
         let doc = sample_voice_doc(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
         let values = params.values_by_node();
 
         assert_eq!(
@@ -1021,7 +1020,7 @@ mod tests {
     fn bound_index_routes_each_node_param_to_its_own_binding() {
         let registry = Registry::with_builtins();
         let doc = sample_voice_doc(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
 
         // The ADSR carries four params (a, d, s, r): each index must resolve to a distinct
         // binding that belongs to that node, and an out-of-range index resolves to nothing.
@@ -1070,7 +1069,7 @@ mod tests {
             .unwrap();
         let doc = ProjectDoc::from_graph(&graph);
         let ctx = BuildContext::default();
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
         let gain = doc
             .nodes
             .iter()
@@ -1118,7 +1117,7 @@ mod tests {
     fn preset_state_carries_the_whole_patch() {
         let registry = Registry::with_builtins();
         let doc = default_patch(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
 
         // Save: the serialized fields embed the patch RON.
         let fields = params.serialize_fields();
@@ -1129,7 +1128,7 @@ mod tests {
         let mut other_graph = vb_core::Graph::new();
         other_graph.add_node(registry.graph_node("oscillator").unwrap());
         let other_doc = ProjectDoc::from_graph(&other_graph);
-        let fresh = VstBombParams::for_doc(&other_doc, &registry);
+        let fresh = SecLabParams::for_doc(&other_doc, &registry);
         fresh.deserialize_fields(&fields);
 
         let restored = fresh.stored_patch().expect("patch restored");
@@ -1183,7 +1182,7 @@ mod tests {
         // host's saved state must then carry that edited patch, not the one loaded at construction
         // — this is what lets a rearranged panel survive a DAW project save/reopen.
         let registry = Registry::with_builtins();
-        let params = VstBombParams::for_doc(&default_patch(&registry), &registry);
+        let params = SecLabParams::for_doc(&default_patch(&registry), &registry);
 
         let mut edited = vb_core::Graph::new();
         edited.add_node(registry.graph_node("oscillator").unwrap());
@@ -1201,7 +1200,7 @@ mod tests {
     fn corrupt_preset_patches_are_rejected() {
         let registry = Registry::with_builtins();
         let doc = default_patch(&registry);
-        let params = VstBombParams::for_doc(&doc, &registry);
+        let params = SecLabParams::for_doc(&doc, &registry);
         let before = params.stored_patch().expect("valid initial patch");
 
         let mut corrupt = BTreeMap::new();
@@ -1234,7 +1233,7 @@ mod tests {
     #[test]
     fn engine_compiles_at_host_buffer_sizes() {
         // The initialize path without the nih-plug harness: same builder, same doc.
-        let plugin = VstBomb::default();
+        let plugin = SecLab::default();
         let doc = plugin.doc.lock().unwrap().clone();
         for frames in [64_usize, 256, 1_024, 4_096] {
             let built = engine_from_doc(&doc, &plugin.registry, &plugin.build_ctx, frames);

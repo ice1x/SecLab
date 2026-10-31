@@ -39,7 +39,7 @@ node palette groups them by category:
 | `vca` | dynamics | applies the envelope to the audio |
 | `gain` | math | the output |
 
-Then wire them by dragging from an output port to an input port (VST_bomb only lets you
+Then wire them by dragging from an output port to an input port (SecLab only lets you
 connect matching signal types, and refuses wires that would make a cycle):
 
 1. `oscillator.out` → `biquad.in`
@@ -74,7 +74,7 @@ The editor writes the patch as a `.ron` project file — the same format as the 
 build at your patch and compile the CLAP:
 
 ```bash
-# Build the CLAP (a libvb_plugin cdylib; rename to vb_bomb.clap to load it in a host).
+# Build the CLAP (a libvb_plugin cdylib; rename to seclab.clap to load it in a host).
 cargo build -p vb-plugin --release
 
 # The plugin loads the patch named by VB_PATCH, falling back to a built-in default.

@@ -1,4 +1,4 @@
-//! `vb-runtime` — real-time graph execution for VST_bomb.
+//! `vb-runtime` — real-time graph execution for SecLab.
 //!
 //! [`vb_core::Engine`] is the reference evaluator: correct, simple, and free to allocate.
 //! That is fine for tests and offline rendering but not for an audio callback, where a

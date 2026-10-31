@@ -1,4 +1,4 @@
-//! `vb-project` — project serialization for VST_bomb.
+//! `vb-project` — project serialization for SecLab.
 //!
 //! A [`ProjectDoc`] is the on-disk representation of a patch: the structural graph
 //! (nodes with their ports, plus edges) in a versioned, `serde`-friendly form. **RON**

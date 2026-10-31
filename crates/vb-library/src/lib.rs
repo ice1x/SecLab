@@ -1,9 +1,9 @@
-//! `vb-library` — the patch/preset library and AI knowledge base for VST_bomb (Epic 11).
+//! `vb-library` — the patch/preset library and AI knowledge base for SecLab (Epic 11).
 //!
 //! The library stores metadata and links for patches, macro-nodes and presets in
 //! [drevo](https://github.com/) — the user's embedded graph database — while the RON
 //! project files stay the source of truth for the audio structure. This crate is the
-//! seam between VST_bomb and drevo.
+//! seam between SecLab and drevo.
 //!
 //! **drevo is optional.** Everything here lives behind the `library` Cargo feature, which
 //! pulls drevo in via its *direct Rust API* (the embedded [`drevo::native_service::NativeService`]

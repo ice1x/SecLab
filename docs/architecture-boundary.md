@@ -1,6 +1,6 @@
 # The web / native runtime boundary
 
-VST_bomb runs in three places — a native desktop editor, an audio plugin inside a DAW, and
+SecLab runs in three places — a native desktop editor, an audio plugin inside a DAW, and
 (as of Epic 9) a browser — from **one** codebase. This document defines what is shared
 across those targets and what is target-specific, so a change lands on the right side of the
 line. It is the design deliverable for [000084](../README.md); the WASM verification for

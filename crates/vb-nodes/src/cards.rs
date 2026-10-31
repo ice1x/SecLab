@@ -21,7 +21,7 @@ use vb_core::{Parameter, Port, SignalType};
 use crate::registry::{NodeDescriptor, Registry};
 
 /// First line of a reference; also the version marker.
-const HEADER: &str = "# VST_bomb node reference v1";
+const HEADER: &str = "# SecLab node reference v1";
 
 /// Short tag for a signal type (matches the patch prompt format).
 fn type_tag(signal: SignalType) -> &'static str {

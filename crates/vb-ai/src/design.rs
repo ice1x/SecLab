@@ -60,7 +60,7 @@ impl DesignSession {
     #[must_use]
     pub fn new(registry: &Registry, config: &ProviderConfig, description: &str) -> Self {
         let brief = format!(
-            "Design a VST_bomb patch for this request. If the request is ambiguous, ask ONE \
+            "Design a SecLab patch for this request. If the request is ambiguous, ask ONE \
              short clarifying question in prose (no code) and wait for the answer. When you \
              have enough to proceed, output the full ProjectDoc per the contract.\n\n\
              Request: {description}"

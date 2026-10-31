@@ -1,6 +1,6 @@
 [package]
 name = "vb-library"
-description = "VST_bomb — patch/preset library and AI knowledge base, backed by embedded drevo."
+description = "SecLab — patch/preset library and AI knowledge base, backed by embedded drevo."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

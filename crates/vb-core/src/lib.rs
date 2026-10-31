@@ -1,4 +1,4 @@
-//! `vb-core` — the structural DSP graph model for VST_bomb.
+//! `vb-core` — the structural DSP graph model for SecLab.
 //!
 //! This crate holds the data model that the whole editor and runtime build on:
 //! typed [`Port`]s, [`GraphNode`]s and the [`Graph`] container that wires them

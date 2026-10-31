@@ -5,7 +5,7 @@
 //! drevo itself is schema-less — nodes and edges carry a free-form `kind` string. This
 //! module pins down the small vocabulary the library uses ([`kind`] / [`rel`]) and wraps
 //! drevo's generic CRUD in intention-revealing methods ([`Library::add_patch`],
-//! [`Library::link_uses`], …) so the rest of VST_bomb never hand-writes kind strings. The
+//! [`Library::link_uses`], …) so the rest of SecLab never hand-writes kind strings. The
 //! RON project files remain the source of truth for audio structure; this graph stores
 //! only metadata and the links between library items.
 

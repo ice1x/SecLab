@@ -507,11 +507,11 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("VST_bomb")
+            .with_title("SecLab")
             .with_inner_size([1280.0, 800.0]),
         ..Default::default()
     };
-    eframe::run_native("VST_bomb", options, Box::new(|_cc| Ok(Box::new(app))))?;
+    eframe::run_native("SecLab", options, Box::new(|_cc| Ok(Box::new(app))))?;
     Ok(())
 }
 

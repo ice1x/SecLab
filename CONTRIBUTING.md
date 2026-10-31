@@ -1,4 +1,4 @@
-# Contributing to VST_bomb
+# Contributing to SecLab
 
 Thanks for helping build a no-code/low-code VST/AU plugin editor. This document is the
 short version of how we work. When in doubt, match the surrounding code and keep changes

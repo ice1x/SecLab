@@ -1,6 +1,6 @@
 [package]
 name = "vb-ai"
-description = "VST_bomb — AI assistant: grounded prompt assembly and the LLM output contract."
+description = "SecLab — AI assistant: grounded prompt assembly and the LLM output contract."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

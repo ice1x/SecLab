@@ -26,7 +26,7 @@ use vb_core::{Edge, NodeId};
 use vb_editor::EditorApp;
 use vb_project::ProjectDoc;
 
-use crate::{changed_values, PluginTask, VstBomb, VstBombParams};
+use crate::{changed_values, PluginTask, SecLab, SecLabParams};
 
 /// Per-node parameter values (registry `params()` order) of a document — the snapshot
 /// [`changed_values`] diffs to find the knob the user moved in the editor.
@@ -73,9 +73,9 @@ struct EditorHost {
 /// schedules the off-audio-thread rebuild when the graph is edited.
 pub(crate) fn create(
     egui_state: Arc<EguiState>,
-    params: Arc<VstBombParams>,
+    params: Arc<SecLabParams>,
     doc: Arc<Mutex<Arc<ProjectDoc>>>,
-    executor: AsyncExecutor<VstBomb>,
+    executor: AsyncExecutor<SecLab>,
 ) -> Option<Box<dyn Editor>> {
     // Seed the editor with the patch this instance is playing, not the demo.
     let mut app = EditorApp::new();

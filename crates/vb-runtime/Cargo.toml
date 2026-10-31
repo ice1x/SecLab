@@ -1,6 +1,6 @@
 [package]
 name = "vb-runtime"
-description = "VST_bomb — real-time graph execution (buffers, parameters, MIDI)."
+description = "SecLab — real-time graph execution (buffers, parameters, MIDI)."
 version.workspace = true
 edition.workspace = true
 license.workspace = true

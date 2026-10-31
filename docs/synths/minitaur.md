@@ -1,6 +1,6 @@
 # Moog Minitaur — clone spec & fidelity audit
 
-The Minitaur is the target for VST_bomb's **default synth** (Epic 14, issue #203) because it
+The Minitaur is the target for SecLab's **default synth** (Epic 14, issue #203) because it
 is the simplest of the planned hardware clones: a **monophonic analog bass** with **two
 oscillators**, one Moog ladder low-pass, envelopes, an LFO, and glide — no polyphony,
 patchbay, spring reverb, or digital engine. This document is the spec the clone is built

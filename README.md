@@ -1,4 +1,4 @@
-# VST_bomb
+# SecLab
 
 **Cross-platform no-code / low-code editor for VST/AU plugins.**
 
@@ -56,7 +56,7 @@ safe Rust and opening the road to WASM.
 ## 📦 Planned structure (Cargo workspace)
 
 ```
-VST_bomb/
+SecLab/
 ├─ crates/
 │  ├─ vb-core/        # graph model, port types, scheduler, sample processing
 │  ├─ vb-nodes/       # DSP node library (osc, filters, envelopes, math, MIDI)
@@ -353,7 +353,7 @@ the definition of done.
 - [x] 000087 — A set of example projects (synth, delay effect, dual-osc unison, LFO tremolo, LFO filter sweep) 🧪
 - [x] 000088 — Developer guide: how to add your own node (`Processor` trait + registration) — [docs/adding-a-node.md](docs/adding-a-node.md), with a compile-tested example in `crates/vb-nodes/tests/custom_node.rs` 🧪
 - [ ] 000089 — Screencast/GIF of the UI for the README
-- [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI — **macOS leg wired**: [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the CLAP/VST3/AU/standalone bundles on a `v*` tag (or manual dispatch) via the existing `cargo xtask` commands, zips them, and uploads a `VST_bomb-macos-bundles` artifact; code-signing/notarization run only when the `DEVELOPER_ID`/`NOTARY_PROFILE` secrets are set (see [docs/releasing.md](docs/releasing.md)). Linux/Windows legs await the runner-billing fix (blocking `cross-platform.yml` too)
+- [ ] 000090 — Set up releases: build VST3/AU/standalone bundles for all OSes in CI — **macOS leg wired**: [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the CLAP/VST3/AU/standalone bundles on a `v*` tag (or manual dispatch) via the existing `cargo xtask` commands, zips them, and uploads a `SecLab-macos-bundles` artifact; code-signing/notarization run only when the `DEVELOPER_ID`/`NOTARY_PROFILE` secrets are set (see [docs/releasing.md](docs/releasing.md)). Linux/Windows legs await the runner-billing fix (blocking `cross-platform.yml` too)
 - [x] 000091 — Versioning and CHANGELOG — [CHANGELOG.md](CHANGELOG.md) (Keep a Changelog; documents the crate SemVer vs. the separate project format version), guarded by a test tying it to `vb_project::FORMAT_VERSION` 🧪
 - [x] 000092 — MVP release: working export of a minimal synth to VST3 + AU — `cargo xtask bundle-vst3` / `bundle-auv2` wrap the CLAP into loadable VST3/AU bundles carrying the default synth patch; the AU passes Apple's `auval` in CI (`au validate` job) and the VST3/CLAP pass `clap-validator`; the release workflow packages both (see [docs/releasing.md](docs/releasing.md)) 🧪
 
@@ -546,34 +546,34 @@ values), so a preset can pin exact knob settings, not just a graph.
   pitch-tracking tone + `noise` → resonant `ladder` → note-gated `vca`, the amp driven by a
   one-shot `ad` envelope so a note fires a short **hit that decays** (kick/tom/zap), unlike a
   sustained lead/bass. Built from existing nodes; wired into the examples manifest with a
-  `edge_is_a_percussive_hit_that_decays` test ([#208](https://github.com/ice1x/VST_bomb/issues/208)) 🧪
+  `edge_is_a_percussive_hit_that_decays` test ([#208](https://github.com/ice1x/SecLab/issues/208)) 🧪
 - [x] 000168 — **Roland TB-303** clone (acid bass): the classic squelchy mono-bass. Shipped as
   `examples/tb303.ron` and offered in the editor's factory-patch list: a single saw (`pitch-osc`)
   with `glide` (the 303 **slide**) → a **high-resonance** `ladder` swept by a filter `ad`
   env-mod (the "wow"/squelch) → note-gated `vca` with its own short amp `ad` (a plucky, decaying
   note). Built from existing nodes; a `tb303_is_silent_at_rest_squelches_on_a_note_and_decays`
-  test asserts the silent→squelch→decay behaviour ([#219](https://github.com/ice1x/VST_bomb/issues/219)) 🧪
+  test asserts the silent→squelch→decay behaviour ([#219](https://github.com/ice1x/SecLab/issues/219)) 🧪
 - [x] 000169 — **Roland SH-101** clone (mono synth): the versatile saw/pulse/sub mono-synth.
   Shipped as `examples/sh101.ron` and in the factory-patch list: saw (`pitch-osc`) + pulse
   (`pwm`) + square sub + a hint of `noise`, leveled (`attenuvert`) and summed → resonant
   `ladder` → note-gated `vca`, with **one ADSR fanned out** to both the filter cutoff and the
   amp (the SH-101 has a single envelope) and `glide` for portamento. Built from existing nodes;
   a `sh101_is_silent_at_rest_and_sustains_a_note` test asserts silent→sustained (distinct from
-  the plucky 303/Edge) ([#221](https://github.com/ice1x/VST_bomb/issues/221)) 🧪
+  the plucky 303/Edge) ([#221](https://github.com/ice1x/SecLab/issues/221)) 🧪
 - [x] 000170 — **Roland Juno-60** clone (polysynth): the lush chorus polysynth. Shipped as
   `examples/juno60.ron` and in the factory-patch list: a **4-voice polyphonic** pad (each
   `voice-in` voice a saw + pulse (`pwm`) + square sub DCO → resonant `ladder` → note-gated
   `vca`, one `adsr` to filter+amp), the four voices summed into the signature **`chorus`**.
   Uses the same `PolyNoteSource`/voice-allocator the plugin drives (as the Minilogue clone
   does). A `juno60_is_silent_at_rest_and_polyphonic_notes_sound_through_the_chorus` test plays
-  a chord into the poly source ([#223](https://github.com/ice1x/VST_bomb/issues/223)) 🧪
+  a chord into the poly source ([#223](https://github.com/ice1x/SecLab/issues/223)) 🧪
 - [x] 000171 — 🧩 **Wavetable oscillator node** (`wavetable`) — a pitch-tracking oscillator that
   **morphs** across a built-in four-frame bank (sine → triangle → saw → square, each synthesised
   additively so it is band-limited by construction). The `position` (a parameter **summed** with
   a `position` CV input, so an envelope/LFO can sweep the timbre) blends between frames with
   linear phase+frame interpolation. Closes the "future wavetable oscillator" gap noted for the
   Minilogue's digital engine; unit-tested for audible/finite output, pitch tracking, and that
-  higher `position` (and CV) adds harmonics ([#225](https://github.com/ice1x/VST_bomb/issues/225)) 🧪
+  higher `position` (and CV) adds harmonics ([#225](https://github.com/ice1x/SecLab/issues/225)) 🧪
 - [x] 000203 — 🧩 **Wavetable Pad factory patch** (`examples/wavetable_pad.ron`) — the first
   instrument to actually **play** the `wavetable` node (000171 shipped the node with only unit
   tests, no patch used it): two wavetable oscillators (one up-detuned ~10 cents via a
@@ -616,6 +616,13 @@ values), so a preset can pin exact knob settings, not just a graph.
   Mirrors the 000215 biquad-core extraction. Pure refactor — no API/registry/param/`docs/nodes.md`
   change, every per-node DSP test passes unchanged, engine has its own identity-round-trip test.
   Future spectral nodes now cost only their transform 🧪
+- [x] 000243 — 🏷️ **Rename the project `VST_bomb` → `SecLab`** — dropped "VST" (Steinberg trademark)
+  for **SecLab** (the author's own music project since 2014). Repo renamed to `ice1x/SecLab`; swept
+  across app/window title, in-editor version label, plugin `NAME`/`CLAP_ID` (`com.ice1x.seclab`),
+  plugin structs (`VstBomb`→`SecLab`), all docs/README/links, crate descriptions, the `docs/nodes.md`
+  header, and the CI artifact name. Keychain service and the modules/settings dir moved with the brand
+  (safe pre-release). Internal crate names (`vb-*`) and the CLAP bundle filename (`vb-plugin.clap`)
+  left unchanged, so the clap-validator gate is unaffected 🧪
 - [x] 000242 — 🔐 **The Submit gate defers to `send_blocker`, closing a key-check divergence** —
   the editor's Submit handler enforced privacy (000110) + blank model (000237) but **skipped the key
   check**, assuming "provider configured → key present". Wrong: a cloud `OpenAiProvider` holds a
@@ -1016,7 +1023,7 @@ per-widget styling and a saved layout in the project.
   rearranged panel in particular) was lost when the DAW project was reopened. The editor now bumps
   a separate `PatchView::view_revision` on presentational edits (panel placement, control type),
   and the plugin's editor mirror re-serializes the live document into the host state
-  (`VstBombParams::set_patch_ron`) on **both** audible and view-only changes — rebuilding the audio
+  (`SecLabParams::set_patch_ron`) on **both** audible and view-only changes — rebuilding the audio
   engine only for the audible ones. So a project saved after arranging the panel in the DAW reopens
   with that arrangement. Tested: `view_revision` bumps on placement/retype but not on audible edits
   (and vice-versa), and `set_patch_ron` makes the saved host state carry the edited patch. *(Next:
@@ -1047,39 +1054,39 @@ finish the DSP modules and UI it exercises. Minitaur is the **simplest** Epic-13
 2 osc + sub, one ladder filter, envelopes, LFO, glide), so it is the right default and a good
 shake-out. Most building blocks exist (incl. `attenuvert` for CV amount), so this is largely
 assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
-[#203](https://github.com/ice1x/VST_bomb/issues/203).
+[#203](https://github.com/ice1x/SecLab/issues/203).
 
 - [x] 000162 — **Minitaur voice spec & fidelity audit** — [docs/synths/minitaur.md](docs/synths/minitaur.md):
   target voice vs. the current `examples/minitaur.ron` (one shared envelope for filter+amp, no
   LFO, bare `add` mixer) with the gap list and the target graph. No new DSP nodes needed —
   `attenuvert` already covers the filter-EG amount, LFO depth, and per-osc level. Baseline
-  locked by a `minitaur_is_silent_at_rest_and_sings_on_a_note` test ([#204](https://github.com/ice1x/VST_bomb/issues/204)) 🧪
+  locked by a `minitaur_is_silent_at_rest_and_sings_on_a_note` test ([#204](https://github.com/ice1x/SecLab/issues/204)) 🧪
 - [x] 000163 — **Faithful Minitaur voice** — `vb_engine::minitaur_patch()` (from which
   `examples/minitaur.ron` is generated, kept in sync by an anti-drift test): **separate filter
   and amp envelopes**, a **leveled oscillator mix** (per-osc `attenuvert`), glide, pinned
   values; tests assert silent at rest, audible + bass on a note, and pitch tracking. The LFO is
   split out to 000167 — routing it to cutoff needs a control-rate mixer (`add`/`attenuvert` are
-  audio-typed, and `Audio` is not compatible with `Control`) ([#205](https://github.com/ice1x/VST_bomb/issues/205)) 🧪
+  audio-typed, and `Audio` is not compatible with `Control`) ([#205](https://github.com/ice1x/SecLab/issues/205)) 🧪
 - [x] 000167 — 🧩 **Control-rate math nodes** (`cv-add`, `cv-attenuvert`) + wire the **Minitaur
   LFO** — the audio `add`/`attenuvert` can't carry CV (`Audio` ≠ `Control`), so added their
   `Control`-typed twins (same processors, control ports) and routed
   `lfo → cv-attenuvert(depth) → cv-add ← filter-EG → ladder.cutoff` in `minitaur_patch`; LFO
   depth 0 by default (clean bass, wobble on demand). Closes gap 2 from
-  [docs/synths/minitaur.md](docs/synths/minitaur.md) ([#211](https://github.com/ice1x/VST_bomb/issues/211)) 🧪
+  [docs/synths/minitaur.md](docs/synths/minitaur.md) ([#211](https://github.com/ice1x/SecLab/issues/211)) 🧪
 - [x] 000164 — **Make Minitaur the default patch** — `vb_engine::default_patch` delegates to
   `minitaur_patch`, so the plugin/DAW ships the Minitaur bass; the editor's starting patch
   loads the same voice from the committed `examples/minitaur.ron` (auto-laid-out), so the
   standalone opens on it too — both silent-until-note. Fixed a real bug found here:
   `PatchView::apply_doc` was resetting every knob to its registry default on load (a preset's
   VCA `bias 0` sprang open and droned) — it now carries stored per-node values. Engine/
-  standalone/editor tests updated ([#206](https://github.com/ice1x/VST_bomb/issues/206)) 🧪
+  standalone/editor tests updated ([#206](https://github.com/ice1x/SecLab/issues/206)) 🧪
 - [x] 000165 — **UI polish for factory patches** — a **"factory patches"** palette section
   (`crate::factory`: the instrument clones — Minitaur, Model D, Grandmother, Neutron, Edge,
   Minilogue, drum kit — each `include_str!`'d from `examples/`) with a one-click
   `EditorApp::load_factory_patch` that replaces the canvas; an anti-rot test parses every
   entry. Palette **node-category grouping** was already present (headers per `category`); the
   inspector already labels each parameter by name. Richer per-unit inspector annotations are a
-  minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/VST_bomb/issues/207)) 🧪
+  minor visual follow-up left to a human pass ([#207](https://github.com/ice1x/SecLab/issues/207)) 🧪
 - [x] 000202 — **Minitaur LFO → pitch destination** — the hardware LFO has **two** independent
   destinations, each with its own amount knob (VCO LFO AMOUNT → pitch, VCF LFO AMOUNT → cutoff;
   per Moog's Minitaur manual), but `minitaur_patch` only wired the cutoff leg (000167). Fanned

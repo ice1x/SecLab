@@ -77,7 +77,7 @@ mod tests {
     fn the_preamble_states_role_contract_and_refusals() {
         let p = SYSTEM_PREAMBLE;
         assert!(!p.trim().is_empty());
-        assert!(p.contains("VST_bomb patch assistant"), "role");
+        assert!(p.contains("SecLab patch assistant"), "role");
         assert!(p.contains("ProjectDoc"), "output contract names the doc");
         assert!(p.to_lowercase().contains("refus"), "refusal rules");
         assert!(
@@ -157,7 +157,7 @@ mod tests {
         let prompt = build_system_prompt(&registry, Some(&sample_patch()));
 
         // Pre-prompt first, then the live node reference.
-        assert!(prompt.starts_with("# VST_bomb patch assistant"));
+        assert!(prompt.starts_with("# SecLab patch assistant"));
         assert!(prompt.contains(NODES_HEADING));
         assert!(
             prompt.contains("oscillator [generator]"),
