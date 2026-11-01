@@ -1697,6 +1697,15 @@ impl EditorApp {
         }
     }
 
+    /// Shares a log buffer with the report dialog, so a filed report carries a tail of recent
+    /// log lines (000256). The host (standalone) installs the same buffer as a panic hook, so
+    /// a crash shows up in the next report. Only present with the `assistant` feature — the
+    /// plugin build has no report dialog (and no `report` field).
+    #[cfg(feature = "assistant")]
+    pub fn set_log_buffer(&mut self, log: crate::log_buffer::LogBuffer) {
+        self.report.set_log(log);
+    }
+
     /// Writes the current assistant settings to `settings.ron` under [`Self::modules_dir`] so
     /// they survive a restart. Never writes the API key (it stays in the keychain). A write
     /// failure is reported in the assistant status rather than propagated. Called when the user

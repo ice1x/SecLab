@@ -16,6 +16,7 @@ pub mod factory;
 pub mod layout;
 pub mod library;
 pub mod library_panel;
+pub mod log_buffer;
 pub mod module;
 pub mod palette;
 pub mod patch;
