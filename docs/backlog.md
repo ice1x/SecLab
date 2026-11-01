@@ -949,6 +949,30 @@ assembly + a default-patch swap + UI polish, not new DSP. Tracked as issue
   the shipped bass is unchanged, but the panel now has a working vibrato knob. Brings the code
   up to its own spec in [docs/synths/minitaur.md](docs/synths/minitaur.md) 🧪
 
+### Epic 16 — In-app bug reporter & feedback
+
+The **"Report a problem / feature request"** button: an authenticated user submits the
+session logs + a screenshot + a short description, and it lands as a GitHub issue on this
+repo for triage. **Auth-gated** — no account → no report — via GitHub sign-in (e-mail
+sign-in for non-GitHub users is a later phase). Nothing leaves the machine without an
+explicit "what will be sent?" review, and any stored secret is scrubbed first.
+
+- [x] 000250 — **GitHub device-flow auth core** (`seclab_ai::github`) — the sign-in the
+  reporter gates on. `DeviceFlow::start` requests a device/user code; `poll_once` classifies
+  GitHub's token-endpoint reply into a `PollOutcome`
+  (`Pending`/`SlowDown`/`Authorized`/`Denied`/`Expired`). Drives the crate's shared
+  `HttpTransport` seam, so every path is unit-tested against a mock with **zero network**;
+  needs only a **public** `client_id` (no secret in the binary). `AccessToken` redacts the
+  token in its `Debug` output so it can never leak to a log 🧪
+- [ ] 000251 — **Persist the user token in the OS keychain** (reuse the `keystore` pattern),
+  with a memory-backed reference store for tests; sign-out clears it.
+- [ ] 000252 — **Report payload assembly + secret scrubbing** — collect the session log
+  tail + metadata (version, git SHA, OS) + an egui screenshot, render a "what will be sent?"
+  review, and scrub any keychain secret/token before it can leave the machine.
+- [ ] 000253 — **Create the issue + wire the editor button** — POST the report as a GitHub
+  issue via the user's own token; the editor's "Report a problem / feature request" button
+  runs sign-in (if needed) → review → submit.
+
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
 their own numbers.

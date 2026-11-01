@@ -20,6 +20,20 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **GitHub device-flow auth core for the in-app bug reporter (000250).** First slice of the planned
+  "Report a problem / feature request" feature (new Epic 16): the sign-in it gates on. Reporting will
+  be available only to an authenticated user (no account → no report), and rather than build an account
+  system SecLab signs the user in with their existing GitHub account via the OAuth **device flow** (the
+  same flow `gh auth login` uses). New `seclab_ai::github` module: `DeviceFlow::start` requests a
+  device/user code and `poll_once` classifies GitHub's token-endpoint reply into a `PollOutcome`
+  (`Pending` / `SlowDown` / `Authorized` / `Denied` / `Expired`). It drives the crate's existing
+  `HttpTransport` seam, so all 14 paths are unit-tested against a mock with **zero network**, and needs
+  only a **public** `client_id` — no secret ships in the binary. `AccessToken` redacts the token in its
+  `Debug` output so it can never leak into a log or panic. Token persistence (keychain), payload
+  assembly + secret scrubbing, issue creation and the editor button follow in 000251–000253.
+
 ### Changed
 
 - **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
