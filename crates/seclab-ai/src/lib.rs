@@ -32,6 +32,7 @@ pub mod prompt;
 pub mod provider;
 pub mod repair;
 pub mod report;
+pub mod reporter;
 pub mod settings;
 pub mod suggest;
 
@@ -73,6 +74,7 @@ pub use provider::{
 };
 pub use repair::{repair_patch, RepairError, RepairOutcome};
 pub use report::{build_issue, scrub, IssuePayload, Metadata, ReportDraft, ReportKind, REDACTION};
+pub use reporter::ReportSession;
 pub use settings::{AssistantSettings, SendBlocker};
 pub use suggest::{
     autofix, compatible_consumers, free_outputs, suggest_next, EdgeDefect, Fix, FreeOutput,

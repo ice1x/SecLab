@@ -22,6 +22,17 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Reporter orchestration — `ReportSession` (000254).** One small state machine (`seclab_ai::reporter`)
+  that ties the in-app bug reporter's pieces together — device-flow sign-in, the keychain token store
+  and issue creation — so the editor's "Report a problem" button (000255) is a thin view over it, the
+  same split the assistant uses (`EditSession` / `DesignSession`). It exposes `begin_sign_in` /
+  `poll_sign_in` (persists the token on authorize) / `is_signed_in` / `sign_out`, and `submit`, which
+  owns two safety properties so the UI can't get them wrong: the **auth gate** (no stored token →
+  `AuthError::Unauthorized`, and a 401 clears the token so the UI re-prompts a sign-in) and
+  **self-redaction** (the signed-in token is always added to the scrub list before the payload is
+  built, so the reporter can never leak its own credential into an issue). Driven by the shared
+  `HttpTransport` seam and unit-tested against a mock with zero network. Wiring the egui button +
+  screenshot + live log-tail capture is the final slice (000255).
 - **Create the report as a GitHub issue via the user's token (000253).** The network step of the
   in-app bug reporter (Epic 16): `seclab_ai::github::create_issue` POSTs an `IssuePayload` to the
   GitHub REST issues endpoint authenticated as the signed-in user (bearer token + the required
