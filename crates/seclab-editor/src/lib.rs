@@ -21,6 +21,8 @@ pub mod palette;
 pub mod patch;
 pub mod preset;
 #[cfg(feature = "assistant")]
+pub mod report_panel;
+#[cfg(feature = "assistant")]
 pub mod settings_panel;
 pub mod theme;
 #[cfg(all(target_arch = "wasm32", feature = "app"))]
