@@ -991,11 +991,17 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   which enforces the **auth gate** (no token → `Unauthorized`; 401 → clears the token so the UI
   re-prompts) and **self-redaction** (the signed-in token is always added to the scrub list, so the
   reporter can't leak its own credential). Driven by `HttpTransport`, unit-tested with a mock 🧪
-- [ ] 000255 — **Wire the editor button + capture (screenshot + live log tail)** — the editor's
-  "Report a problem / feature request" button drives a `ReportSession`: GitHub sign-in (device flow,
-  if not already) → gather an egui screenshot + the live session-log tail → "what will be sent?"
-  review → `submit` → link the user to their new issue. (UI / needs in-app verification with the
-  real `REPORT_CLIENT_ID`.)
+- [x] 000255 — **Editor "Report a problem / feature request" button** (`seclab_editor::report_panel`)
+  — a toolbar button opens a dialog: pick bug/feature, type a title + description, **sign in to GitHub**
+  (device flow on a worker thread so the minutes-long authorization never freezes the UI — one worker
+  sends the user code, then polls to completion), review **"what will be sent?"** (scrubbed), and
+  **Send** files it as an issue via `ReportSession`, linking straight to it. Auth-gated: Send is
+  disabled until signed in. Network (sign-in/submit) is `assistant-net`-only like the assistant; the
+  dialog + state machine are headless-tested in the base build. Screenshot + live log tail are 000256 🧪
+- [ ] 000256 — **Attach a screenshot + live log tail to reports** — add a ring-buffer log sink the
+  reporter can snapshot (the project has no logging yet) and capture an egui framebuffer screenshot
+  via `ViewportCommand::Screenshot`, scrub both, and include them in the report. (UI / needs in-app
+  verification.)
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with

@@ -22,6 +22,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **In-app "Report a problem / feature request" button (000255).** The reporter is now wired into the
+  editor (`seclab_editor::report_panel`): a toolbar button opens a dialog where the user picks
+  bug/feature, types a title and description, **signs in with GitHub** (the device flow, run on a
+  worker thread so the minutes-long browser authorization never freezes the UI — one worker reports the
+  user code to show, then polls to completion), reviews a scrubbed **"what will be sent?"** preview, and
+  sends the report, which lands as a GitHub issue the dialog links straight to. Reporting is auth-gated
+  — Send stays disabled until the user is signed in. The network work (sign-in and issue creation) is
+  compiled only under the `assistant-net` feature, exactly like the assistant, so the wasm/plugin
+  builds stay free of the HTTP/keychain stack; the dialog and its state machine are unit-tested in the
+  base build. Attaching an egui screenshot and a live log tail is the next slice (000256).
 - **Reporter orchestration — `ReportSession` (000254).** One small state machine (`seclab_ai::reporter`)
   that ties the in-app bug reporter's pieces together — device-flow sign-in, the keychain token store
   and issue creation — so the editor's "Report a problem" button (000255) is a thin view over it, the

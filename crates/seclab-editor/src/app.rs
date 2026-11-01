@@ -37,6 +37,8 @@ use crate::widgets::{
 #[cfg(feature = "assistant")]
 use crate::assistant_panel::{assistant_panel_ui, AssistantAction};
 #[cfg(feature = "assistant")]
+use crate::report_panel::ReportHost;
+#[cfg(feature = "assistant")]
 use crate::settings_panel::{settings_panel_ui, SettingsAction};
 #[cfg(feature = "assistant")]
 use seclab_ai::{
@@ -213,6 +215,10 @@ pub struct EditorApp {
     /// `assistant` feature so the provider/HTTP stack never reaches the wasm or plugin builds.
     #[cfg(feature = "assistant")]
     assistant: AssistantHost,
+    /// The "Report a problem / feature request" dialog and its GitHub sign-in (000255).
+    /// Behind `assistant` so the HTTP/keychain stack stays out of the wasm/plugin builds.
+    #[cfg(feature = "assistant")]
+    report: ReportHost,
 }
 
 /// The editor's two surfaces. **Structure** is the node/wire graph where a patch is built;
@@ -381,6 +387,8 @@ impl Default for EditorApp {
             panel_drag: None,
             #[cfg(feature = "assistant")]
             assistant: AssistantHost::new(),
+            #[cfg(feature = "assistant")]
+            report: ReportHost::new(),
         }
     }
 }
@@ -2014,6 +2022,9 @@ impl EditorApp {
             if self.assistant.in_flight() {
                 ui.ctx().request_repaint();
             }
+            // Advance the report dialog's worker (sign-in / submit) and draw it on top.
+            self.report.poll();
+            self.report.ui(ui, env!("VB_GIT_SHA"));
         }
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
@@ -2085,6 +2096,10 @@ impl EditorApp {
                         " · ",
                         env!("VB_BUILD_DATE")
                     ));
+                // The "Report a problem / feature request" button (000255): opens the report
+                // dialog, which signs the user in to GitHub and files the report as an issue.
+                #[cfg(feature = "assistant")]
+                self.report.toolbar_button(ui);
                 ui.separator();
                 // Breadcrumbs: root / macro#n / … — click any level to jump back.
                 let depth = self.stack.len();
