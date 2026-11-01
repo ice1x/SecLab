@@ -104,6 +104,14 @@ impl ReportHost {
         let token: Box<dyn TokenStore> = Box::new(seclab_ai::KeychainTokenStore::new("SecLab"));
         #[cfg(not(feature = "assistant-net"))]
         let token: Box<dyn TokenStore> = Box::new(seclab_ai::MemoryTokenStore::new());
+        Self::with_token_store(token)
+    }
+
+    /// A closed dialog over an explicit token store. Lets the tests inject a
+    /// [`seclab_ai::MemoryTokenStore`] so they never touch the real OS keychain, whatever
+    /// feature set the build unified to.
+    #[must_use]
+    fn with_token_store(token: Box<dyn TokenStore>) -> Self {
         Self {
             open: false,
             phase: Phase::Form,
@@ -533,9 +541,16 @@ fn submit_worker(tx: &mpsc::Sender<ReportMsg>, draft: ReportDraft, meta: Metadat
 mod tests {
     use super::*;
 
+    /// A dialog backed by an **in-memory** token store, so tests never touch the real OS
+    /// keychain — which the CI build would otherwise use (the editor unifies to
+    /// `assistant-net` there, so `ReportHost::new()` picks `KeychainTokenStore`).
+    fn test_host() -> ReportHost {
+        ReportHost::with_token_store(Box::new(seclab_ai::MemoryTokenStore::new()))
+    }
+
     #[test]
     fn opens_and_closes() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         assert!(!host.open);
         host.open();
         assert!(host.open);
@@ -544,7 +559,7 @@ mod tests {
 
     #[test]
     fn reopening_after_done_starts_a_fresh_form() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.title = "old".to_owned();
         host.phase = Phase::Done;
         host.open();
@@ -554,7 +569,7 @@ mod tests {
 
     #[test]
     fn code_message_shows_the_device_code_and_keeps_signing_in() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.apply_msg(ReportMsg::Code(DeviceCode {
             device_code: "dc".to_owned(),
             user_code: "WXYZ-1234".to_owned(),
@@ -568,7 +583,7 @@ mod tests {
 
     #[test]
     fn signed_in_message_returns_to_the_form() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.phase = Phase::SigningIn;
         host.apply_msg(ReportMsg::SignedIn);
         assert_eq!(host.phase, Phase::Form);
@@ -578,7 +593,7 @@ mod tests {
 
     #[test]
     fn submitted_message_shows_the_issue_link() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.phase = Phase::Submitting;
         host.apply_msg(ReportMsg::Submitted(CreatedIssue {
             number: 7,
@@ -590,7 +605,7 @@ mod tests {
 
     #[test]
     fn a_401_submit_failure_reprompts_sign_in() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.phase = Phase::Submitting;
         host.apply_msg(ReportMsg::SubmitFailed {
             message: "your GitHub session expired".to_owned(),
@@ -602,7 +617,7 @@ mod tests {
 
     #[test]
     fn submit_requires_a_title() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.title = "   ".to_owned();
         host.begin_submit("abc1234");
         assert_eq!(host.status.as_deref(), Some("please enter a short title"));
@@ -611,7 +626,7 @@ mod tests {
 
     #[test]
     fn submit_requires_sign_in() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.title = "a real title".to_owned();
         // MemoryTokenStore starts signed out in the base build.
         host.begin_submit("abc1234");
@@ -621,7 +636,7 @@ mod tests {
 
     #[test]
     fn sign_out_clears_the_token() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.token.store("gho_tok").unwrap();
         assert!(host.signed_in());
         host.sign_out();
@@ -630,7 +645,7 @@ mod tests {
 
     #[test]
     fn preview_scrubs_and_tags_the_title() {
-        let mut host = ReportHost::new();
+        let mut host = test_host();
         host.title = "no sound".to_owned();
         host.description = "leaked gho_SECRETTOKEN here".to_owned();
         let preview = host.preview("deadbee");
