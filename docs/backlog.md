@@ -964,8 +964,12 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   `HttpTransport` seam, so every path is unit-tested against a mock with **zero network**;
   needs only a **public** `client_id` (no secret in the binary). `AccessToken` redacts the
   token in its `Debug` output so it can never leak to a log 🧪
-- [ ] 000251 — **Persist the user token in the OS keychain** (reuse the `keystore` pattern),
-  with a memory-backed reference store for tests; sign-out clears it.
+- [x] 000251 — **Persist the user token in the OS keychain** — a `TokenStore` trait with
+  `store`/`load`/`clear` (sign-out) + `is_signed_in`, mirroring the BYOK `keystore` pattern:
+  `MemoryTokenStore` (the tested in-session reference / dev default) and, behind the
+  `keychain` feature, `KeychainTokenStore` (OS keychain, filed under the app service +
+  `github-report-token`). Only the token string is persisted (scope/type are not); neither
+  backend is serializable, so the token can't reach disk by accident; `clear` is idempotent 🧪
 - [ ] 000252 — **Report payload assembly + secret scrubbing** — collect the session log
   tail + metadata (version, git SHA, OS) + an egui screenshot, render a "what will be sent?"
   review, and scrub any keychain secret/token before it can leave the machine.

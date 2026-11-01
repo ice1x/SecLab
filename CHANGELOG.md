@@ -22,6 +22,14 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Keychain persistence for the signed-in GitHub token (000251).** Builds on the device-flow core:
+  a `TokenStore` trait (`store` / `load` / `clear` for sign-out / `is_signed_in`) mirroring the BYOK
+  `keystore` pattern, with `MemoryTokenStore` (the tested in-session reference and dev default) and,
+  behind the `keychain` feature, `KeychainTokenStore` persisting to the OS keychain under the app's
+  service name and a fixed `github-report-token` account. The token is a secret: only the token string
+  is stored (the scope/type from `AccessToken` are not persisted), neither backend is serializable so
+  it cannot reach disk by accident, and `clear` is idempotent so signing out when already signed out is
+  not an error.
 - **GitHub device-flow auth core for the in-app bug reporter (000250).** First slice of the planned
   "Report a problem / feature request" feature (new Epic 16): the sign-in it gates on. Reporting will
   be available only to an authenticated user (no account → no report), and rather than build an account

@@ -46,9 +46,11 @@ pub use diff::{PatchDiff, Retype};
 pub use edit_session::{EditSession, EditState, Turn, TurnStatus};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
+#[cfg(feature = "keychain")]
+pub use github::KeychainTokenStore;
 pub use github::{
-    AccessToken, AuthError, DeviceCode, DeviceFlow, PollOutcome, ACCESS_TOKEN_URL, DEVICE_CODE_URL,
-    DEVICE_GRANT_TYPE, REPORT_SCOPE,
+    AccessToken, AuthError, DeviceCode, DeviceFlow, MemoryTokenStore, PollOutcome, TokenStore,
+    ACCESS_TOKEN_URL, DEVICE_CODE_URL, DEVICE_GRANT_TYPE, REPORT_SCOPE,
 };
 #[cfg(feature = "net")]
 pub use http::ReqwestTransport;
