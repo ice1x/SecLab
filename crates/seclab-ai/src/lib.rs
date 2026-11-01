@@ -20,6 +20,7 @@ pub mod diff;
 pub mod edit_session;
 pub mod explain;
 pub mod generate;
+pub mod github;
 pub mod http;
 pub mod inspect;
 pub mod keystore;
@@ -45,6 +46,10 @@ pub use diff::{PatchDiff, Retype};
 pub use edit_session::{EditSession, EditState, Turn, TurnStatus};
 pub use explain::{explain_node, explain_patch, ExplainError};
 pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, GenerateOutcome};
+pub use github::{
+    AccessToken, AuthError, DeviceCode, DeviceFlow, PollOutcome, ACCESS_TOKEN_URL, DEVICE_CODE_URL,
+    DEVICE_GRANT_TYPE, REPORT_SCOPE,
+};
 #[cfg(feature = "net")]
 pub use http::ReqwestTransport;
 pub use http::{Header, HttpReply, HttpTransport};
