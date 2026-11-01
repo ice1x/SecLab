@@ -978,11 +978,17 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   (`gho_`/`ghp_`/`github_pat_`/`sk-ant-`/`sk-…`) from the logs, preserving layout.
   `IssuePayload::preview` renders the exact text for the "what will be sent?" screen. No IO:
   capturing the live log tail + screenshot and sending belong to 000253 🧪
-- [ ] 000253 — **Capture (screenshot + log tail), create the issue + wire the editor button**
-  — grab an egui screenshot and the live session-log tail, run them through `report::scrub`
-  + the "what will be sent?" review, POST the report as a GitHub issue via the user's own
-  token, and wire the editor's "Report a problem / feature request" button: sign-in (device
-  flow, if needed) → review → submit.
+- [x] 000253 — **Create the GitHub issue via the user's token** (`seclab_ai::github::create_issue`)
+  — POSTs an `IssuePayload` to the REST issues endpoint with the signed-in user's bearer token
+  (+ the required `User-Agent`), returning the new issue's number + URL (`CreatedIssue`) on 201;
+  maps 401 → `AuthError::Unauthorized` (re-sign-in), other non-201 → `Status`. The reporter's
+  public OAuth App is baked in: `REPORT_CLIENT_ID` (`Ov23…`, not a secret), `REPORT_REPO_OWNER`
+  /`REPORT_REPO_NAME`. Driven by `HttpTransport`, unit-tested with a mock (no network) 🧪
+- [ ] 000254 — **Wire the editor button + capture (screenshot + live log tail)** — the editor's
+  "Report a problem / feature request" button runs the whole flow: GitHub sign-in (device flow,
+  if not already) → gather an egui screenshot + the live session-log tail → `report::scrub` +
+  the "what will be sent?" review → `create_issue` → link the user to their new issue. (UI /
+  needs in-app verification.)
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
