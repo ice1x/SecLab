@@ -21,6 +21,7 @@
 use serde::Deserialize;
 
 use crate::http::{Header, HttpTransport};
+use crate::keystore::KeyStoreError;
 
 /// GitHub's device-code request endpoint (step 1 of the device flow).
 pub const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
@@ -271,6 +272,156 @@ impl<'a> DeviceFlow<'a> {
 /// GitHub's documented minimum slow-down bump when it omits a new interval.
 const DEFAULT_SLOW_DOWN_SECS: u64 = 5;
 
+/// Persistent storage for the signed-in user's GitHub token (000251).
+///
+/// The bug reporter is auth-gated: a stored token means "signed in". Like the BYOK API
+/// keys (see [`crate::keystore`]), the token is a **secret** — it must never land in a
+/// project file, RON, or telemetry — so it lives only in a `TokenStore`. Two backends
+/// implement the trait: [`MemoryTokenStore`], the ephemeral in-session reference (and the
+/// dev/offline default), and — behind the `keychain` feature — [`KeychainTokenStore`],
+/// which persists to the OS keychain. Neither backend is serializable, so the token cannot
+/// reach disk by accident; only the token string is stored (the scope/type from
+/// [`AccessToken`] are informational and not persisted).
+///
+/// Signing out is [`TokenStore::clear`] — idempotent, so clearing when already signed out
+/// is not an error.
+pub trait TokenStore {
+    /// Stores `token`, replacing any existing one. The token is trimmed; an empty or
+    /// whitespace-only token is rejected.
+    ///
+    /// # Errors
+    /// [`KeyStoreError::EmptyKey`] for a blank token, or [`KeyStoreError::Backend`].
+    fn store(&mut self, token: &str) -> Result<(), KeyStoreError>;
+
+    /// Reads the stored token, or `None` when signed out.
+    ///
+    /// # Errors
+    /// [`KeyStoreError::Backend`] if the store cannot be read.
+    fn load(&self) -> Result<Option<String>, KeyStoreError>;
+
+    /// Removes any stored token (sign-out). Idempotent: clearing when signed out succeeds.
+    ///
+    /// # Errors
+    /// [`KeyStoreError::Backend`] if the store cannot be written.
+    fn clear(&mut self) -> Result<(), KeyStoreError>;
+
+    /// Convenience: persist the token from a freshly obtained [`AccessToken`], storing only
+    /// the secret string (scope/type are not persisted).
+    ///
+    /// # Errors
+    /// As [`store`](TokenStore::store).
+    fn store_access(&mut self, token: &AccessToken) -> Result<(), KeyStoreError> {
+        self.store(&token.token)
+    }
+
+    /// Whether a token is currently stored (i.e. the user is signed in).
+    ///
+    /// # Errors
+    /// [`KeyStoreError::Backend`] if the store cannot be read.
+    fn is_signed_in(&self) -> Result<bool, KeyStoreError> {
+        Ok(self.load()?.is_some())
+    }
+}
+
+/// Validates and normalizes a token before storage: trims surrounding whitespace and
+/// rejects an empty result.
+fn normalize_token(token: &str) -> Result<String, KeyStoreError> {
+    let trimmed = token.trim();
+    if trimmed.is_empty() {
+        return Err(KeyStoreError::EmptyKey);
+    }
+    Ok(trimmed.to_owned())
+}
+
+/// An in-session, in-memory token store — the offline/dev default and the tested reference.
+///
+/// Deliberately not `Serialize`/`Deserialize`: the token lives only in memory for the
+/// session, exactly like [`MemoryKeyStore`](crate::keystore::MemoryKeyStore).
+#[derive(Default)]
+pub struct MemoryTokenStore {
+    token: Option<String>,
+}
+
+impl MemoryTokenStore {
+    /// An empty (signed-out) store.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl TokenStore for MemoryTokenStore {
+    fn store(&mut self, token: &str) -> Result<(), KeyStoreError> {
+        self.token = Some(normalize_token(token)?);
+        Ok(())
+    }
+
+    fn load(&self) -> Result<Option<String>, KeyStoreError> {
+        Ok(self.token.clone())
+    }
+
+    fn clear(&mut self) -> Result<(), KeyStoreError> {
+        self.token = None;
+        Ok(())
+    }
+}
+
+/// The OS-keychain-backed token store (macOS Security.framework via the `keyring` crate).
+///
+/// Enabled by the `keychain` feature. The token persists across sessions in the system
+/// secure store under the app's service name and a fixed account label; the app holds only
+/// those names, never the token material.
+#[cfg(feature = "keychain")]
+pub struct KeychainTokenStore {
+    service: String,
+    account: String,
+}
+
+#[cfg(feature = "keychain")]
+impl KeychainTokenStore {
+    /// The keychain account label the GitHub report token is filed under.
+    pub const ACCOUNT: &'static str = "github-report-token";
+
+    /// A store filing the token under `service` (e.g. `"SecLab"`) and [`Self::ACCOUNT`].
+    #[must_use]
+    pub fn new(service: impl Into<String>) -> Self {
+        Self {
+            service: service.into(),
+            account: Self::ACCOUNT.to_owned(),
+        }
+    }
+
+    fn entry(&self) -> Result<keyring::Entry, KeyStoreError> {
+        keyring::Entry::new(&self.service, &self.account)
+            .map_err(|e| KeyStoreError::Backend(e.to_string()))
+    }
+}
+
+#[cfg(feature = "keychain")]
+impl TokenStore for KeychainTokenStore {
+    fn store(&mut self, token: &str) -> Result<(), KeyStoreError> {
+        let token = normalize_token(token)?;
+        self.entry()?
+            .set_password(&token)
+            .map_err(|e| KeyStoreError::Backend(e.to_string()))
+    }
+
+    fn load(&self) -> Result<Option<String>, KeyStoreError> {
+        match self.entry()?.get_password() {
+            Ok(token) => Ok(Some(token)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(e) => Err(KeyStoreError::Backend(e.to_string())),
+        }
+    }
+
+    fn clear(&mut self) -> Result<(), KeyStoreError> {
+        match self.entry()?.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(KeyStoreError::Backend(e.to_string())),
+        }
+    }
+}
+
 /// Encodes `s` as a JSON string literal (quotes + escapes), so request bodies are valid
 /// JSON even when a value contains `"` or `\`.
 fn json_str(s: &str) -> String {
@@ -462,5 +613,53 @@ mod tests {
     fn json_str_escapes_quotes_and_backslashes() {
         assert_eq!(json_str(r#"a"b\c"#), r#""a\"b\\c""#);
         assert_eq!(json_str("line\n"), r#""line\n""#);
+    }
+
+    #[test]
+    fn token_store_round_trips_and_sign_out_clears() {
+        let mut store = MemoryTokenStore::new();
+        assert_eq!(store.load().unwrap(), None);
+        assert!(!store.is_signed_in().unwrap(), "starts signed out");
+
+        store.store("gho_abc").unwrap();
+        assert_eq!(store.load().unwrap().as_deref(), Some("gho_abc"));
+        assert!(store.is_signed_in().unwrap(), "signed in after store");
+
+        // Sign out.
+        store.clear().unwrap();
+        assert_eq!(store.load().unwrap(), None);
+        assert!(!store.is_signed_in().unwrap());
+        // Clearing again (already signed out) is a no-op, not an error.
+        store.clear().unwrap();
+    }
+
+    #[test]
+    fn token_store_replaces_and_trims_and_rejects_blank() {
+        let mut store = MemoryTokenStore::new();
+        store.store("first").unwrap();
+        store.store("  second  ").unwrap();
+        assert_eq!(
+            store.load().unwrap().as_deref(),
+            Some("second"),
+            "newest token wins and is trimmed"
+        );
+
+        assert_eq!(store.store("   "), Err(KeyStoreError::EmptyKey));
+        assert_eq!(store.store(""), Err(KeyStoreError::EmptyKey));
+        // A rejected store leaves the previous token intact.
+        assert_eq!(store.load().unwrap().as_deref(), Some("second"));
+    }
+
+    #[test]
+    fn store_access_persists_only_the_secret_from_an_access_token() {
+        let tok = AccessToken {
+            token: "gho_from_flow".to_owned(),
+            scope: "public_repo".to_owned(),
+            token_type: "bearer".to_owned(),
+        };
+        let mut store = MemoryTokenStore::new();
+        store.store_access(&tok).unwrap();
+        // Only the token string is stored; scope/type are not persisted.
+        assert_eq!(store.load().unwrap().as_deref(), Some("gho_from_flow"));
     }
 }
