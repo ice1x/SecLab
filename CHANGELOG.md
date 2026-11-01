@@ -22,6 +22,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Report payload assembly + secret scrubbing (000252).** The pure logic behind the in-app bug
+  reporter's submission (Epic 16): `seclab_ai::report` turns a `ReportDraft` (bug/feature + title +
+  description) and a `Metadata` stamp (crate version, build commit, OS/arch) into the `IssuePayload`
+  (a tagged title and a Markdown body) the GitHub issue will carry. Before assembly, `scrub` runs the
+  privacy pass — it removes every known secret (the signed-in token and any BYOK API keys) wherever it
+  appears in the description or logs, then redacts any remaining credential-shaped word
+  (`gho_`/`ghp_`/`github_pat_`/`sk-ant-`/`sk-…`), preserving the log's layout so a token can't swallow
+  the next line. `IssuePayload::preview` renders the exact bytes for a "what will be sent?" review, the
+  same consent discipline the assistant uses for outgoing requests. The module is pure (no IO): the
+  live log tail, the egui screenshot and the actual issue POST land with the editor wiring (000253).
 - **Keychain persistence for the signed-in GitHub token (000251).** Builds on the device-flow core:
   a `TokenStore` trait (`store` / `load` / `clear` for sign-out / `is_signed_in`) mirroring the BYOK
   `keystore` pattern, with `MemoryTokenStore` (the tested in-session reference and dev default) and,

@@ -970,12 +970,19 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   `keychain` feature, `KeychainTokenStore` (OS keychain, filed under the app service +
   `github-report-token`). Only the token string is persisted (scope/type are not); neither
   backend is serializable, so the token can't reach disk by accident; `clear` is idempotent 🧪
-- [ ] 000252 — **Report payload assembly + secret scrubbing** — collect the session log
-  tail + metadata (version, git SHA, OS) + an egui screenshot, render a "what will be sent?"
-  review, and scrub any keychain secret/token before it can leave the machine.
-- [ ] 000253 — **Create the issue + wire the editor button** — POST the report as a GitHub
-  issue via the user's own token; the editor's "Report a problem / feature request" button
-  runs sign-in (if needed) → review → submit.
+- [x] 000252 — **Report payload assembly + secret scrubbing** (`seclab_ai::report`) — the
+  pure logic that turns a `ReportDraft` (bug/feature + title + description) and a `Metadata`
+  stamp (version, build SHA, OS/arch) into the `IssuePayload` (tagged title + Markdown body)
+  the GitHub issue carries. `scrub` runs first: it removes every known secret (signed-in
+  token, BYOK keys) wherever it appears, then redacts any remaining credential-shaped word
+  (`gho_`/`ghp_`/`github_pat_`/`sk-ant-`/`sk-…`) from the logs, preserving layout.
+  `IssuePayload::preview` renders the exact text for the "what will be sent?" screen. No IO:
+  capturing the live log tail + screenshot and sending belong to 000253 🧪
+- [ ] 000253 — **Capture (screenshot + log tail), create the issue + wire the editor button**
+  — grab an egui screenshot and the live session-log tail, run them through `report::scrub`
+  + the "what will be sent?" review, POST the report as a GitHub issue via the user's own
+  token, and wire the editor's "Report a problem / feature request" button: sign-in (device
+  flow, if needed) → review → submit.
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
