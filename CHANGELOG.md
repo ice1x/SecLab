@@ -22,6 +22,16 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Create the report as a GitHub issue via the user's token (000253).** The network step of the
+  in-app bug reporter (Epic 16): `seclab_ai::github::create_issue` POSTs an `IssuePayload` to the
+  GitHub REST issues endpoint authenticated as the signed-in user (bearer token + the required
+  `User-Agent`), returning the new issue's number and URL (`CreatedIssue`) on HTTP 201 so the app can
+  link the user straight to their report. HTTP 401 maps to `AuthError::Unauthorized` (prompt a fresh
+  sign-in); any other non-201 status becomes `AuthError::Status`. The reporter's **public** OAuth App
+  is baked in as `REPORT_CLIENT_ID` (`Ov23…` — a client ID is public by design, not a secret),
+  alongside `REPORT_REPO_OWNER`/`REPORT_REPO_NAME`. Like the rest of the module it drives the shared
+  `HttpTransport` seam, so it is unit-tested against a mock and opens no socket in the default build.
+  Capturing the screenshot + live log tail and wiring the editor button follow in 000254.
 - **Report payload assembly + secret scrubbing (000252).** The pure logic behind the in-app bug
   reporter's submission (Epic 16): `seclab_ai::report` turns a `ReportDraft` (bug/feature + title +
   description) and a `Metadata` stamp (crate version, build commit, OS/arch) into the `IssuePayload`

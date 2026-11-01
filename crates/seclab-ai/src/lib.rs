@@ -50,8 +50,9 @@ pub use generate::{edit_patch, generate_patch, EditOutcome, GenerateError, Gener
 #[cfg(feature = "keychain")]
 pub use github::KeychainTokenStore;
 pub use github::{
-    AccessToken, AuthError, DeviceCode, DeviceFlow, MemoryTokenStore, PollOutcome, TokenStore,
-    ACCESS_TOKEN_URL, DEVICE_CODE_URL, DEVICE_GRANT_TYPE, REPORT_SCOPE,
+    create_issue, issues_url, AccessToken, AuthError, CreatedIssue, DeviceCode, DeviceFlow,
+    MemoryTokenStore, PollOutcome, TokenStore, ACCESS_TOKEN_URL, DEVICE_CODE_URL,
+    DEVICE_GRANT_TYPE, REPORT_CLIENT_ID, REPORT_REPO_NAME, REPORT_REPO_OWNER, REPORT_SCOPE,
 };
 #[cfg(feature = "net")]
 pub use http::ReqwestTransport;

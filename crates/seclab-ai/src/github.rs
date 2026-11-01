@@ -22,6 +22,7 @@ use serde::Deserialize;
 
 use crate::http::{Header, HttpTransport};
 use crate::keystore::KeyStoreError;
+use crate::report::IssuePayload;
 
 /// GitHub's device-code request endpoint (step 1 of the device flow).
 pub const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
@@ -35,6 +36,26 @@ pub const DEVICE_GRANT_TYPE: &str = "urn:ietf:params:oauth:grant-type:device_cod
 /// public repository; it grants no access to private repos.
 pub const REPORT_SCOPE: &str = "public_repo";
 
+/// The **public** client ID of the "SecLab" GitHub OAuth App the reporter signs in with.
+///
+/// This is not a secret — an OAuth client ID is public by design (it travels in every
+/// authorization request, exactly as `gh`'s own client ID ships in its source). Security
+/// rests on the user authorizing explicitly, the minimal [`REPORT_SCOPE`], and GitHub's
+/// rate limiting — never on hiding this value. The app has Device Flow enabled and
+/// non-expiring user tokens.
+pub const REPORT_CLIENT_ID: &str = "Ov23liqzuPLIh3uLlhVC";
+
+/// The owner of the repository reports are filed on.
+pub const REPORT_REPO_OWNER: &str = "ice1x";
+/// The repository reports are filed on.
+pub const REPORT_REPO_NAME: &str = "SecLab";
+
+/// Builds the GitHub REST URL for creating an issue on `owner/repo`.
+#[must_use]
+pub fn issues_url(owner: &str, repo: &str) -> String {
+    format!("https://api.github.com/repos/{owner}/{repo}/issues")
+}
+
 /// Why a device-flow step could not be completed.
 ///
 /// A *fatal* OAuth error (`access_denied`, `expired_token`) is **not** an `AuthError` — it
@@ -47,6 +68,8 @@ pub enum AuthError {
     Transport(String),
     /// GitHub returned an unexpected HTTP status.
     Status(u16),
+    /// The token was missing, invalid or revoked (HTTP 401): the user must sign in again.
+    Unauthorized,
     /// The response body could not be decoded into the expected shape.
     Decode(String),
     /// GitHub returned an OAuth error this flow does not model.
@@ -58,6 +81,9 @@ impl std::fmt::Display for AuthError {
         match self {
             AuthError::Transport(e) => write!(f, "network error talking to GitHub: {e}"),
             AuthError::Status(code) => write!(f, "GitHub returned HTTP {code}"),
+            AuthError::Unauthorized => {
+                write!(f, "not signed in to GitHub (token invalid or expired)")
+            }
             AuthError::Decode(e) => write!(f, "could not read GitHub's response: {e}"),
             AuthError::Oauth(e) => write!(f, "GitHub rejected the request: {e}"),
         }
@@ -271,6 +297,76 @@ impl<'a> DeviceFlow<'a> {
 
 /// GitHub's documented minimum slow-down bump when it omits a new interval.
 const DEFAULT_SLOW_DOWN_SECS: u64 = 5;
+
+/// The issue GitHub created from a report, for linking the user to it afterwards.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CreatedIssue {
+    /// The new issue's number.
+    pub number: u64,
+    /// The new issue's web URL (`https://github.com/owner/repo/issues/N`).
+    pub html_url: String,
+}
+
+/// The fields of the created-issue reply we read back.
+#[derive(Deserialize)]
+struct CreatedIssueBody {
+    number: u64,
+    html_url: String,
+}
+
+/// Files a report as a GitHub issue on `owner/repo`, authenticated as the signed-in user
+/// with their `token` (000253).
+///
+/// POSTs the [`IssuePayload`] to the GitHub REST issues endpoint with a bearer token and
+/// the required `User-Agent`. On success (HTTP 201) it returns the new issue's number and
+/// URL so the app can link the user straight to their report. Drives the shared
+/// [`HttpTransport`] seam, so it is unit-tested with a mock and never touches the network in
+/// the default build.
+///
+/// # Errors
+/// - [`AuthError::Unauthorized`] on HTTP 401 — the token is missing, invalid or revoked, so
+///   the user must sign in again.
+/// - [`AuthError::Status`] for any other non-201 status (e.g. 403 rate limit, 422 validation).
+/// - [`AuthError::Transport`] if the request cannot be made at all.
+/// - [`AuthError::Decode`] if a 201 body is not the expected JSON.
+pub fn create_issue(
+    transport: &dyn HttpTransport,
+    token: &str,
+    owner: &str,
+    repo: &str,
+    payload: &IssuePayload,
+) -> Result<CreatedIssue, AuthError> {
+    let url = issues_url(owner, repo);
+    let auth = format!("Bearer {token}");
+    let headers: [Header<'_>; 5] = [
+        ("Authorization", auth.as_str()),
+        ("Accept", "application/vnd.github+json"),
+        ("Content-Type", "application/json"),
+        // GitHub's REST API rejects a request with no User-Agent.
+        ("User-Agent", "SecLab"),
+        ("X-GitHub-Api-Version", "2022-11-28"),
+    ];
+    let body = format!(
+        r#"{{"title":{},"body":{}}}"#,
+        json_str(&payload.title),
+        json_str(&payload.body)
+    );
+    let reply = transport
+        .post_json(&url, &headers, &body)
+        .map_err(|e| AuthError::Transport(e.to_string()))?;
+    match reply.status {
+        201 => {
+            let parsed: CreatedIssueBody =
+                serde_json::from_str(&reply.body).map_err(|e| AuthError::Decode(e.to_string()))?;
+            Ok(CreatedIssue {
+                number: parsed.number,
+                html_url: parsed.html_url,
+            })
+        }
+        401 => Err(AuthError::Unauthorized),
+        other => Err(AuthError::Status(other)),
+    }
+}
 
 /// Persistent storage for the signed-in user's GitHub token (000251).
 ///
@@ -661,5 +757,84 @@ mod tests {
         store.store_access(&tok).unwrap();
         // Only the token string is stored; scope/type are not persisted.
         assert_eq!(store.load().unwrap().as_deref(), Some("gho_from_flow"));
+    }
+
+    fn payload() -> IssuePayload {
+        IssuePayload {
+            title: "[Bug] no sound".to_owned(),
+            body: "**Type:** Bug\n\nVCA stuck".to_owned(),
+        }
+    }
+
+    #[test]
+    fn create_issue_posts_payload_with_bearer_and_parses_the_created_issue() {
+        let transport = MockTransport::replying(
+            201,
+            r#"{"number":42,"html_url":"https://github.com/ice1x/SecLab/issues/42","title":"x"}"#,
+        );
+        let issue =
+            create_issue(&transport, "gho_tok", "ice1x", "SecLab", &payload()).expect("created");
+        assert_eq!(issue.number, 42);
+        assert_eq!(issue.html_url, "https://github.com/ice1x/SecLab/issues/42");
+
+        let req = transport.only_request();
+        assert_eq!(req.url, "https://api.github.com/repos/ice1x/SecLab/issues");
+        assert!(req
+            .headers
+            .iter()
+            .any(|(k, v)| k == "Authorization" && v == "Bearer gho_tok"));
+        assert!(
+            req.headers.iter().any(|(k, _)| k == "User-Agent"),
+            "GitHub requires a User-Agent"
+        );
+        assert!(req.body.contains("[Bug] no sound"), "title in body");
+        assert!(req.body.contains("VCA stuck"), "issue body in body");
+    }
+
+    #[test]
+    fn create_issue_maps_401_to_unauthorized() {
+        let transport = MockTransport::replying(401, r#"{"message":"Bad credentials"}"#);
+        assert_eq!(
+            create_issue(&transport, "stale", "ice1x", "SecLab", &payload()),
+            Err(AuthError::Unauthorized)
+        );
+    }
+
+    #[test]
+    fn create_issue_maps_other_status_to_status_error() {
+        // 422 (validation) and 403 (rate limit) are surfaced as Status, not Unauthorized.
+        let transport = MockTransport::replying(422, r#"{"message":"Validation Failed"}"#);
+        assert_eq!(
+            create_issue(&transport, "t", "ice1x", "SecLab", &payload()),
+            Err(AuthError::Status(422))
+        );
+    }
+
+    #[test]
+    fn create_issue_maps_a_dead_transport_to_transport_error() {
+        let transport = MockTransport::failing("no route to host");
+        match create_issue(&transport, "t", "ice1x", "SecLab", &payload()) {
+            Err(AuthError::Transport(msg)) => assert!(msg.contains("no route to host")),
+            other => panic!("expected Transport error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn create_issue_rejects_a_malformed_created_body() {
+        let transport = MockTransport::replying(201, "not json");
+        assert!(matches!(
+            create_issue(&transport, "t", "ice1x", "SecLab", &payload()),
+            Err(AuthError::Decode(_))
+        ));
+    }
+
+    #[test]
+    fn report_constants_are_the_public_oauth_app() {
+        // The client ID is public by design (not a secret); guard against an accidental edit.
+        assert_eq!(REPORT_CLIENT_ID, "Ov23liqzuPLIh3uLlhVC");
+        assert_eq!(
+            issues_url(REPORT_REPO_OWNER, REPORT_REPO_NAME),
+            "https://api.github.com/repos/ice1x/SecLab/issues"
+        );
     }
 }
