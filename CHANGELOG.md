@@ -22,6 +22,13 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Attach a live log tail to bug reports (000256).** The project had no logging stack, so a report
+  had nothing to carry. New `seclab_editor::log_buffer::LogBuffer` — a bounded, clonable ring sink:
+  the standalone installs it as a **panic hook** (so a crash is captured for the next report) and
+  shares the same handle with the editor, whose report dialog snapshots the last ~200 lines into the
+  issue body. The tail is scrubbed for secrets by `ReportSession` before it leaves and is shown in the
+  "what will be sent?" preview. (Screenshots are deferred to 000257 — a GitHub issue can't carry an
+  image via the user's token without our own image hosting.)
 - **In-app "Report a problem / feature request" button (000255).** The reporter is now wired into the
   editor (`seclab_editor::report_panel`): a toolbar button opens a dialog where the user picks
   bug/feature, types a title and description, **signs in with GitHub** (the device flow, run on a

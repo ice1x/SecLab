@@ -460,6 +460,11 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     // that stays in the keychain) from `settings.ron` in that same folder. The user clicks
     // "apply / connect" in the Settings panel to wire the provider.
     editor.load_assistant_settings();
+    // A shared log buffer: installed as a panic hook (so a crash is captured) and handed to the
+    // editor, whose report dialog attaches its tail to a filed bug report (000256).
+    let log = seclab_editor::log_buffer::LogBuffer::new(500);
+    log.install_panic_hook();
+    editor.set_log_buffer(log);
     let registry = Registry::with_builtins();
     let build_ctx = BuildContext::default();
     let stack = start_stack(

@@ -25,6 +25,11 @@ use seclab_ai::{
     build_issue, CreatedIssue, DeviceCode, Metadata, ReportDraft, ReportKind, TokenStore,
 };
 
+use crate::log_buffer::LogBuffer;
+
+/// How many recent log lines a report carries.
+const LOG_TAIL_LINES: usize = 200;
+
 #[cfg(feature = "assistant-net")]
 use seclab_ai::{AuthError, PollOutcome, ReportSession, ReqwestTransport};
 
@@ -85,6 +90,9 @@ pub struct ReportHost {
     /// Token storage (keychain under `assistant-net`), read for the signed-in state and
     /// cleared on sign-out.
     token: Box<dyn TokenStore>,
+    /// The shared log sink whose tail is attached to a report (000256). Empty by default
+    /// until the host shares its buffer via [`ReportHost::set_log`].
+    log: LogBuffer,
     rx: Option<mpsc::Receiver<ReportMsg>>,
     worker: Option<JoinHandle<()>>,
 }
@@ -122,9 +130,15 @@ impl ReportHost {
             issue: None,
             status: None,
             token,
+            log: LogBuffer::new(1),
             rx: None,
             worker: None,
         }
+    }
+
+    /// Shares the app's log buffer so reports carry a tail of recent log lines.
+    pub fn set_log(&mut self, log: LogBuffer) {
+        self.log = log;
     }
 
     /// Opens the dialog. Reopening after a finished report starts a fresh form.
@@ -271,10 +285,11 @@ impl ReportHost {
         }
         let draft = ReportDraft::new(self.kind, self.title.trim(), self.description.trim());
         let meta = Metadata::current(Some(git_sha.to_owned()));
+        let logs = self.log.tail(LOG_TAIL_LINES);
         #[cfg(feature = "assistant-net")]
         {
             let (tx, rx) = mpsc::channel();
-            let worker = std::thread::spawn(move || submit_worker(&tx, draft, meta));
+            let worker = std::thread::spawn(move || submit_worker(&tx, draft, meta, logs));
             self.rx = Some(rx);
             self.worker = Some(worker);
             self.phase = Phase::Submitting;
@@ -282,7 +297,7 @@ impl ReportHost {
         }
         #[cfg(not(feature = "assistant-net"))]
         {
-            let _ = (draft, meta);
+            let _ = (draft, meta, logs);
             self.status = Some("sending needs the network build (assistant-net)".to_owned());
         }
     }
@@ -291,7 +306,7 @@ impl ReportHost {
     fn preview(&self, git_sha: &str) -> String {
         let draft = ReportDraft::new(self.kind, self.title.trim(), self.description.trim());
         let meta = Metadata::current(Some(git_sha.to_owned()));
-        build_issue(&draft, &meta, "", &[]).preview()
+        build_issue(&draft, &meta, &self.log.tail(LOG_TAIL_LINES), &[]).preview()
     }
 
     /// Draws the toolbar button that opens the dialog.
@@ -504,7 +519,7 @@ fn sign_in_worker(tx: &mpsc::Sender<ReportMsg>) {
 /// The submit worker body: create the issue as the signed-in user. Runs its own transport +
 /// keychain store on a background thread.
 #[cfg(feature = "assistant-net")]
-fn submit_worker(tx: &mpsc::Sender<ReportMsg>, draft: ReportDraft, meta: Metadata) {
+fn submit_worker(tx: &mpsc::Sender<ReportMsg>, draft: ReportDraft, meta: Metadata, logs: String) {
     let transport = match ReqwestTransport::new(std::time::Duration::from_secs(60)) {
         Ok(t) => t,
         Err(e) => {
@@ -517,8 +532,8 @@ fn submit_worker(tx: &mpsc::Sender<ReportMsg>, draft: ReportDraft, meta: Metadat
     };
     let mut store = seclab_ai::KeychainTokenStore::new("SecLab");
     let mut session = ReportSession::new(&mut store);
-    // No live log tail yet (000256): an empty excerpt omits the logs block.
-    match session.submit(&transport, &draft, &meta, "", &[]) {
+    // The session scrubs the log tail (and auto-adds the signed-in token) before it leaves.
+    match session.submit(&transport, &draft, &meta, &logs, &[]) {
         Ok(issue) => {
             let _ = tx.send(ReportMsg::Submitted(issue));
         }
@@ -655,5 +670,22 @@ mod tests {
             "secret scrubbed in preview"
         );
         assert!(preview.contains("deadbee"), "build sha stamped");
+    }
+
+    #[test]
+    fn preview_includes_the_shared_log_tail_scrubbed() {
+        let mut host = test_host();
+        let log = LogBuffer::new(10);
+        log.push("boot ok");
+        log.push("request used gho_LOGTOKEN then failed");
+        host.set_log(log);
+        host.title = "crash on load".to_owned();
+
+        let preview = host.preview("sha1234");
+        assert!(preview.contains("boot ok"), "log tail is attached");
+        assert!(
+            !preview.contains("gho_LOGTOKEN"),
+            "a secret in the logs is scrubbed from the preview"
+        );
     }
 }

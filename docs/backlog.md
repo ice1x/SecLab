@@ -998,10 +998,16 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   **Send** files it as an issue via `ReportSession`, linking straight to it. Auth-gated: Send is
   disabled until signed in. Network (sign-in/submit) is `assistant-net`-only like the assistant; the
   dialog + state machine are headless-tested in the base build. Screenshot + live log tail are 000256 🧪
-- [ ] 000256 — **Attach a screenshot + live log tail to reports** — add a ring-buffer log sink the
-  reporter can snapshot (the project has no logging yet) and capture an egui framebuffer screenshot
-  via `ViewportCommand::Screenshot`, scrub both, and include them in the report. (UI / needs in-app
-  verification.)
+- [x] 000256 — **Attach a live log tail to reports** (`seclab_editor::log_buffer`) — a bounded,
+  shareable `LogBuffer` ring sink (the project had no logging): the standalone installs it as a panic
+  hook (so a crash is captured) and shares it with the editor, whose reporter snapshots the last ~200
+  lines into the issue body. The tail is scrubbed by `ReportSession` before it leaves (and shown in
+  the "what will be sent?" preview) 🧪
+- [ ] 000257 — **Attach a screenshot to reports** — capture an egui framebuffer via
+  `ViewportCommand::Screenshot`. **Blocked on image hosting:** a GitHub issue can't carry an image via
+  the user's token (no public upload API; `public_repo` can't create release assets on a repo the user
+  doesn't own), so this needs our own hosting — a small Cloudflare Worker + R2 — before the shot can be
+  embedded. (UI + backend / needs in-app verification.)
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
