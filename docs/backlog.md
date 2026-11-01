@@ -984,11 +984,18 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   maps 401 → `AuthError::Unauthorized` (re-sign-in), other non-201 → `Status`. The reporter's
   public OAuth App is baked in: `REPORT_CLIENT_ID` (`Ov23…`, not a secret), `REPORT_REPO_OWNER`
   /`REPORT_REPO_NAME`. Driven by `HttpTransport`, unit-tested with a mock (no network) 🧪
-- [ ] 000254 — **Wire the editor button + capture (screenshot + live log tail)** — the editor's
-  "Report a problem / feature request" button runs the whole flow: GitHub sign-in (device flow,
-  if not already) → gather an egui screenshot + the live session-log tail → `report::scrub` +
-  the "what will be sent?" review → `create_issue` → link the user to their new issue. (UI /
-  needs in-app verification.)
+- [x] 000254 — **Reporter orchestration — `ReportSession`** (`seclab_ai::reporter`) — one small
+  state machine that ties device-flow sign-in, the token store and issue creation together, so the
+  editor button becomes a thin view (same split as `EditSession`/`DesignSession`). `begin_sign_in`
+  / `poll_sign_in` (persists the token on authorize) / `is_signed_in` / `sign_out`, and `submit`
+  which enforces the **auth gate** (no token → `Unauthorized`; 401 → clears the token so the UI
+  re-prompts) and **self-redaction** (the signed-in token is always added to the scrub list, so the
+  reporter can't leak its own credential). Driven by `HttpTransport`, unit-tested with a mock 🧪
+- [ ] 000255 — **Wire the editor button + capture (screenshot + live log tail)** — the editor's
+  "Report a problem / feature request" button drives a `ReportSession`: GitHub sign-in (device flow,
+  if not already) → gather an egui screenshot + the live session-log tail → "what will be sent?"
+  review → `submit` → link the user to their new issue. (UI / needs in-app verification with the
+  real `REPORT_CLIENT_ID`.)
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
