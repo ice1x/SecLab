@@ -92,6 +92,20 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **Move CI onto GitHub-hosted runners (000258).** Now the repo is public, GitHub-hosted macOS
+  minutes are free, so [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs every job on
+  `macos-14` (Apple Silicon / ARM64) instead of the developer's self-hosted Mac — CI no longer
+  depends on that machine being online. Each ephemeral job installs its toolchain
+  (`dtolnay/rust-toolchain`) and restores the cargo/target cache (`Swatinem/rust-cache`); the
+  `clap-validator` gate `cargo install`s and caches the validator; `coverage` installs
+  `cargo-llvm-cov`. To make this possible, `seclab-library`'s `drevo` dependency changed from an
+  absolute local path to a **pinned git revision** of `ice1x/drevo`: Cargo resolves optional
+  dependencies for the lockfile even when their feature is off, so the old absolute path made every
+  workspace command (`cargo fmt`, `cargo test --workspace`, even `cargo metadata`) fail on any
+  machine without that exact directory. drevo is still only compiled under `--features library`;
+  local live-development against a sibling drevo checkout is preserved by a `paths` override in the
+  developer's user-global `~/.cargo/config.toml` (outside the repo, so it never reaches CI).
+
 - **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
   public launch, the only remaining occurrences of the old brand (and its crate-prefix initials) were
   the rename-documenting entries in this changelog and `docs/backlog.md`. Those entries were rewritten

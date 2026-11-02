@@ -13,26 +13,37 @@ concurrency:
 env:
   CARGO_TERM_COLOR: always
 
-# All required CI runs on the self-hosted macOS/ARM64 runner: GitHub-hosted runners are
-# currently unavailable for this private repo (account billing), so cloud legs would
-# never start. The machine has rustup/stable with rustfmt+clippy preinstalled and keeps
-# a persistent work dir, so it needs neither the toolchain action nor the cache action.
-# Cross-platform (Linux/Windows) coverage lives in cross-platform.yml, manually
-# dispatchable once billing is restored.
+# CI runs on GitHub-hosted macOS runners (`macos-14`, Apple Silicon / ARM64 — the project's
+# native target). The repo is public, so hosted macOS minutes are free, and this removes the
+# dependency on the developer's self-hosted Mac being online. Unlike the old self-hosted
+# runner (which had the toolchain and build tools preinstalled and a persistent work dir),
+# each hosted job is ephemeral, so every job installs its toolchain with
+# `dtolnay/rust-toolchain` and restores the cargo/target cache with `Swatinem/rust-cache`.
+#
+# drevo coupling: the patch-library crate (seclab-library) depends on `drevo` as a PINNED
+# GIT dependency (it used to be an absolute local path). drevo is OPTIONAL and only compiled
+# under `--features library`, but Cargo resolves every dependency's manifest for the lockfile
+# regardless of features — so an absolute-path dep made every workspace command fail on any
+# machine without that exact path, which is why CI could not run on hosted runners before. A
+# git source resolves identically everywhere; `cargo metadata --no-deps` (the fmt gate) does
+# not even fetch it. See crates/seclab-library/Cargo.toml.
+#
+# Cross-platform (Linux/Windows) coverage lives in cross-platform.yml.
 jobs:
   fmt:
     name: rustfmt
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      # Format-check only THIS workspace's crates, never `--all`. `cargo fmt --all`
-      # descends into local path-dependency packages, and `seclab-library` depends on the
-      # sibling `drevo` checkout by absolute path — so `--all` would format ~184 drevo
-      # files and fail this required gate whenever that shared, external working tree has
-      # unformatted edits (another dev/session mid-work). We scope to workspace members,
-      # enumerated from `cargo metadata --no-deps` so a newly-added crate is picked up
-      # automatically (no hand-maintained list, and `cargo fmt` has no `--exclude`).
-      - name: rustfmt (workspace crates only, excludes path-dep drevo)
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      # Format-check only THIS workspace's crates, never `--all`. `cargo fmt --all` descends
+      # into local path-based dependency packages, so scoping to the workspace members keeps
+      # the gate independent of any sibling checkout. The members are enumerated from `cargo
+      # metadata --no-deps` so a newly-added crate is picked up automatically (no hand list,
+      # and `cargo fmt` has no `--exclude`). `--no-deps` never touches the drevo git source.
+      - name: rustfmt (workspace crates only)
         run: |
           cargo metadata --no-deps --format-version 1 \
             | jq -r '.packages[].name' \
@@ -40,90 +51,108 @@ jobs:
             | xargs cargo fmt --check
 
   check:
-    name: clippy & test (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
+    name: clippy & test
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
       - name: clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test
         run: cargo test --workspace
 
-  # clap-validator is installed machine-wide on the runner
-  # (cargo install --git https://github.com/free-audio/clap-validator.git).
-  # pluginval joins for VST3/AU once those exports land (000069/000070).
+  # clap-validator is `cargo install`'d and cached (it is not on the hosted image). pluginval
+  # joins for VST3/AU once those exports are gated in. `cargo xtask validate` bundles the
+  # release plugin with nih-plug's bundler (no cmake / clap-wrapper — those are only for the
+  # wrapped VST3/AU formats) and runs clap-validator over the produced `.clap`.
   plugin-validate:
-    name: clap-validator (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
+    name: clap-validator
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
-      - run: cargo xtask validate
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: cache the clap-validator binary
+        id: clap-validator-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/clap-validator
+          key: clap-validator-macos-14-v1
+      - name: install clap-validator
+        if: steps.clap-validator-cache.outputs.cache-hit != 'true'
+        run: cargo install --git https://github.com/free-audio/clap-validator.git
+      - name: validate the CLAP bundle
+        run: cargo xtask validate
 
-  # Advisory line coverage. cargo-llvm-cov and the llvm-tools rustup component are
-  # installed on the runner. This job is NON-blocking (continue-on-error): coverage is a
-  # signal, not a gate, so a tooling hiccup or a dip in the number never fails the merge.
+  # Advisory line coverage. cargo-llvm-cov + the llvm-tools component are installed here (the
+  # hosted image has neither). NON-blocking (continue-on-error): coverage is a signal, not a
+  # gate, so a tooling hiccup or a dip in the number never fails the merge. PR-only.
   coverage:
-    name: coverage (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: coverage
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+      - uses: Swatinem/rust-cache@v2
+      - name: install cargo-llvm-cov
+        run: cargo install cargo-llvm-cov
       - name: line coverage summary
         run: cargo llvm-cov --workspace --summary-only
 
-  # Opt-in drevo-backed library (Epic 11). The `library` feature compiles the embedded
-  # drevo dependency and runs its CRUD smoke test. NON-blocking: it depends on the sibling
-  # `drevo` crate on the runner machine, so the required gate never hinges on an external
-  # crate's state. The default jobs above do not build drevo.
+  # Opt-in drevo-backed library (Epic 11). The `library` feature compiles the embedded drevo
+  # dependency (resolved from the pinned git rev on CI) and runs its CRUD smoke test.
+  # NON-blocking: the default workspace build never compiles drevo, so the required gates do
+  # not hinge on it. PR-only.
   library:
-    name: library / drevo (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: library / drevo
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: drevo CRUD smoke test
         run: cargo test -p seclab-library --features library
 
   # Compile-check of the embedded plugin editor (000067, `gui` feature — egui/baseview).
-  # NON-blocking: the required clap-validator gate builds the plugin WITHOUT the editor, so
-  # a headless runner never opens a window; this only proves the GUI code still compiles.
+  # NON-blocking: the required clap-validator gate builds the plugin WITHOUT the editor, so a
+  # headless runner never opens a window; this only proves the GUI code still compiles. PR-only.
   gui:
-    name: plugin editor / gui (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: plugin editor / gui
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: build the plugin with the editor
         run: cargo build -p seclab-plugin --features gui
 
   # Native-only AI assistant panel (000108, `assistant` feature). The panel renders the
-  # seclab-ai EditSession view-model, so it pulls in the provider/HTTP stack and is OFF by
-  # default — the required clippy/test gate above builds seclab-editor WITHOUT it, and the wasm
-  # job proves it never leaks into the browser build. This job compiles and tests the panel
-  # under the feature so the code cannot rot. NON-blocking: an optional native feature, like
-  # `gui` and `library`, is a signal rather than a required gate.
+  # seclab-ai EditSession view-model, pulling in the provider/HTTP stack; it is OFF by default
+  # (the required clippy/test gate builds seclab-editor WITHOUT it, and the wasm job proves it
+  # never leaks into the browser build). This job compiles and tests the panel under the
+  # feature so the code cannot rot. NON-blocking. PR-only.
   assistant:
-    name: assistant panel (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: assistant panel
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
       - name: clippy the assistant panel (deny warnings)
         run: cargo clippy -p seclab-editor --features assistant --all-targets -- -D warnings
       - name: test the assistant panel
@@ -134,21 +163,20 @@ jobs:
       - name: clippy the assistant-net providers (deny warnings)
         run: cargo clippy -p seclab-editor --features assistant-net --all-targets -- -D warnings
 
-  # WASM proof of concept (backlog 000081): the editor compiles to the browser target and
-  # the platform-agnostic core (engine/nodes/project format) is portable. NON-blocking —
-  # the wasm32 toolchain is not a required gate — this only proves the web path still builds.
+  # WASM proof of concept (backlog 000081): the editor compiles to the browser target and the
+  # platform-agnostic core (engine/nodes/project format) is portable. NON-blocking — the
+  # wasm32 toolchain is not a required gate — this only proves the web path still builds. PR-only.
   wasm:
-    name: wasm build (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: wasm build
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-      - name: add the wasm32 target
-        run: rustup target add wasm32-unknown-unknown
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
       - name: build the core crates for wasm32
         run: cargo build -p seclab-core -p seclab-nodes -p seclab-project -p seclab-runtime --target wasm32-unknown-unknown
       # The browser audio engine (000083): the nih-plug-free instrument core plus its
@@ -172,19 +200,20 @@ jobs:
         run: cargo build -p seclab-library --target wasm32-unknown-unknown
 
   # Browser audio prototype (backlog 000083): build the seclab-engine wasm package with its JS
-  # bindings and run the headless Node smoke test — the exact Rust → wasm → JS path the
-  # browser AudioWorklet drives (silent at rest, audible on a note, decays on release).
-  # NON-blocking: the wasm/JS toolchain is not a required gate. See web/audio/.
+  # bindings and run the headless Node smoke test — the exact Rust → wasm → JS path the browser
+  # AudioWorklet drives (silent at rest, audible on a note, decays on release). NON-blocking:
+  # the wasm/JS toolchain is not a required gate. See web/audio/. PR-only.
   browser-audio:
-    name: browser audio (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: browser audio
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
       - name: ensure wasm-pack is available
         run: command -v wasm-pack >/dev/null 2>&1 || cargo install wasm-pack
       - name: build the audio engine to a Node wasm package
@@ -192,23 +221,21 @@ jobs:
       - name: run the headless audio smoke test
         run: node web/audio/test/smoke.mjs
 
-  # AudioUnit validation (000092): build the AUv2 via clap-wrapper and run Apple's `auval`
-  # on it — the authoritative check that the exported AU actually loads, negotiates formats,
+  # AudioUnit validation (000092): build the AUv2 via clap-wrapper and run Apple's `auval` on
+  # it — the authoritative check that the exported AU actually loads, negotiates formats,
   # renders at every sample rate, and handles parameters/MIDI. NON-blocking: the wrapped-AU
-  # build is heavy (clones/builds clap-wrapper) and auval is macOS-only, so it is a signal,
-  # not a required gate. The required CLAP gate stays `clap-validator`.
+  # build is heavy (clones/builds clap-wrapper via cmake) and auval is macOS-only, so it is a
+  # signal, not a required gate. The required CLAP gate stays `clap-validator`. PR-only.
   au-validate:
-    name: au validate (macos-self-hosted)
-    runs-on: [self-hosted, macOS, ARM64]
-    # Advisory job: it already ran on the PR, so skip it on the post-merge push to main —
-    # that keeps the single self-hosted runner free for the next PR instead of re-running
-    # every signal job. The required gates (fmt, check, clap-validator) still run on main.
+    name: au validate
+    runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       # validate-au builds+installs the AUv2 itself, then runs auval — one step so the build
-      # and validation resolve the same target/bundled path (the runner checkout is nested
-      # inside the developer clone, so splitting them let the two disagree).
+      # and validation resolve the same target/bundled path.
       - name: build the AUv2 and validate it with auval
         run: cargo xtask validate-au
