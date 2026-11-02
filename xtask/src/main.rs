@@ -394,6 +394,16 @@ fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
     // Best-effort and CI-only: a developer's machine already tracks the install through its
     // running audio session, and we never want to disturb that session locally.
     if std::env::var_os("CI").is_some() {
+        // macOS only registers a *code-signed* AudioUnit. A bundle freshly built on a CI
+        // runner is unsigned, so the registrar silently ignores it and auval reports "-50 /
+        // didn't find the component" (confirmed: `auval -a` listed only Apple units). Ad-hoc
+        // sign it (`--sign -`, no Developer ID required) so the registrar accepts it. CI-only
+        // — locally the dev session already tracks the install, and `xtask sign` handles real
+        // Developer ID signing its own way.
+        let _ = std::process::Command::new("codesign")
+            .args(["--force", "--deep", "--sign", "-", "--timestamp=none"])
+            .arg(&component)
+            .status();
         // The registrar respawns on demand; killing it discards the stale registry.
         let _ = std::process::Command::new("killall")
             .args(["-9", "AudioComponentRegistrar"])
