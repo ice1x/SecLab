@@ -221,13 +221,19 @@ jobs:
       - name: run the headless audio smoke test
         run: node web/audio/test/smoke.mjs
 
-  # AudioUnit validation (000092): build the AUv2 via clap-wrapper and run Apple's `auval` on
-  # it — the authoritative check that the exported AU actually loads, negotiates formats,
-  # renders at every sample rate, and handles parameters/MIDI. NON-blocking: the wrapped-AU
-  # build is heavy (clones/builds clap-wrapper via cmake) and auval is macOS-only, so it is a
-  # signal, not a required gate. The required CLAP gate stays `clap-validator`. PR-only.
-  au-validate:
-    name: au validate
+  # AudioUnit wrapper build (000092): build the AUv2 `.component` via clap-wrapper + cmake —
+  # the compile/link regression guard for the wrapped-AU export. NON-blocking signal, PR-only.
+  #
+  # We deliberately do NOT run Apple's `auval` here. auval validates an AU by loading it
+  # through the system AudioComponent registry, and a headless GitHub-hosted runner has no
+  # logged-in audio session to register a freshly installed third-party component — auval
+  # always reports "Cannot get Component's Name strings" / error -50 / "didn't find the
+  # component", even after ad-hoc code-signing and kicking AudioComponentRegistrar (tried,
+  # did not help). The authoritative plugin gate on CI is the required `clap-validator` job
+  # (the CLAP is the primary format here); run the full `cargo xtask validate-au` (build +
+  # auval) locally or on a machine with a real session when the AU export needs validating.
+  au-build:
+    name: au build (wrapper)
     runs-on: macos-14
     if: ${{ github.event_name == 'pull_request' }}
     continue-on-error: true
@@ -235,7 +241,5 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # validate-au builds+installs the AUv2 itself, then runs auval — one step so the build
-      # and validation resolve the same target/bundled path.
-      - name: build the AUv2 and validate it with auval
-        run: cargo xtask validate-au
+      - name: build the AUv2 via clap-wrapper
+        run: cargo xtask bundle-auv2
