@@ -387,6 +387,20 @@ fn validate_au() -> Result<(), Box<dyn std::error::Error>> {
     let subtype = au_code(&plist, "subtype")?;
     let manufacturer = au_code(&plist, "manufacturer")?;
     println!("validating AU ({kind} {subtype} {manufacturer}) with auval…");
+    // On a headless CI runner the freshly-installed component is not yet in the Audio
+    // Component registry, so auval reports "Cannot get Component's Name strings" / "didn't
+    // find the component" (err -50) even though the bundle is valid. Kick the registrar to
+    // force a fresh scan that picks up the just-installed `.component` before validating.
+    // Best-effort and CI-only: a developer's machine already tracks the install through its
+    // running audio session, and we never want to disturb that session locally.
+    if std::env::var_os("CI").is_some() {
+        // The registrar respawns on demand; killing it discards the stale registry.
+        let _ = std::process::Command::new("killall")
+            .args(["-9", "AudioComponentRegistrar"])
+            .status();
+        // `auval -a` enumerates every unit, forcing a full rescan that registers our bundle.
+        let _ = std::process::Command::new("auval").arg("-a").status();
+    }
     let mut cmd = std::process::Command::new("auval");
     cmd.args(auval_args(&kind, &subtype, &manufacturer));
     run(&mut cmd, "auval").map_err(|e| {
