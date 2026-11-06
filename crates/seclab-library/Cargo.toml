@@ -10,19 +10,24 @@ authors.workspace = true
 [dependencies]
 # drevo is the embedded graph store for the patch library (Epic 11). It is OPTIONAL and
 # gated behind the `library` feature, so the default workspace build — and CI's required
-# gate — never compiles it. We depend on the crate directly (the direct Rust API, not the
+# gates — never compile it. We depend on the crate directly (the direct Rust API, not the
 # Bolt server) with default features OFF, pulling only the embedded `redb-backend`; this
 # drops drevo's heavy `http` (axum/tokio) and `cbindgen` defaults.
 #
-# Path dependency on the sibling drevo checkout. The path is ABSOLUTE on purpose: Cargo
-# resolves every path dependency's manifest even when it is optional and its feature is
-# off, and the self-hosted CI runner checks this repo out into its own `_work` tree (not
-# alongside `/…/repo/drevo`), so a relative `../../../drevo` would fail to resolve there
-# and break the default gate. An absolute path resolves identically for the local clone
-# and the runner (same machine). This is a deliberate, documented single-machine coupling
-# for the Epic 11 assessment; a git dependency can replace it once the integration
-# stabilises. drevo is still only COMPILED under `--features library`.
-drevo = { path = "/Users/cold00n/repo/drevo", default-features = false, optional = true }
+# GIT dependency, pinned to a revision (was an absolute local path). Cargo resolves every
+# dependency's manifest for the lockfile even when it is optional and its feature is off,
+# so an absolute-path dep (`/Users/.../drevo`) made EVERY workspace command — `cargo fmt`,
+# `cargo test --workspace`, even `cargo metadata` — fail on any machine without that exact
+# path. That blocked running CI on GitHub-hosted runners. A pinned git source resolves
+# identically everywhere (hosted CI, any clone) and is still only COMPILED under
+# `--features library`; `cargo metadata --no-deps` (the fmt gate) does not even fetch it.
+# The pin keeps the `library` signal job reproducible; bump it to adopt newer drevo.
+#
+# Local live-dev against a sibling drevo checkout (editing drevo and rebuilding SecLab in
+# one step) is restored by a `paths` override in the developer's user-global
+# `~/.cargo/config.toml` (outside the repo, so it never reaches CI). Cargo matches it by
+# package name + version; absent that override — e.g. on CI — the pinned git rev is used.
+drevo = { git = "https://github.com/ice1x/drevo.git", rev = "e3f321de3685e91df20d50da548ca7d99dfc4521", default-features = false, optional = true }
 # Reading patches to import (000095). seclab-project is a light workspace crate; still gated
 # behind `library` so the default build stays untouched.
 seclab-project = { workspace = true, optional = true }
