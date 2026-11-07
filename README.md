@@ -39,7 +39,14 @@ Faster test runs: [`cargo nextest run`](https://nexte.st/) (config in
 
 ## License
 
-**PolyForm Strict License 1.0.0** — source-available, not open-source: you may read the
-code, but using, modifying, redistributing or commercializing it is not permitted. See
-[`LICENSE`](LICENSE) for the full terms and [`NOTICE`](NOTICE) for third-party components
-(which remain under their own, permissive licenses).
+Two documents, for two different things:
+
+- **Source code — [PolyForm Strict License 1.0.0](LICENSE).** Source-available, not
+  open-source: you may read the code, but using, modifying, redistributing or
+  commercializing it is not permitted. [`NOTICE`](NOTICE) lists the third-party components,
+  which remain under their own, permissive licenses.
+- **Official beta binaries — [Freeware Beta EULA](EULA-BETA.md).** The pre-release builds
+  the project distributes (standalone app + CLAP/VST3/AU plug-ins) are **free to download
+  and use, including to make and sell music** — you just may not redistribute, modify or
+  reverse-engineer them. This is what lets the beta be tested by real musicians while the
+  source stays under the strict license. The final release may ship under different terms.
