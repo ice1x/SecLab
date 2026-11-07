@@ -1,13 +1,16 @@
 # Releasing
 
 How a SecLab release is built, packaged, and (optionally) signed. This covers backlog
-[000090](../README.md) (release bundles in CI) and [000092](../README.md) (export the synth
-to VST3 + AU).
+[000090](backlog.md) (release bundles in CI) and [000092](backlog.md) (export the synth to
+VST3 + AU).
 
 ## What a release contains
 
-The four macOS bundles the build produces under `target/bundled/`, packaged into one zip
-(`SecLab-<tag>-macos.zip`):
+One zip per OS, each carrying that OS's bundles plus the license documents (`LICENSE`,
+`NOTICE`, `EULA-BETA.md` — the beta binaries ship under the freeware beta EULA, the source
+under PolyForm Strict; see the README's License section).
+
+### macOS — `SecLab-<tag>-macos-arm64.zip`
 
 | Bundle | Format | Install location |
 | --- | --- | --- |
@@ -17,9 +20,30 @@ The four macOS bundles the build produces under `target/bundled/`, packaged into
 | `seclab-plugin.app` | wrapped standalone | `/Applications/` |
 
 The VST3 and AU dynamically load the CLAP from the standard locations, so install the
-`.clap` alongside them. Each bundle already carries the MVP synth's default patch (the
-`export` step installs a `.vbp` into the bundle's resources; the plugin loads `VB_PATCH` →
-bundled patch → built-in default, in that order).
+`.clap` alongside them. Apple Silicon only (the hosted `macos-15` runner is arm64).
+
+### Linux — `SecLab-<tag>-linux-x86_64.zip`
+
+| Bundle | Format | Install location |
+| --- | --- | --- |
+| `seclab-plugin.clap` | CLAP | `~/.clap/` |
+| `seclab-standalone` | native standalone (cpal + eframe) | anywhere on `$PATH` |
+
+### Windows — `SecLab-<tag>-windows-x86_64.zip`
+
+| Bundle | Format | Install location |
+| --- | --- | --- |
+| `seclab-plugin.clap` | CLAP | `%COMMONPROGRAMFILES%\CLAP\` |
+| `seclab-standalone.exe` | native standalone (cpal + eframe) | anywhere |
+
+Linux and Windows get the CLAP (with the embedded editor) and the native standalone; the
+VST3/AU wrappers are macOS-only for now because `cargo xtask bundle-vst3` / `bundle-auv2`
+drive clap-wrapper with macOS paths and flags. Hosts on those OSes load the CLAP directly
+(Bitwig, REAPER, FL Studio, Ardour, …); VST3 wrappers for them are a follow-up.
+
+Each CLAP already carries the MVP synth's default patch (the `export` step installs a `.vbp`
+into the bundle's resources; the plugin loads `VB_PATCH` → bundled patch → built-in default,
+in that order).
 
 ## The CI workflow
 
@@ -29,51 +53,57 @@ bundles on:
 - a **version tag** push — `git tag v0.1.0 && git push origin v0.1.0`, or
 - a **manual dispatch** from the Actions tab (or `gh workflow run Release`).
 
-It runs on the self-hosted macOS/ARM64 runner, calls the existing `cargo xtask`
-bundle commands (reusing the cached clap-wrapper checkout), zips the four bundles, and
-uploads them as the **`SecLab-macos-bundles`** workflow artifact. It does **not** create a
-public GitHub Release — download the artifact from the run and attach it to a release
-yourself when you are ready to publish.
+It runs three independent legs on GitHub-hosted runners (`macos-15`, `ubuntu-latest`,
+`windows-latest`). The macOS leg calls the existing `cargo xtask` bundle commands (cloning
+and building clap-wrapper under `target/` on the first run); the Linux/Windows legs run the
+nih-plug bundler (`cargo xtask bundle seclab-plugin --release --features gui`) and
+`cargo build --release -p seclab-standalone`. Each leg uploads its zip as a workflow
+artifact — **`SecLab-macos-arm64`**, **`SecLab-linux-x86_64`**, **`SecLab-windows-x86_64`**.
+The workflow does **not** create a public GitHub Release — download the artifacts from the
+run and attach them to a release yourself when you are ready to publish.
 
-### macOS-only, for now
+The runner image labels are perishable (GitHub retires images roughly yearly and announces
+it in [actions/runner-images](https://github.com/actions/runner-images/issues?q=label%3Aannouncement));
+when `ci.yml` moves to a newer image, move `release.yml` with it.
 
-Only the macOS leg is wired: the self-hosted macOS runner is the only one available while
-the account's GitHub-hosted runner billing is unavailable (see
-[`cross-platform.yml`](../.github/workflows/cross-platform.yml)). Linux/Windows release legs
-join this workflow once that is restored.
+## Signing and notarization (macOS, optional)
 
-## Signing and notarization (optional)
-
-The workflow signs and notarizes **only when the credentials are configured** — otherwise it
-uploads unsigned bundles, which run on the build machine but are blocked by Gatekeeper on
-other Macs. To turn signing on, set these as repository **secrets**:
+The macOS leg signs and notarizes **only when the credentials are configured** — otherwise it
+uploads unsigned bundles, which Gatekeeper blocks on other Macs (right-click → Open, or
+`xattr -d com.apple.quarantine`, works around it for testers). To turn signing on, set these
+as repository **secrets**:
 
 | Secret | Used by | What it is |
 | --- | --- | --- |
 | `DEVELOPER_ID` | `cargo xtask sign` | the Developer ID Application identity, e.g. `Developer ID Application: Your Name (TEAMID)` |
-| `NOTARY_PROFILE` | `cargo xtask notarize` | the name of a `notarytool` keychain profile stored on the runner |
+| `NOTARY_PROFILE` | `cargo xtask notarize` | the name of a `notarytool` keychain profile |
 
-The signing identity (certificate + private key) and the `notarytool` keychain profile must
-exist **on the self-hosted runner's login keychain** — secrets only select which identity/
-profile to use. See [signing.md](signing.md) for the one-time setup and the full manual
-flow.
+On a GitHub-hosted runner there is no persistent login keychain, so the signing certificate
+(+ private key) and the notary credentials additionally have to be imported into the job's
+temporary keychain from secrets before `cargo xtask sign` runs — that import step is not
+wired yet (it needs an Apple Developer account to test against). See
+[signing.md](signing.md) for the identities involved and the full manual flow.
+
+Linux and Windows bundles are unsigned (Windows SmartScreen will warn on first launch of the
+standalone; Authenticode signing is a follow-up).
 
 ## Cutting a release
 
 1. Update the version and [CHANGELOG.md](../CHANGELOG.md).
 2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The Release workflow builds, (optionally) signs, and uploads the bundles artifact.
-4. Download `SecLab-macos-bundles`, verify it loads (`auval -v aumu gWrp clAd`,
-   clap-validator, or a DAW), and attach the zip to a GitHub Release.
+3. The Release workflow builds, (optionally) signs, and uploads the three artifacts.
+4. Download them, verify they load (`clap-validator`, `auval -v aumu gWrp clAd` on macOS, or a
+   DAW), and attach the zips to a GitHub Release.
 
 ## Building locally
 
 The same bundles, without CI:
 
 ```bash
-cargo xtask bundle seclab-plugin --release   # CLAP
-cargo xtask bundle-vst3                   # VST3
-cargo xtask bundle-auv2                   # AUv2
-cargo xtask bundle-standalone             # standalone .app
-# → target/bundled/{seclab-plugin.clap,.vst3,.component,.app}
+cargo xtask bundle seclab-plugin --release --features gui   # CLAP with the editor (any OS)
+cargo build --release -p seclab-standalone                 # native standalone (any OS)
+cargo xtask bundle-vst3                                    # VST3 (macOS)
+cargo xtask bundle-auv2                                    # AUv2 (macOS)
+cargo xtask bundle-standalone                              # wrapped standalone .app (macOS)
+# → target/bundled/{seclab-plugin.clap,.vst3,.component,.app}, target/release/seclab-standalone
 ```

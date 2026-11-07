@@ -179,6 +179,13 @@ impl WrappedFormat {
     }
 }
 
+/// Whether `dir` holds a clap-wrapper checkout cmake can configure: its top-level
+/// `CMakeLists.txt` must be present. A missing or hollow directory (e.g. one a CI cache
+/// restored without its contents) is not usable and must be (re-)cloned.
+fn clap_wrapper_checkout_is_usable(dir: &Path) -> bool {
+    dir.join("CMakeLists.txt").is_file()
+}
+
 /// Builds the release CLAP, then wraps it into the requested format via clap-wrapper.
 fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error>> {
     // The wrapped bundles (VST3/AU/standalone) ship with the embedded editor (000067) —
@@ -193,9 +200,16 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     let root = workspace_root()?;
     let clap_bundle = bundle_dir()?;
 
-    // Clone once, reuse forever (delete target/clap-wrapper to refresh).
+    // Clone once, reuse forever (delete target/clap-wrapper to refresh). The check is for a
+    // USABLE checkout, not a mere directory: on CI, `Swatinem/rust-cache` restores `target/`
+    // and prunes everything cargo did not produce, which left an EMPTY `target/clap-wrapper`
+    // behind — a bare `exists()` then skipped the clone and cmake failed with "does not
+    // appear to contain CMakeLists.txt". A hollow directory is removed and re-cloned.
     let wrapper_src = root.join("target").join("clap-wrapper");
-    if !wrapper_src.exists() {
+    if !clap_wrapper_checkout_is_usable(&wrapper_src) {
+        if wrapper_src.exists() {
+            std::fs::remove_dir_all(&wrapper_src)?;
+        }
         run(
             std::process::Command::new("git")
                 .args(["clone", "--depth", "1", CLAP_WRAPPER_REPO])
@@ -605,6 +619,24 @@ mod tests {
         // Absent → None.
         std::fs::remove_file(helper.join("auv2_Info.plist")).unwrap();
         assert!(find_generated_au_plist(&root).is_none());
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_clap_wrapper_checkout_is_usable_only_with_its_cmakelists() {
+        use super::clap_wrapper_checkout_is_usable;
+        let root = std::env::temp_dir().join(format!("vbcw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+
+        // Missing entirely → clone.
+        assert!(!clap_wrapper_checkout_is_usable(&root));
+        // A hollow directory (what a pruned CI cache leaves behind) → still clone.
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!clap_wrapper_checkout_is_usable(&root));
+        // The real thing has a top-level CMakeLists.txt → reuse.
+        std::fs::write(root.join("CMakeLists.txt"), b"project(clap-wrapper)").unwrap();
+        assert!(clap_wrapper_checkout_is_usable(&root));
 
         std::fs::remove_dir_all(&root).unwrap();
     }

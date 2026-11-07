@@ -119,6 +119,27 @@ Two independent version numbers matter in this project:
   local live-development against a sibling drevo checkout is preserved by a `paths` override in the
   developer's user-global `~/.cargo/config.toml` (outside the repo, so it never reaches CI).
 
+- **Release bundles for macOS, Linux and Windows on hosted runners (000090, 000261).**
+  [`release.yml`](.github/workflows/release.yml) leaves the self-hosted Mac: the macOS leg now runs
+  on `macos-15` (CLAP + VST3 + AUv2 + wrapped standalone, as before), and two new legs build the
+  CLAP with the embedded editor plus the native `seclab-standalone` on `ubuntu-latest` and
+  `windows-latest`. Every leg zips its bundles with `LICENSE`/`NOTICE`/`EULA-BETA.md` and uploads
+  `SecLab-{macos-arm64,linux-x86_64,windows-x86_64}`. The parked `cross-platform.yml` is folded into
+  [`ci.yml`](.github/workflows/ci.yml) as an advisory PR-only `clippy & test (ubuntu-latest /
+  windows-latest)` matrix job (Linux installs `libasound2-dev` for cpal/midir and the X11/GL headers
+  the plugin editor's `x11` crate links). Its first runs found two real portability bugs: the
+  `modules_dir_from` unit test used a literal `/data/root`, which is not an absolute path on Windows
+  (no drive letter) — it now derives its root from `std::env::temp_dir()`; and the `docs/nodes.md`
+  byte-equality guard received a CRLF file on Windows (git `autocrlf`) — a new repo-wide
+  `.gitattributes` pins `eol=lf` and the test compares line-ending-neutrally. Then a third, in the
+  format itself: `seclab_project::to_ron` (and `ModMatrix::to_ron`) used `ron::PrettyConfig::default()`,
+  whose newline is the platform's — so a patch saved on Windows was a different file byte-for-byte.
+  Both now serialise through a shared `io::ron_pretty()` that pins `"\n"`; the patch format is one
+  format on every OS (tests added). `cargo xtask bundle-*` also stopped trusting a bare
+  `target/clap-wrapper` directory: a CI cache restored it hollow (no `CMakeLists.txt`) and cmake
+  failed, so the checkout is now validated by that file and re-cloned when hollow.
+  [docs/releasing.md](docs/releasing.md) rewritten for the three legs.
+
 - **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
   public launch, the only remaining occurrences of the old brand (and its crate-prefix initials) were
   the rename-documenting entries in this changelog and `docs/backlog.md`. Those entries were rewritten

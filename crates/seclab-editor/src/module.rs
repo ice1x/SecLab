@@ -255,11 +255,20 @@ mod tests {
 
     #[test]
     fn modules_dir_is_placed_under_a_data_root_or_falls_back_relative() {
-        // A resolved data root nests the app's modules folder under it.
-        let dir = modules_dir_from(Some(PathBuf::from("/data/root")));
+        // A resolved data root nests the app's modules folder under it. The root must be
+        // absolute ON THIS PLATFORM: a literal "/data/root" is absolute on Unix but merely
+        // rooted (no drive letter) on Windows, where `Path::is_absolute` is false — which is
+        // exactly how this test failed on the first Windows CI run. `temp_dir()` is absolute
+        // everywhere and never touched (nothing is created).
+        let root = std::env::temp_dir().join("seclab-data-root");
+        assert!(root.is_absolute(), "temp_dir is not absolute: {root:?}");
+        let dir = modules_dir_from(Some(root.clone()));
         assert!(dir.is_absolute());
-        assert!(dir.ends_with("SecLab/modules"), "got {dir:?}");
-        assert_eq!(dir, PathBuf::from("/data/root/SecLab/modules"));
+        assert!(
+            dir.ends_with(Path::new("SecLab").join("modules")),
+            "got {dir:?}"
+        );
+        assert_eq!(dir, root.join("SecLab").join("modules"));
 
         // No data root (WASM / no env) → the relative fallback so a project-root launch still works.
         assert_eq!(modules_dir_from(None), PathBuf::from("modules"));

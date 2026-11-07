@@ -1,17 +1,24 @@
 name: Release
 
-# Builds the macOS plugin bundles (CLAP, VST3, AU) and the wrapped standalone, packages
-# them into one zip, and uploads it as a workflow artifact. Runs on a version tag (`v*`)
-# or on manual dispatch.
+# Builds the distributable bundles on every supported OS, packages each OS's set into one
+# zip together with the license documents, and uploads them as workflow artifacts. Runs on a
+# version tag (`v*`) or on manual dispatch. See docs/releasing.md.
 #
-# Signing and notarization are OPTIONAL: they run only when the `DEVELOPER_ID` /
-# `NOTARY_PROFILE` secrets are set on the repo, so the workflow produces (unsigned) bundles
-# out of the box and starts signing them the moment those credentials exist. See
-# docs/releasing.md.
+# Legs:
+#   macOS   — CLAP + VST3 (clap-wrapper) + AUv2 (clap-wrapper) + wrapped standalone .app,
+#             via the `cargo xtask` bundle commands. Signing and notarization are OPTIONAL:
+#             they run only when the `DEVELOPER_ID` / `NOTARY_PROFILE` secrets are set, so
+#             the workflow produces (unsigned) bundles out of the box.
+#   Linux   — CLAP (nih-plug bundler, with the embedded editor) + the native standalone
+#             binary (seclab-standalone: cpal + eframe).
+#   Windows — the same two as Linux.
 #
-# macOS-only for now: the self-hosted macOS/ARM64 runner is the only one available (the
-# account's GitHub-hosted runner billing is broken — see cross-platform.yml). Linux/Windows
-# release legs join here once that is restored.
+# The VST3/AU wrappers are macOS-only for now: `cargo xtask bundle-vst3/-auv2` drive
+# clap-wrapper with macOS paths/flags (see xtask). Linux/Windows hosts load the CLAP directly
+# (Bitwig, REAPER, FL Studio, Ardour, …); VST3 wrappers for them are a follow-up.
+#
+# Runner images are perishable pins (GitHub retires them yearly — see the header of ci.yml);
+# bump them here too when ci.yml moves.
 on:
   push:
     tags:
@@ -24,18 +31,19 @@ env:
 jobs:
   macos:
     name: macOS bundles
-    runs-on: [self-hosted, macOS, ARM64]
+    runs-on: macos-15
     # Job-level env so the optional signing steps can gate on whether the secret is set.
     env:
       DEVELOPER_ID: ${{ secrets.DEVELOPER_ID }}
       NOTARY_PROFILE: ${{ secrets.NOTARY_PROFILE }}
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
 
-      # Each command reuses the clap-wrapper checkout cached under target/ (see xtask), so
-      # only the first run on a fresh machine clones/builds it.
-      - name: build the CLAP bundle
-        run: cargo xtask bundle seclab-plugin --release
+      # The wrapped formats rebuild the CLAP WITH the embedded editor (`--features gui`, see
+      # xtask `bundle_wrapped`) and ship it next to the wrapper; the first run also clones and
+      # builds clap-wrapper under target/ (network).
       - name: build the VST3 (clap-wrapper)
         run: cargo xtask bundle-vst3
       - name: build the AUv2 component (clap-wrapper)
@@ -44,7 +52,9 @@ jobs:
         run: cargo xtask bundle-standalone
 
       # Code-sign every bundle in target/bundled with the Developer ID identity — only when
-      # one is configured. Unsigned bundles are still produced and uploaded otherwise.
+      # one is configured. Unsigned bundles are still produced and uploaded otherwise. On a
+      # GitHub-hosted runner the identity + notary profile would first have to be imported
+      # into the job's keychain from secrets; see docs/signing.md.
       - name: code-sign (Developer ID)
         if: ${{ env.DEVELOPER_ID != '' }}
         run: cargo xtask sign
@@ -54,27 +64,100 @@ jobs:
         if: ${{ env.NOTARY_PROFILE != '' }}
         run: cargo xtask notarize
 
-      # Package the four bundles into one versioned archive. GITHUB_REF_NAME is the tag on a
-      # tag push (e.g. v0.1.0) and the branch on manual dispatch.
+      # Package the four bundles + the license documents into one versioned archive.
+      # GITHUB_REF_NAME is the tag on a tag push (e.g. v0.1.0) and the branch on manual dispatch.
       - name: package the bundles
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME:-dev}"
-          dist="target/dist"
+          dist="$PWD/target/dist"
           mkdir -p "$dist"
-          archive="$PWD/$dist/SecLab-${version}-macos.zip"
+          archive="$dist/SecLab-${version}-macos-arm64.zip"
           rm -f "$archive"
+          cp LICENSE NOTICE EULA-BETA.md target/bundled/
           cd target/bundled
           zip -r -q "$archive" \
             seclab-plugin.clap \
             seclab-plugin.vst3 \
             seclab-plugin.component \
-            seclab-plugin.app
+            seclab-plugin.app \
+            LICENSE NOTICE EULA-BETA.md
           echo "packaged $archive"
 
       - name: upload the macOS bundles artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SecLab-macos-bundles
+          name: SecLab-macos-arm64
+          path: target/dist/*.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux bundles
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Same package set as the `cross-platform` job in ci.yml (see the comment there): ALSA
+      # headers for cpal/midir, X11/GL headers for the `x11` crate behind the plugin editor.
+      - name: install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libx11-dev libx11-xcb-dev libgl-dev
+      - name: build the CLAP bundle (with the embedded editor)
+        run: cargo xtask bundle seclab-plugin --release --features gui
+      - name: build the native standalone
+        run: cargo build --release -p seclab-standalone
+      - name: package the bundles
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME:-dev}"
+          dist="$PWD/target/dist"
+          stage="$PWD/target/stage"
+          rm -rf "$stage" && mkdir -p "$dist" "$stage"
+          cp -r target/bundled/seclab-plugin.clap "$stage/"
+          cp target/release/seclab-standalone "$stage/"
+          cp LICENSE NOTICE EULA-BETA.md "$stage/"
+          archive="$dist/SecLab-${version}-linux-x86_64.zip"
+          (cd "$stage" && zip -r -q "$archive" .)
+          echo "packaged $archive"
+      - name: upload the Linux bundles artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecLab-linux-x86_64
+          path: target/dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows bundles
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build the CLAP bundle (with the embedded editor)
+        run: cargo xtask bundle seclab-plugin --release --features gui
+      - name: build the native standalone
+        run: cargo build --release -p seclab-standalone
+      - name: package the bundles
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "dev" }
+          $dist = "target/dist"
+          $stage = "target/stage"
+          if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
+          New-Item -ItemType Directory -Force -Path $dist, $stage | Out-Null
+          Copy-Item -Recurse target/bundled/seclab-plugin.clap $stage/
+          Copy-Item target/release/seclab-standalone.exe $stage/
+          Copy-Item LICENSE, NOTICE, EULA-BETA.md $stage/
+          $archive = "$dist/SecLab-$version-windows-x86_64.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $archive -Force
+          Write-Host "packaged $archive"
+      - name: upload the Windows bundles artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SecLab-windows-x86_64
           path: target/dist/*.zip
           if-no-files-found: error
