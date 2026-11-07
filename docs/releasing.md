@@ -27,6 +27,7 @@ The VST3 and AU dynamically load the CLAP from the standard locations, so instal
 | Bundle | Format | Install location |
 | --- | --- | --- |
 | `seclab-plugin.clap` | CLAP | `~/.clap/` |
+| `seclab-plugin.vst3` | VST3 (clap-wrapper, bundle folder) | `~/.vst3/` |
 | `seclab-standalone` | native standalone (cpal + eframe) | anywhere on `$PATH` |
 
 ### Windows — `SecLab-<tag>-windows-x86_64.zip`
@@ -34,12 +35,14 @@ The VST3 and AU dynamically load the CLAP from the standard locations, so instal
 | Bundle | Format | Install location |
 | --- | --- | --- |
 | `seclab-plugin.clap` | CLAP | `%COMMONPROGRAMFILES%\CLAP\` |
+| `seclab-plugin.vst3` | VST3 (clap-wrapper, single file) | `%COMMONPROGRAMFILES%\VST3\` |
 | `seclab-standalone.exe` | native standalone (cpal + eframe) | anywhere |
 
-Linux and Windows get the CLAP (with the embedded editor) and the native standalone; the
-VST3/AU wrappers are macOS-only for now because `cargo xtask bundle-vst3` / `bundle-auv2`
-drive clap-wrapper with macOS paths and flags. Hosts on those OSes load the CLAP directly
-(Bitwig, REAPER, FL Studio, Ardour, …); VST3 wrappers for them are a follow-up.
+Linux and Windows get the CLAP (with the embedded editor), a VST3 wrapper, and the native
+standalone. As on macOS, the VST3 loads the CLAP at runtime from the standard CLAP folder, so
+install the `.clap` too. The AUv2 and the wrapped `.app` are macOS-only (`cargo xtask
+bundle-auv2` / `bundle-standalone` refuse to run elsewhere); off macOS the standalone is the
+native `seclab-standalone`.
 
 Each CLAP already carries the MVP synth's default patch (the `export` step installs a `.vbp`
 into the bundle's resources; the plugin loads `VB_PATCH` → bundled patch → built-in default,
@@ -55,9 +58,9 @@ bundles on:
 
 It runs three independent legs on GitHub-hosted runners (`macos-15`, `ubuntu-latest`,
 `windows-latest`). The macOS leg calls the existing `cargo xtask` bundle commands (cloning
-and building clap-wrapper under `target/` on the first run); the Linux/Windows legs run the
-nih-plug bundler (`cargo xtask bundle seclab-plugin --release --features gui`) and
-`cargo build --release -p seclab-standalone`. Each leg uploads its zip as a workflow
+and building clap-wrapper under `target/` on the first run); the Linux/Windows legs run
+`cargo xtask bundle-vst3` (the CLAP with the editor, then the clap-wrapper VST3 built with the
+runner's own C++ toolchain) and `cargo build --release -p seclab-standalone`. Each leg uploads its zip as a workflow
 artifact — **`SecLab-macos-arm64`**, **`SecLab-linux-x86_64`**, **`SecLab-windows-x86_64`**.
 The workflow does **not** create a public GitHub Release — download the artifacts from the
 run and attach them to a release yourself when you are ready to publish.
@@ -102,7 +105,7 @@ The same bundles, without CI:
 ```bash
 cargo xtask bundle seclab-plugin --release --features gui   # CLAP with the editor (any OS)
 cargo build --release -p seclab-standalone                 # native standalone (any OS)
-cargo xtask bundle-vst3                                    # VST3 (macOS)
+cargo xtask bundle-vst3                                    # CLAP + VST3 (any OS; cmake + C++)
 cargo xtask bundle-auv2                                    # AUv2 (macOS)
 cargo xtask bundle-standalone                              # wrapped standalone .app (macOS)
 # → target/bundled/{seclab-plugin.clap,.vst3,.component,.app}, target/release/seclab-standalone
