@@ -158,12 +158,13 @@ impl ModMatrix {
         param.clamp(base + self.offset(dest, sources))
     }
 
-    /// Serializes to a pretty RON string.
+    /// Serializes to a pretty RON string (LF line endings on every platform — see
+    /// [`crate::io::to_ron`]).
     ///
     /// # Errors
     /// [`ModMatrixError::Serialize`] if RON serialization fails.
     pub fn to_ron(&self) -> Result<String, ModMatrixError> {
-        ron::ser::to_string_pretty(self, ron::ser::PrettyConfig::default())
+        ron::ser::to_string_pretty(self, crate::io::ron_pretty())
             .map_err(|e| ModMatrixError::Serialize(e.to_string()))
     }
 
@@ -186,6 +187,14 @@ impl ModMatrix {
 mod tests {
     use super::*;
     use seclab_core::NodeId;
+
+    #[test]
+    fn serialized_matrix_uses_lf_line_endings_on_every_platform() {
+        // ron's default newline is CRLF on Windows; a saved matrix must not depend on the OS.
+        let text = ModMatrix::default().to_ron().expect("serialises");
+        assert!(text.contains('\n'), "pretty RON spans lines: {text:?}");
+        assert!(!text.contains('\r'), "CRLF leaked into RON: {text:?}");
+    }
 
     fn route(source: &str, dest: ParamId, amount: f32) -> ModRoute {
         ModRoute {

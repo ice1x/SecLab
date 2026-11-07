@@ -11,13 +11,24 @@ use crate::doc::ProjectDoc;
 use crate::error::ProjectError;
 use crate::migrate::migrate_to_current;
 
-/// Serializes a project to pretty RON text.
+/// The one RON pretty-printing configuration every on-disk SecLab document uses.
+///
+/// It pins the line terminator to `"\n"`: `PrettyConfig::default()` uses the platform's
+/// native newline, so the same patch saved on Windows came out with CRLF — a different
+/// file byte-for-byte, which broke the committed-example byte-equality guards on the first
+/// Windows CI run and would make a patch's text differ by the OS it was saved on. The
+/// patch format is one format on every platform.
+pub(crate) fn ron_pretty() -> ron::ser::PrettyConfig {
+    ron::ser::PrettyConfig::default().new_line("\n")
+}
+
+/// Serializes a project to pretty RON text (LF line endings on every platform).
 ///
 /// # Errors
 ///
 /// Returns [`ProjectError::Serialize`] if RON serialization fails.
 pub fn to_ron(doc: &ProjectDoc) -> Result<String, ProjectError> {
-    ron::ser::to_string_pretty(doc, ron::ser::PrettyConfig::default())
+    ron::ser::to_string_pretty(doc, ron_pretty())
         .map_err(|e| ProjectError::Serialize(e.to_string()))
 }
 
@@ -76,4 +87,22 @@ pub fn load_from_path(path: &Path) -> Result<ProjectDoc, ProjectError> {
 pub fn open_path(path: &Path) -> Result<ProjectDoc, ProjectError> {
     let text = std::fs::read_to_string(path).map_err(|e| ProjectError::Io(e.to_string()))?;
     open_ron(&text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn serialized_project_uses_lf_line_endings_on_every_platform() {
+        // ron's `PrettyConfig::default()` picks the platform newline (CRLF on Windows). The
+        // patch format must be byte-identical whichever OS saved it — the committed
+        // `examples/*.ron` are compared byte-for-byte against their builders in CI.
+        let doc = ProjectDoc::from_graph(&seclab_core::Graph::default());
+        let text = to_ron(&doc).expect("serialises");
+        assert!(text.contains('\n'), "pretty RON spans lines: {text:?}");
+        assert!(!text.contains('\r'), "CRLF leaked into RON: {text:?}");
+        // And it still round-trips.
+        assert_eq!(from_ron(&text).expect("parses"), doc);
+    }
 }
