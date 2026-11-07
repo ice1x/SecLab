@@ -22,6 +22,12 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **VST3 for Linux and Windows (000262).** `cargo xtask bundle-vst3` now builds the clap-wrapper
+  VST3 on all three OSes, and the Linux/Windows release zips carry `seclab-plugin.vst3` next to
+  the CLAP (install it in `~/.vst3` or `%COMMONPROGRAMFILES%\VST3`, with the `.clap` in the
+  matching CLAP folder). AUv2 and the wrapped `.app` stay macOS-only and now say so up front.
+  Fixed along the way: xtask found "the first `.clap`" in `target/bundled`, so a stale
+  pre-rename bundle could be validated or exported instead of `seclab-plugin.clap`.
 - **Freeware beta EULA for the official binaries (000259).** New `EULA-BETA.md`: the distributed
   pre-release builds (standalone + CLAP/VST3/AU) are free to install and use — including to make and
   sell music — but may not be redistributed, modified or reverse-engineered; it discloses the opt-in,

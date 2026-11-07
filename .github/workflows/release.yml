@@ -66,10 +66,13 @@ jobs:
 
       # Package the four bundles + the license documents into one versioned archive.
       # GITHUB_REF_NAME is the tag on a tag push (e.g. v0.1.0) and the branch on manual dispatch.
+      # A branch like `feature/x` contains "/", which would turn the archive name into a missing
+      # sub-folder ("zip I/O error"), so every leg replaces "/" with "-".
       - name: package the bundles
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME:-dev}"
+          version="${version//\//-}"
           dist="$PWD/target/dist"
           mkdir -p "$dist"
           archive="$dist/SecLab-${version}-macos-arm64.zip"
@@ -105,18 +108,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libasound2-dev libx11-dev libx11-xcb-dev libgl-dev
-      - name: build the CLAP bundle (with the embedded editor)
-        run: cargo xtask bundle seclab-plugin --release --features gui
+      # bundle-vst3 first bundles the CLAP (with the embedded editor), then wraps it into a
+      # VST3 with clap-wrapper (cmake + the runner's C++ toolchain; fetches the VST3 SDK).
+      - name: build the CLAP and the VST3 wrapper
+        run: cargo xtask bundle-vst3
       - name: build the native standalone
         run: cargo build --release -p seclab-standalone
       - name: package the bundles
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME:-dev}"
+          version="${version//\//-}"
           dist="$PWD/target/dist"
           stage="$PWD/target/stage"
           rm -rf "$stage" && mkdir -p "$dist" "$stage"
           cp -r target/bundled/seclab-plugin.clap "$stage/"
+          cp -r target/bundled/seclab-plugin.vst3 "$stage/"
           cp target/release/seclab-standalone "$stage/"
           cp LICENSE NOTICE EULA-BETA.md "$stage/"
           archive="$dist/SecLab-${version}-linux-x86_64.zip"
@@ -136,8 +143,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: build the CLAP bundle (with the embedded editor)
-        run: cargo xtask bundle seclab-plugin --release --features gui
+      # bundle-vst3 first bundles the CLAP (with the embedded editor), then wraps it into a
+      # VST3 with clap-wrapper (cmake + the runner's C++ toolchain; fetches the VST3 SDK).
+      - name: build the CLAP and the VST3 wrapper
+        run: cargo xtask bundle-vst3
       - name: build the native standalone
         run: cargo build --release -p seclab-standalone
       - name: package the bundles
@@ -145,11 +154,13 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "dev" }
+          $version = $version.Replace("/", "-")
           $dist = "target/dist"
           $stage = "target/stage"
           if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
           New-Item -ItemType Directory -Force -Path $dist, $stage | Out-Null
           Copy-Item -Recurse target/bundled/seclab-plugin.clap $stage/
+          Copy-Item -Recurse target/bundled/seclab-plugin.vst3 $stage/
           Copy-Item target/release/seclab-standalone.exe $stage/
           Copy-Item LICENSE, NOTICE, EULA-BETA.md $stage/
           $archive = "$dist/SecLab-$version-windows-x86_64.zip"
