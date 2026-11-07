@@ -20,7 +20,7 @@
 //!   macOS, Linux and Windows. The produced `seclab-plugin.vst3` dynamically loads
 //!   `seclab-plugin.clap` from the standard CLAP locations, so install both: macOS
 //!   `~/Library/Audio/Plug-Ins/{CLAP,VST3}`, Linux `~/.clap` + `~/.vst3`, Windows
-//!   `%COMMONPROGRAMFILES%\{CLAP,VST3}` (on Windows the `.vst3` is a single file).
+//!   `%COMMONPROGRAMFILES%\{CLAP,VST3}`.
 //! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
 //!   into `~/Library/Audio/Plug-Ins/Components`, validate with
 //!   `auval -v aumu gWrp clAd`). Deterministically installs clap-wrapper's generated
@@ -213,7 +213,9 @@ fn clap_install_dir(os: &str) -> &'static str {
 /// Locates a clap-wrapper output in `build_dir`. With the single-config Makefiles generator
 /// on macOS it lands in the build dir itself; on Linux clap-wrapper nests the VST3 bundle
 /// under a `Release/` config folder, and the multi-config MSVC generator on Windows puts
-/// its (single-file) `.vst3` there too (`cmake/wrap_vst3.cmake`).
+/// `.vst3` there too — a bundle folder (`Contents/x86_64-win/`, what the release leg
+/// produces), or a single DLL when clap-wrapper's `WINDOWS_FOLDER_VST3` is off
+/// (`cmake/wrap_vst3.cmake`).
 fn wrapped_artifact_in(build_dir: &Path, artifact: &str) -> Option<PathBuf> {
     [
         build_dir.join(artifact),
@@ -223,8 +225,8 @@ fn wrapped_artifact_in(build_dir: &Path, artifact: &str) -> Option<PathBuf> {
     .find(|p| p.exists())
 }
 
-/// Copies a produced artifact — a bundle directory, or a single file such as the Windows
-/// `.vst3` DLL — to `to`, replacing whatever is there.
+/// Copies a produced artifact — a bundle directory, or a single file such as a
+/// single-DLL Windows `.vst3` — to `to`, replacing whatever is there.
 fn copy_artifact(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
     if to.is_dir() {
         std::fs::remove_dir_all(to)?;
@@ -742,7 +744,8 @@ mod tests {
             Some(linux.join("Release").join(name))
         );
 
-        // Windows (multi-config MSVC): a single-file `.vst3` DLL under `Release/`.
+        // Windows (multi-config MSVC) with WINDOWS_FOLDER_VST3 off: a single-DLL `.vst3`
+        // under `Release/` (with it on, the folder case above applies).
         let win = scratch("win");
         std::fs::create_dir_all(win.join("Release")).unwrap();
         std::fs::write(win.join("Release").join(name), b"MZ").unwrap();
@@ -782,7 +785,7 @@ mod tests {
         );
         assert!(!dest.join("stale").exists(), "old bundle contents removed");
 
-        // A single-file VST3 (Windows) replaces whatever was there, even a directory.
+        // A single-DLL VST3 replaces whatever was there, even a directory.
         let file = root.join("single.vst3");
         std::fs::write(&file, b"MZ").unwrap();
         copy_artifact(&file, &dest).unwrap();

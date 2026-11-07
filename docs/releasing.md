@@ -35,7 +35,7 @@ The VST3 and AU dynamically load the CLAP from the standard locations, so instal
 | Bundle | Format | Install location |
 | --- | --- | --- |
 | `seclab-plugin.clap` | CLAP | `%COMMONPROGRAMFILES%\CLAP\` |
-| `seclab-plugin.vst3` | VST3 (clap-wrapper, single file) | `%COMMONPROGRAMFILES%\VST3\` |
+| `seclab-plugin.vst3` | VST3 (clap-wrapper, bundle folder) | `%COMMONPROGRAMFILES%\VST3\` |
 | `seclab-standalone.exe` | native standalone (cpal + eframe) | anywhere |
 
 Linux and Windows get the CLAP (with the embedded editor), a VST3 wrapper, and the native
