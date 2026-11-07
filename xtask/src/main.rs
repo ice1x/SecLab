@@ -16,10 +16,11 @@
 //!   over it (install once with
 //!   `cargo install --git https://github.com/free-audio/clap-validator.git`).
 //! - `cargo xtask bundle-vst3` — builds the VST3 via clap-wrapper (cloned and
-//!   cached under `target/`; needs `cmake` and network on first run). The produced
-//!   `seclab-plugin.vst3` dynamically loads `seclab-plugin.clap` from the standard CLAP
-//!   locations, so install both: the `.clap` into `~/Library/Audio/Plug-Ins/CLAP`
-//!   and the `.vst3` into `~/Library/Audio/Plug-Ins/VST3`.
+//!   cached under `target/`; needs `cmake`, a C++ compiler and network on first run) on
+//!   macOS, Linux and Windows. The produced `seclab-plugin.vst3` dynamically loads
+//!   `seclab-plugin.clap` from the standard CLAP locations, so install both: macOS
+//!   `~/Library/Audio/Plug-Ins/{CLAP,VST3}`, Linux `~/.clap` + `~/.vst3`, Windows
+//!   `%COMMONPROGRAMFILES%\{CLAP,VST3}` (on Windows the `.vst3` is a single file).
 //! - `cargo xtask bundle-auv2` — same, for the AUv2 `.component` (macOS; installs
 //!   into `~/Library/Audio/Plug-Ins/Components`, validate with
 //!   `auval -v aumu gWrp clAd`). Deterministically installs clap-wrapper's generated
@@ -162,11 +163,24 @@ impl WrappedFormat {
         }
     }
 
-    fn install_dir(self) -> &'static str {
+    /// Where a host scans for this format on `os` (`std::env::consts::OS` spelling).
+    fn install_dir(self, os: &str) -> &'static str {
+        match (self, os) {
+            (Self::Vst3, "linux") => "~/.vst3/",
+            (Self::Vst3, "windows") => r"%COMMONPROGRAMFILES%\VST3\",
+            (Self::Vst3, _) => "~/Library/Audio/Plug-Ins/VST3/",
+            (Self::Auv2, _) => "~/Library/Audio/Plug-Ins/Components/",
+            (Self::Standalone, _) => "/Applications/",
+        }
+    }
+
+    /// Whether clap-wrapper can produce this format on `os`. The VST3 builds everywhere;
+    /// AUv2 is Apple-only, and the wrapper's `.app` runner is only shipped on macOS (on
+    /// Linux/Windows the standalone is our own `seclab-standalone`).
+    fn supported_on(self, os: &str) -> bool {
         match self {
-            Self::Vst3 => "~/Library/Audio/Plug-Ins/VST3/",
-            Self::Auv2 => "~/Library/Audio/Plug-Ins/Components/",
-            Self::Standalone => "/Applications/",
+            Self::Vst3 => true,
+            Self::Auv2 | Self::Standalone => os == "macos",
         }
     }
 
@@ -186,8 +200,56 @@ fn clap_wrapper_checkout_is_usable(dir: &Path) -> bool {
     dir.join("CMakeLists.txt").is_file()
 }
 
+/// Where hosts — and the wrapped VST3/AU, which loads the CLAP at runtime — look for a
+/// `.clap` on `os`. Mirrors clap-wrapper's search (`src/detail/clap/fsutil.cpp`).
+fn clap_install_dir(os: &str) -> &'static str {
+    match os {
+        "linux" => "~/.clap/",
+        "windows" => r"%COMMONPROGRAMFILES%\CLAP\",
+        _ => "~/Library/Audio/Plug-Ins/CLAP/",
+    }
+}
+
+/// Locates a clap-wrapper output in `build_dir`. With the single-config Makefiles generator
+/// on macOS it lands in the build dir itself; on Linux clap-wrapper nests the VST3 bundle
+/// under a `Release/` config folder, and the multi-config MSVC generator on Windows puts
+/// its (single-file) `.vst3` there too (`cmake/wrap_vst3.cmake`).
+fn wrapped_artifact_in(build_dir: &Path, artifact: &str) -> Option<PathBuf> {
+    [
+        build_dir.join(artifact),
+        build_dir.join("Release").join(artifact),
+    ]
+    .into_iter()
+    .find(|p| p.exists())
+}
+
+/// Copies a produced artifact — a bundle directory, or a single file such as the Windows
+/// `.vst3` DLL — to `to`, replacing whatever is there.
+fn copy_artifact(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if to.is_dir() {
+        std::fs::remove_dir_all(to)?;
+    } else if to.exists() {
+        std::fs::remove_file(to)?;
+    }
+    if from.is_dir() {
+        copy_tree(from, to)
+    } else {
+        std::fs::copy(from, to)?;
+        Ok(())
+    }
+}
+
 /// Builds the release CLAP, then wraps it into the requested format via clap-wrapper.
 fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error>> {
+    let os = std::env::consts::OS;
+    if !format.supported_on(os) {
+        return Err(format!(
+            "{} is macOS-only; on {os} build the VST3 (`cargo xtask bundle-vst3`) or the \
+             native standalone (`cargo build --release -p seclab-standalone`)",
+            format.artifact()
+        )
+        .into());
+    }
     // The wrapped bundles (VST3/AU/standalone) ship with the embedded editor (000067) —
     // `--features gui`. Plain `validate()` deliberately does NOT, so the CI clap-validator
     // never opens a window on a headless runner.
@@ -252,12 +314,15 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     )?;
 
     // Ship the wrapper next to the clap it loads.
-    let produced = build_dir.join(format.artifact());
+    let produced = wrapped_artifact_in(&build_dir, format.artifact()).ok_or_else(|| {
+        format!(
+            "cmake finished but no {} was found in {} (or its Release/ folder)",
+            format.artifact(),
+            build_dir.display()
+        )
+    })?;
     let dest = root.join("target").join("bundled").join(format.artifact());
-    if dest.exists() {
-        std::fs::remove_dir_all(&dest)?;
-    }
-    copy_tree(&produced, &dest)?;
+    copy_artifact(&produced, &dest)?;
 
     // Fix + brand the AU Info.plist. clap-wrapper GENERATES a correct AudioComponents plist
     // (`…-build-helper-output/auv2_Info.plist`) but installs it into the `.component` only
@@ -282,10 +347,11 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
 
     println!("built: {}", dest.display());
     println!(
-        "install: cp -r {} ~/Library/Audio/Plug-Ins/CLAP/ && cp -r {} {}",
+        "install: copy {} into {} and {} into {}",
         clap_bundle.display(),
+        clap_install_dir(os),
         dest.display(),
-        format.install_dir()
+        format.install_dir(os)
     );
     Ok(())
 }
@@ -553,12 +619,22 @@ fn notarize_bundles() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Locates the produced `.clap` bundle under `target/bundled/`.
 fn bundle_dir() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let bundled = workspace_root()?.join("target").join("bundled");
-    let entry = std::fs::read_dir(&bundled)?
-        .filter_map(Result::ok)
-        .find(|e| e.path().extension().is_some_and(|ext| ext == "clap"))
-        .ok_or_else(|| format!("no .clap bundle found in {}", bundled.display()))?;
-    Ok(entry.path())
+    clap_bundle_in(&workspace_root()?.join("target").join("bundled"))
+}
+
+/// The bundler's output name for the plugin crate.
+const CLAP_BUNDLE: &str = "seclab-plugin.clap";
+
+/// The plugin's `.clap` in `bundled`, by its exact name. Picking "the first `.clap`" in
+/// directory order used to grab a stale bundle left from an older crate name
+/// (`vb-plugin.clap`), so `validate`/`export` acted on the wrong plugin.
+fn clap_bundle_in(bundled: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let clap = bundled.join(CLAP_BUNDLE);
+    if clap.exists() {
+        Ok(clap)
+    } else {
+        Err(format!("no {CLAP_BUNDLE} found in {}", bundled.display()).into())
+    }
 }
 
 /// The workspace root (xtask runs from anywhere inside it).
@@ -639,6 +715,130 @@ mod tests {
         assert!(clap_wrapper_checkout_is_usable(&root));
 
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    fn scratch(tag: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("vbx-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn the_wrapped_artifact_is_found_in_each_platform_layout() {
+        use super::wrapped_artifact_in;
+        let name = "seclab-plugin.vst3";
+
+        // macOS (single-config Makefiles): a bundle directory straight in the build dir.
+        let mac = scratch("mac");
+        std::fs::create_dir_all(mac.join(name).join("Contents")).unwrap();
+        assert_eq!(wrapped_artifact_in(&mac, name), Some(mac.join(name)));
+
+        // Linux: clap-wrapper puts the bundle under a `Release/` config folder.
+        let linux = scratch("linux");
+        std::fs::create_dir_all(linux.join("Release").join(name).join("Contents")).unwrap();
+        assert_eq!(
+            wrapped_artifact_in(&linux, name),
+            Some(linux.join("Release").join(name))
+        );
+
+        // Windows (multi-config MSVC): a single-file `.vst3` DLL under `Release/`.
+        let win = scratch("win");
+        std::fs::create_dir_all(win.join("Release")).unwrap();
+        std::fs::write(win.join("Release").join(name), b"MZ").unwrap();
+        assert_eq!(
+            wrapped_artifact_in(&win, name),
+            Some(win.join("Release").join(name))
+        );
+
+        // Nothing built → None (the caller turns it into an error naming the build dir).
+        let empty = scratch("empty");
+        assert_eq!(wrapped_artifact_in(&empty, name), None);
+
+        for dir in [mac, linux, win, empty] {
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
+
+    #[test]
+    fn copy_artifact_replaces_a_bundle_dir_or_a_single_file() {
+        use super::copy_artifact;
+        let root = scratch("copy");
+
+        // A bundle directory (macOS/Linux VST3) replaces a stale one wholesale.
+        let bundle = root.join("src.vst3");
+        std::fs::create_dir_all(bundle.join("Contents").join("x86_64-linux")).unwrap();
+        std::fs::write(
+            bundle.join("Contents").join("x86_64-linux").join("p.so"),
+            b"new",
+        )
+        .unwrap();
+        let dest = root.join("out.vst3");
+        std::fs::create_dir_all(dest.join("stale")).unwrap();
+        copy_artifact(&bundle, &dest).unwrap();
+        assert_eq!(
+            std::fs::read(dest.join("Contents").join("x86_64-linux").join("p.so")).unwrap(),
+            b"new"
+        );
+        assert!(!dest.join("stale").exists(), "old bundle contents removed");
+
+        // A single-file VST3 (Windows) replaces whatever was there, even a directory.
+        let file = root.join("single.vst3");
+        std::fs::write(&file, b"MZ").unwrap();
+        copy_artifact(&file, &dest).unwrap();
+        assert!(dest.is_file());
+        assert_eq!(std::fs::read(&dest).unwrap(), b"MZ");
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn the_clap_bundle_is_picked_by_name_not_by_directory_order() {
+        use super::clap_bundle_in;
+        let root = scratch("clap");
+        assert!(clap_bundle_in(&root).is_err(), "nothing bundled yet");
+        // A stale bundle from the pre-rename crate must never be chosen.
+        std::fs::create_dir_all(root.join("vb-plugin.clap")).unwrap();
+        assert!(clap_bundle_in(&root).is_err());
+        std::fs::create_dir_all(root.join("seclab-plugin.clap")).unwrap();
+        assert_eq!(
+            clap_bundle_in(&root).unwrap(),
+            root.join("seclab-plugin.clap")
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn vst3_wraps_everywhere_but_au_and_the_wrapper_app_are_macos_only() {
+        for os in ["macos", "linux", "windows"] {
+            assert!(WrappedFormat::Vst3.supported_on(os), "VST3 on {os}");
+        }
+        assert!(WrappedFormat::Auv2.supported_on("macos"));
+        assert!(WrappedFormat::Standalone.supported_on("macos"));
+        for os in ["linux", "windows"] {
+            assert!(!WrappedFormat::Auv2.supported_on(os), "AU is Apple-only");
+            // Off macOS the shipped standalone is our own `seclab-standalone`.
+            assert!(!WrappedFormat::Standalone.supported_on(os));
+        }
+    }
+
+    #[test]
+    fn install_hints_follow_each_platforms_standard_plugin_folders() {
+        use super::clap_install_dir;
+        // Paths the hosts scan by default (Steinberg's VST3 locations; clap-wrapper's CLAP
+        // search in src/detail/clap/fsutil.cpp, which is how the VST3 finds the .clap).
+        assert_eq!(
+            WrappedFormat::Vst3.install_dir("macos"),
+            "~/Library/Audio/Plug-Ins/VST3/"
+        );
+        assert_eq!(WrappedFormat::Vst3.install_dir("linux"), "~/.vst3/");
+        assert_eq!(
+            WrappedFormat::Vst3.install_dir("windows"),
+            r"%COMMONPROGRAMFILES%\VST3\"
+        );
+        assert_eq!(clap_install_dir("macos"), "~/Library/Audio/Plug-Ins/CLAP/");
+        assert_eq!(clap_install_dir("linux"), "~/.clap/");
+        assert_eq!(clap_install_dir("windows"), r"%COMMONPROGRAMFILES%\CLAP\");
     }
 
     #[test]
