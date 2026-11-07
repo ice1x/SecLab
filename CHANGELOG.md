@@ -22,6 +22,13 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Freeware beta EULA for the official binaries (000259).** New `EULA-BETA.md`: the distributed
+  pre-release builds (standalone + CLAP/VST3/AU) are free to install and use — including to make and
+  sell music — but may not be redistributed, modified or reverse-engineered; it discloses the opt-in,
+  public bug-reporter diagnostics and carries the "VST" trademark notice. The source code stays under
+  the PolyForm Strict License (`LICENSE`); README's License section now explains the two documents.
+  Governing law is phrased neutrally (Licensor's country of residence, consumer mandatory law
+  preserved) rather than naming a jurisdiction.
 - **Attach a live log tail to bug reports (000256).** The project had no logging stack, so a report
   had nothing to carry. New `seclab_editor::log_buffer::LogBuffer` — a bounded, clonable ring sink:
   the standalone installs it as a **panic hook** (so a crash is captured for the next report) and
