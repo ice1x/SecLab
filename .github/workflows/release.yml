@@ -66,10 +66,13 @@ jobs:
 
       # Package the four bundles + the license documents into one versioned archive.
       # GITHUB_REF_NAME is the tag on a tag push (e.g. v0.1.0) and the branch on manual dispatch.
+      # A branch like `feature/x` contains "/", which would turn the archive name into a missing
+      # sub-folder ("zip I/O error"), so every leg replaces "/" with "-".
       - name: package the bundles
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME:-dev}"
+          version="${version//\//-}"
           dist="$PWD/target/dist"
           mkdir -p "$dist"
           archive="$dist/SecLab-${version}-macos-arm64.zip"
@@ -115,6 +118,7 @@ jobs:
         run: |
           set -euo pipefail
           version="${GITHUB_REF_NAME:-dev}"
+          version="${version//\//-}"
           dist="$PWD/target/dist"
           stage="$PWD/target/stage"
           rm -rf "$stage" && mkdir -p "$dist" "$stage"
@@ -150,6 +154,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $version = if ($env:GITHUB_REF_NAME) { $env:GITHUB_REF_NAME } else { "dev" }
+          $version = $version.Replace("/", "-")
           $dist = "target/dist"
           $stage = "target/stage"
           if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
