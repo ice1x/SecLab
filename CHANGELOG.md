@@ -119,6 +119,18 @@ Two independent version numbers matter in this project:
   local live-development against a sibling drevo checkout is preserved by a `paths` override in the
   developer's user-global `~/.cargo/config.toml` (outside the repo, so it never reaches CI).
 
+- **Release bundles for macOS, Linux and Windows on hosted runners (000090, 000261).**
+  [`release.yml`](.github/workflows/release.yml) leaves the self-hosted Mac: the macOS leg now runs
+  on `macos-15` (CLAP + VST3 + AUv2 + wrapped standalone, as before), and two new legs build the
+  CLAP with the embedded editor plus the native `seclab-standalone` on `ubuntu-latest` and
+  `windows-latest`. Every leg zips its bundles with `LICENSE`/`NOTICE`/`EULA-BETA.md` and uploads
+  `SecLab-{macos-arm64,linux-x86_64,windows-x86_64}`. The parked `cross-platform.yml` is folded into
+  [`ci.yml`](.github/workflows/ci.yml) as an advisory PR-only `clippy & test (ubuntu-latest /
+  windows-latest)` matrix job (Linux installs `libasound2-dev` for cpal/midir). Its first run found a
+  real portability bug: the `modules_dir_from` unit test used a literal `/data/root`, which is not an
+  absolute path on Windows (no drive letter) — the test now derives its root from
+  `std::env::temp_dir()`. [docs/releasing.md](docs/releasing.md) rewritten for the three legs.
+
 - **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
   public launch, the only remaining occurrences of the old brand (and its crate-prefix initials) were
   the rename-documenting entries in this changelog and `docs/backlog.md`. Those entries were rewritten

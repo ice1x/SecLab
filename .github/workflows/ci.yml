@@ -38,7 +38,7 @@ env:
 # git source resolves identically everywhere; `cargo metadata --no-deps` (the fmt gate) does
 # not even fetch it. See crates/seclab-library/Cargo.toml.
 #
-# Cross-platform (Linux/Windows) coverage lives in cross-platform.yml.
+# Linux/Windows coverage is the advisory `cross-platform` matrix job at the end of this file.
 jobs:
   fmt:
     name: rustfmt
@@ -253,3 +253,41 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: build the AUv2 via clap-wrapper
         run: cargo xtask bundle-auv2
+
+  # Linux/Windows compile + test coverage (000261) — formerly the manually-dispatched
+  # cross-platform.yml, folded in here now that hosted runners are available (the release
+  # workflow ships CLAP + standalone bundles for both OSes). NON-blocking for now
+  # (continue-on-error): the required gates are the native macOS jobs above; promote this to
+  # a required check once it has stayed green for a while. PR-only.
+  #
+  # Linux needs the ALSA headers at build time (alsa-sys → `alsa.pc` for cpal/midir); the
+  # editor's window stack (winit/glutin: X11/Wayland/EGL) loads its libraries at runtime, so
+  # nothing else is installed. Windows needs no system packages.
+  cross-platform:
+    name: clippy & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    if: ${{ github.event_name == 'pull_request' }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: install system libraries (Linux)
+        if: ${{ runner.os == 'Linux' }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libasound2-dev
+      - name: clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        run: cargo test --workspace
+      # The release legs ship the CLAP with the embedded editor (`gui`); prove it builds on
+      # this OS too, so a release tag never discovers it first.
+      - name: build the plugin with the editor
+        run: cargo build -p seclab-plugin --features gui
