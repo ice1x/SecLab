@@ -98,12 +98,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      # ALSA headers for cpal/midir (alsa-sys needs `alsa.pc` at build time); the editor's
-      # window stack (winit/glutin: X11, Wayland, EGL) loads its libraries at runtime.
+      # Same package set as the `cross-platform` job in ci.yml (see the comment there): ALSA
+      # headers for cpal/midir, X11/GL headers for the `x11` crate behind the plugin editor.
       - name: install system libraries
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libasound2-dev
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libx11-dev libx11-xcb-dev libgl-dev
       - name: build the CLAP bundle (with the embedded editor)
         run: cargo xtask bundle seclab-plugin --release --features gui
       - name: build the native standalone

@@ -126,10 +126,13 @@ Two independent version numbers matter in this project:
   `windows-latest`. Every leg zips its bundles with `LICENSE`/`NOTICE`/`EULA-BETA.md` and uploads
   `SecLab-{macos-arm64,linux-x86_64,windows-x86_64}`. The parked `cross-platform.yml` is folded into
   [`ci.yml`](.github/workflows/ci.yml) as an advisory PR-only `clippy & test (ubuntu-latest /
-  windows-latest)` matrix job (Linux installs `libasound2-dev` for cpal/midir). Its first run found a
-  real portability bug: the `modules_dir_from` unit test used a literal `/data/root`, which is not an
-  absolute path on Windows (no drive letter) — the test now derives its root from
-  `std::env::temp_dir()`. [docs/releasing.md](docs/releasing.md) rewritten for the three legs.
+  windows-latest)` matrix job (Linux installs `libasound2-dev` for cpal/midir and the X11/GL headers
+  the plugin editor's `x11` crate links). Its first runs found two real portability bugs: the
+  `modules_dir_from` unit test used a literal `/data/root`, which is not an absolute path on Windows
+  (no drive letter) — it now derives its root from `std::env::temp_dir()`; and the `docs/nodes.md`
+  byte-equality guard received a CRLF file on Windows (git `autocrlf`) — a new repo-wide
+  `.gitattributes` pins `eol=lf` and the test compares line-ending-neutrally.
+  [docs/releasing.md](docs/releasing.md) rewritten for the three legs.
 
 - **Scrub the previous project name from the docs (000249).** After the git history was squashed for the
   public launch, the only remaining occurrences of the old brand (and its crate-prefix initials) were

@@ -1,0 +1,17 @@
+# Check every text file out with LF line endings on every platform.
+#
+# Several tests compare a committed file byte-for-byte against generated text
+# (`docs/nodes.md` vs the registry, generated `examples/*.ron` vs their builders).
+# Git's default on Windows (core.autocrlf=true) rewrites those files to CRLF on
+# checkout, so `include_str!` saw "\r\n" where the generator produced "\n" and the
+# first Windows CI run failed `docs::tests::committed_docs_are_in_sync_with_the_registry`.
+# Pinning eol=lf makes a checkout identical on macOS, Linux and Windows.
+* text=auto eol=lf
+
+# Binary assets never get line-ending conversion.
+*.png binary
+*.jpg binary
+*.gif binary
+*.wav binary
+*.icns binary
+*.ico binary

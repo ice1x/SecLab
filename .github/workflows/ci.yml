@@ -260,9 +260,13 @@ jobs:
   # (continue-on-error): the required gates are the native macOS jobs above; promote this to
   # a required check once it has stayed green for a while. PR-only.
   #
-  # Linux needs the ALSA headers at build time (alsa-sys → `alsa.pc` for cpal/midir); the
-  # editor's window stack (winit/glutin: X11/Wayland/EGL) loads its libraries at runtime, so
-  # nothing else is installed. Windows needs no system packages.
+  # Linux system packages, each demanded by a build script on the first runs (not guessed):
+  #   libasound2-dev            alsa-sys (cpal/midir) — "Package alsa was not found"
+  #   libx11-dev libx11-xcb-dev the `x11` crate behind baseview (nih_plug_egui, `gui` feature)
+  #                             is built with the xlib + xlib_xcb features → x11.pc, x11-xcb.pc
+  #   libgl-dev                 the same crate's glx feature → "Package gl was not found"
+  # eframe/winit/glutin (the standalone) load X11/Wayland/EGL at runtime and need nothing
+  # here. Windows needs no system packages.
   cross-platform:
     name: clippy & test (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -282,7 +286,8 @@ jobs:
         if: ${{ runner.os == 'Linux' }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libasound2-dev
+          sudo apt-get install -y --no-install-recommends \
+            libasound2-dev libx11-dev libx11-xcb-dev libgl-dev
       - name: clippy (deny warnings)
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: test

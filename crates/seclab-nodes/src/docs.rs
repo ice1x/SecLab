@@ -116,7 +116,11 @@ mod tests {
     /// `std::fs::write("docs/nodes.md", seclab_nodes::node_reference_markdown(&Registry::with_builtins()))`.
     #[test]
     fn committed_docs_are_in_sync_with_the_registry() {
-        let committed = include_str!("../../../docs/nodes.md");
+        // `.gitattributes` pins LF for every checkout, but a clone that predates it (or an
+        // explicit core.autocrlf override) can still hand `include_str!` a CRLF file on
+        // Windows; the generator always emits "\n", so compare line-ending-neutrally. The
+        // first Windows CI run failed exactly here for that reason.
+        let committed = include_str!("../../../docs/nodes.md").replace("\r\n", "\n");
         let generated = node_reference_markdown(&Registry::with_builtins());
         assert_eq!(
             committed, generated,
