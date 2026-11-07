@@ -92,6 +92,12 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **CI runners: `macos-14` → `macos-15` (000260).** GitHub Actions retired the macOS 14 images on
+  2026-11-02 ([runner-images#13518](https://github.com/actions/runner-images/issues/13518)); the
+  first push after that failed every job in 0 s with "The configuration 'macos-14-arm64-us-default'
+  is not supported". All [`ci.yml`](.github/workflows/ci.yml) jobs now run on `macos-15` (still
+  Apple Silicon), the clap-validator cache key follows the image, and the workflow header records
+  that the image label is a perishable pin to bump on the next retirement announcement.
 - **Move CI onto GitHub-hosted runners (000258).** Now the repo is public, GitHub-hosted macOS
   minutes are free, so [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs every job on
   `macos-14` (Apple Silicon / ARM64) instead of the developer's self-hosted Mac — CI no longer
