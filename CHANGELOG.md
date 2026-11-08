@@ -22,6 +22,13 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **AI assistant chat in the DAW plugin (000264).** The CLAP/VST3/AU editor now has the same
+  assistant section as the standalone: describe a sound in plain language, review the proposed
+  blocks/interface diff, apply it to the patch — which the plugin rebuilds and plays inside the
+  DAW. Provider/model settings are shared with the standalone (`settings.ron` in the per-user
+  modules folder); API keys stay in the OS keychain. The headless/default build (and the
+  clap-validator gate) remains network-free.
+
 - **VST3 for Linux and Windows (000262).** `cargo xtask bundle-vst3` now builds the clap-wrapper
   VST3 on all three OSes, and the Linux/Windows release zips carry `seclab-plugin.vst3` next to
   the CLAP (install it in `~/.vst3` or `%COMMONPROGRAMFILES%\VST3`, with the `.clap` in the

@@ -381,7 +381,10 @@ pub fn create_issue(
 ///
 /// Signing out is [`TokenStore::clear`] — idempotent, so clearing when already signed out
 /// is not an error.
-pub trait TokenStore {
+///
+/// `Send` for the same reason as [`crate::keystore::KeyStore`]: the plugin's editor state
+/// holds a boxed store.
+pub trait TokenStore: Send {
     /// Stores `token`, replacing any existing one. The token is trimmed; an empty or
     /// whitespace-only token is rejected.
     ///

@@ -1697,6 +1697,14 @@ impl EditorApp {
         }
     }
 
+    /// The assistant's current provider/model/sampling/privacy settings (never the key) — what
+    /// [`Self::load_assistant_settings`] restored and the Settings panel edits.
+    #[cfg(feature = "assistant")]
+    #[must_use]
+    pub fn assistant_settings(&self) -> &seclab_ai::AssistantSettings {
+        &self.assistant.settings
+    }
+
     /// Shares a log buffer with the report dialog, so a filed report carries a tail of recent
     /// log lines (000256). The host (standalone) installs the same buffer as a panic hook, so
     /// a crash shows up in the next report. Only present with the `assistant` feature — the
@@ -2634,6 +2642,15 @@ pub fn run() -> Result<(), eframe::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The plugin hosts `EditorApp` as `nih_plug_egui` editor state, which must be `Send` (the
+    /// plugin adds `Sync` with a `Mutex`). With the assistant compiled in, the boxed key/token
+    /// stores were `!Send` — which is what kept the chat out of the DAW-embedded editor.
+    #[test]
+    fn the_editor_app_can_move_to_the_plugin_gui_thread() {
+        fn assert_send<T: Send>() {}
+        assert_send::<EditorApp>();
+    }
 
     #[test]
     fn pan_then_zoom_flows_through_to_the_camera() {

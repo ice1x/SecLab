@@ -146,6 +146,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: build the plugin with the editor
         run: cargo build -p seclab-plugin --features gui
+      # The editor carries the AI assistant (chat + Settings): prove it loads the user's
+      # saved assistant settings — headless, no window is opened.
+      - name: test the plugin with the editor
+        run: cargo test -p seclab-plugin --features gui
 
   # Native-only AI assistant panel (000108, `assistant` feature). The panel renders the
   # seclab-ai EditSession view-model, pulling in the provider/HTTP stack; it is OFF by default
