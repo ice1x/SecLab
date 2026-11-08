@@ -283,6 +283,15 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     }
 
     let build_dir = wrapper_src.join(format.build_dir());
+    // A build dir configured from another path (the repo folder was renamed/moved) makes
+    // cmake refuse to configure; it is a pure cache under target/, so start it afresh.
+    if cmake_cache_is_stale(&build_dir, &wrapper_src) {
+        println!(
+            "clearing stale cmake build dir (configured for another path): {}",
+            build_dir.display()
+        );
+        std::fs::remove_dir_all(&build_dir)?;
+    }
     let mut configure = std::process::Command::new("cmake");
     configure
         .arg("-S")
@@ -291,7 +300,6 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
         .arg(&build_dir)
         .args([
             "-DCLAP_WRAPPER_DOWNLOAD_DEPENDENCIES=ON",
-            "-DCLAP_WRAPPER_OUTPUT_NAME=seclab-plugin",
             "-DCMAKE_BUILD_TYPE=Release",
             // Match the Rust cdylib's architecture: an x86_64 cmake (Rosetta)
             // would otherwise build a wrapper that cannot dlopen our clap.
@@ -300,6 +308,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
             #[cfg(target_arch = "x86_64")]
             "-DCMAKE_OSX_ARCHITECTURES=x86_64",
         ]);
+    configure.arg(format!("-DCLAP_WRAPPER_OUTPUT_NAME={WRAPPER_OUTPUT_NAME}"));
     if let Some(flag) = format.extra_cmake_flag() {
         configure.arg(flag);
     }
@@ -334,7 +343,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     // hardcodes "cleveraudio.org" in top_level_default.cmake, with no cache-var override).
     if matches!(format, WrappedFormat::Auv2) {
         let dest_plist = dest.join("Contents").join("Info.plist");
-        let generated = find_generated_au_plist(&build_dir).ok_or(
+        let generated = find_generated_au_plist(&build_dir, WRAPPER_OUTPUT_NAME).ok_or(
             "could not find clap-wrapper's generated auv2_Info.plist to install; \
              the AU would not register",
         )?;
@@ -363,25 +372,39 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
 /// "cleveraudio.org: <output>" default (see `bundle_wrapped`).
 const AU_DISPLAY_NAME: &str = "ice1x: SecLab";
 
-/// Locates clap-wrapper's generated AU `Info.plist` under the AUv2 build dir — the file in
-/// a `*-build-helper-output/` subdirectory named `auv2_Info.plist`. This is the
+/// clap-wrapper's `CLAP_WRAPPER_OUTPUT_NAME`: the wrapped bundles' file/executable name, and
+/// the prefix of the AU helper-output dir `find_generated_au_plist` reads.
+const WRAPPER_OUTPUT_NAME: &str = "seclab-plugin";
+
+/// Whether `build_dir` holds a `CMakeCache.txt` generated for a source dir other than `src`
+/// (its `CMAKE_HOME_DIRECTORY` differs) — e.g. after the repo folder was renamed. cmake
+/// refuses to reuse such a cache. No cache, or no recorded home → not stale.
+fn cmake_cache_is_stale(build_dir: &Path, src: &Path) -> bool {
+    let Ok(cache) = std::fs::read_to_string(build_dir.join("CMakeCache.txt")) else {
+        return false;
+    };
+    cache
+        .lines()
+        .find_map(|l| l.strip_prefix("CMAKE_HOME_DIRECTORY:INTERNAL="))
+        .is_some_and(|home| Path::new(home.trim()) != src)
+}
+
+/// Locates clap-wrapper's generated AU `Info.plist` under the AUv2 build dir:
+/// `<output_name with - → _>_as_auv2-build-helper-output/auv2_Info.plist`. This is the
 /// reliably-correct AudioComponents plist to install into the bundle (clap-wrapper's own
 /// install of it is flaky across rebuilds).
-fn find_generated_au_plist(build_dir: &std::path::Path) -> Option<PathBuf> {
-    for entry in std::fs::read_dir(build_dir).ok()?.flatten() {
-        let dir = entry.path();
-        let is_helper = dir
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| n.ends_with("-build-helper-output"));
-        if dir.is_dir() && is_helper {
-            let plist = dir.join("auv2_Info.plist");
-            if plist.exists() {
-                return Some(plist);
-            }
-        }
-    }
-    None
+///
+/// The directory is matched by the CURRENT output name, not "any `*-build-helper-output`":
+/// a reused build dir keeps helper outputs from earlier names (the stale `vb_plugin_…` one
+/// after the SecLab rename), and installing that plist names an executable the bundle
+/// doesn't have, so the AU silently fails to register.
+fn find_generated_au_plist(build_dir: &std::path::Path, output_name: &str) -> Option<PathBuf> {
+    let helper = format!(
+        "{}_as_auv2-build-helper-output",
+        output_name.replace('-', "_")
+    );
+    let plist = build_dir.join(helper).join("auv2_Info.plist");
+    plist.is_file().then_some(plist)
 }
 
 /// `PlistBuddy` args to set an AU component's AudioComponents display name.
@@ -685,18 +708,79 @@ mod tests {
     fn finds_the_generated_au_plist_in_a_build_helper_output_dir() {
         use super::find_generated_au_plist;
         let root = std::env::temp_dir().join(format!("vbau-{}", std::process::id()));
-        let helper = root.join("vb_plugin_as_auv2-build-helper-output");
+        let _ = std::fs::remove_dir_all(&root);
+        let helper = root.join("seclab_plugin_as_auv2-build-helper-output");
         std::fs::create_dir_all(&helper).unwrap();
         std::fs::write(helper.join("auv2_Info.plist"), b"<plist/>").unwrap();
         // A decoy dir that is not the helper output.
         std::fs::create_dir_all(root.join("cpm")).unwrap();
 
-        let found = find_generated_au_plist(&root).expect("generated plist located");
+        let found =
+            find_generated_au_plist(&root, "seclab-plugin").expect("generated plist located");
         assert_eq!(found, helper.join("auv2_Info.plist"));
 
         // Absent → None.
         std::fs::remove_file(helper.join("auv2_Info.plist")).unwrap();
-        assert!(find_generated_au_plist(&root).is_none());
+        assert!(find_generated_au_plist(&root, "seclab-plugin").is_none());
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn ignores_a_stale_helper_dir_left_by_an_older_output_name() {
+        // A reused cmake build dir keeps the helper output of every OUTPUT_NAME it ever
+        // built. After the VST_bomb → SecLab rename it held both `vb_plugin_…` (stale,
+        // CFBundleExecutable = vb-plugin) and `seclab_plugin_…`; picking whichever
+        // read_dir returned first installed the stale plist, whose executable does not
+        // exist in the bundle, so the AU never registered ("didn't find the component").
+        use super::find_generated_au_plist;
+        let root = std::env::temp_dir().join(format!("vbau-stale-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let stale = root.join("vb_plugin_as_auv2-build-helper-output");
+        let current = root.join("seclab_plugin_as_auv2-build-helper-output");
+        for dir in [&stale, &current] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("auv2_Info.plist"), b"<plist/>").unwrap();
+        }
+
+        assert_eq!(
+            find_generated_au_plist(&root, "seclab-plugin"),
+            Some(current.join("auv2_Info.plist"))
+        );
+        // Only the stale one present → None (fail loudly, never install the wrong plist).
+        std::fs::remove_dir_all(&current).unwrap();
+        assert!(find_generated_au_plist(&root, "seclab-plugin").is_none());
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_cmake_cache_is_stale_when_generated_for_another_source_dir() {
+        // Renaming the repo folder (VST_bomb → SecLab) left build dirs whose CMakeCache.txt
+        // still points at the old absolute source path; cmake then refuses to configure.
+        use super::cmake_cache_is_stale;
+        let root = std::env::temp_dir().join(format!("vbcc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let build = root.join("build-auv2");
+        let src = root.join("clap-wrapper");
+
+        // No cache yet → nothing to clear.
+        assert!(!cmake_cache_is_stale(&build, &src));
+
+        std::fs::create_dir_all(&build).unwrap();
+        let cache = |home: &std::path::Path| {
+            format!(
+                "# This is the CMakeCache file.\nCMAKE_BUILD_TYPE:STRING=Release\n\
+                 CMAKE_HOME_DIRECTORY:INTERNAL={}\n",
+                home.display()
+            )
+        };
+        std::fs::write(build.join("CMakeCache.txt"), cache(&src)).unwrap();
+        assert!(!cmake_cache_is_stale(&build, &src));
+
+        let old = Path::new("/Users/someone/repo/VST_bomb/target/clap-wrapper");
+        std::fs::write(build.join("CMakeCache.txt"), cache(old)).unwrap();
+        assert!(cmake_cache_is_stale(&build, &src));
 
         std::fs::remove_dir_all(&root).unwrap();
     }
