@@ -1014,6 +1014,16 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   the user's token (no public upload API; `public_repo` can't create release assets on a repo the user
   doesn't own), so this needs our own hosting — a small Cloudflare Worker + R2 — before the shot can be
   embedded. (UI + backend / needs in-app verification.)
+- [x] 000264 — **AI assistant chat in the DAW plugin** — the plugin's `gui` feature now builds
+  `seclab-editor` with `assistant-net`, so the embedded editor carries the same chat + Settings
+  panels (and Report button) as the standalone, and `seclab_plugin::editor::seeded_app` loads the
+  shared `settings.ron` from the per-user modules folder (provider/model chosen in the standalone
+  carry over; the key stays in the keychain; "apply / connect" as in the standalone). What had
+  kept it out: `nih_plug_egui` needs `Send + Sync` editor state, and the assistant's boxed
+  `KeyStore`/`TokenStore` were `!Send` (now `: Send`) and its `mpsc::Receiver`s are `!Sync` (the
+  plugin wraps its editor host in a `Mutex`, reached via `get_mut` — never locked per frame).
+  Verified on the real artifact: bundled CLAP (10.5 MB) + `auval` pass, and the wrapped `.app`
+  window shows the assistant section 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with

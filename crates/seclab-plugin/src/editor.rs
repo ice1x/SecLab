@@ -67,6 +67,22 @@ struct EditorHost {
     last_values: HashMap<NodeId, Vec<f32>>,
 }
 
+/// The editor as the plugin window opens it: on the instance's own `doc`, with the library and
+/// the assistant pointed at `modules_dir` (the shared per-user folder in production).
+///
+/// The default modules dir is a *relative* `modules`, which in a plugin resolves against the
+/// host DAW's working directory — so without this the library browser could never find the
+/// user's saved macro modules. The same folder holds the assistant's `settings.ron`, so the
+/// chat opens with the provider/model chosen in the standalone (the key stays in the keychain;
+/// the user still clicks "apply / connect", as in the standalone).
+fn seeded_app(doc: &ProjectDoc, modules_dir: &std::path::Path) -> EditorApp {
+    let mut app = EditorApp::new();
+    app.set_modules_dir(modules_dir);
+    app.load_assistant_settings();
+    app.load_doc(doc);
+    app
+}
+
 /// Builds the embedded node editor for the plugin window.
 ///
 /// `doc` is the instance's shared project (also read by the background rebuild); `executor`
@@ -78,14 +94,12 @@ pub(crate) fn create(
     executor: AsyncExecutor<SecLab>,
 ) -> Option<Box<dyn Editor>> {
     // Seed the editor with the patch this instance is playing, not the demo.
-    let mut app = EditorApp::new();
-    // Point the library at the shared per-user modules folder. The default is a *relative*
-    // `modules`, which in a plugin resolves against the host DAW's working directory — so without
-    // this the library browser could never find the user's saved macro modules.
-    app.set_modules_dir(seclab_editor::user_modules_dir());
-    if let Ok(current) = doc.lock() {
-        app.load_doc(&current);
-    }
+    // A poisoned lock still holds a complete document (writers swap a whole `Arc`), so use it.
+    let current = Arc::clone(
+        &doc.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
+    let app = seeded_app(&current, &seclab_editor::user_modules_dir());
     let last_revision = app.patch().revision();
     let last_view_revision = app.patch().view_revision();
     let last_structure = structure_of(&app.patch().to_doc());
@@ -95,15 +109,21 @@ pub(crate) fn create(
 
     create_egui_editor(
         egui_state,
-        EditorHost {
+        // `nih_plug_egui` needs `Send + Sync` state. `EditorApp` is `Send`, but with the
+        // assistant it holds `mpsc::Receiver`s (never `Sync`), so the host is wrapped in a
+        // `Mutex`. The GUI closure gets `&mut`, so `get_mut` reaches it without ever locking.
+        Mutex::new(EditorHost {
             app,
             last_revision,
             last_view_revision,
             last_structure,
             last_values,
-        },
+        }),
         |_ctx, _state| {},
-        move |ctx, setter, state| {
+        move |ctx, setter, host| {
+            let state = host
+                .get_mut()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             // Draw the editor at the window's **fixed** size. A drag-corner `ResizableWindow`
             // (000191) was tried so the user could grow the window like other synths, but on the
             // AU surface the clap-wrapper→baseview resize path leaves the plugin unclickable after
@@ -172,8 +192,36 @@ pub(crate) fn create(
 
 #[cfg(test)]
 mod tests {
-    use super::structure_of;
+    use super::{seeded_app, structure_of};
     use seclab_nodes::Registry;
+
+    #[test]
+    fn the_plugin_editor_carries_the_assistant_with_the_users_saved_settings() {
+        // The DAW-embedded editor must offer the same AI assistant chat as the standalone, and
+        // pick up the provider/model the user already chose there (one shared settings.ron in
+        // the per-user modules folder) — so the chat works in the plugin without re-setup.
+        let dir = std::env::temp_dir().join(format!("seclab-plugin-ai-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut saved = seclab_ai::AssistantSettings::default();
+        saved.select_provider(seclab_ai::ProviderKind::Local);
+        saved.set_model("qwen2.5-coder:14b");
+        seclab_ai::save_settings(&dir, &saved).unwrap();
+
+        let registry = Registry::with_builtins();
+        let doc = crate::default_patch(&registry);
+        let app = seeded_app(&doc, &dir);
+
+        assert_eq!(
+            app.assistant_settings().provider(),
+            seclab_ai::ProviderKind::Local
+        );
+        assert_eq!(app.assistant_settings().model(), "qwen2.5-coder:14b");
+        // And the editor still opens on the instance's own patch, not the demo.
+        assert_eq!(app.patch().to_doc().nodes.len(), doc.nodes.len());
+
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn a_value_change_is_not_structural_but_a_node_or_wire_change_is() {

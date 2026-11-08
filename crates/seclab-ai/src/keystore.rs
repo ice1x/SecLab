@@ -44,7 +44,10 @@ fn normalize_key(key: &str) -> Result<String, KeyStoreError> {
 
 /// Storage for a per-provider API key. Implementations must never persist keys anywhere a
 /// project file, log, or telemetry payload could pick them up.
-pub trait KeyStore {
+///
+/// `Send` so an editor holding a boxed store can live as the DAW plugin's editor state
+/// (`nih_plug_egui` moves it to the GUI thread).
+pub trait KeyStore: Send {
     /// Stores `key` for `provider`, replacing any existing one. The key is trimmed; an
     /// empty or whitespace-only key is rejected.
     ///
