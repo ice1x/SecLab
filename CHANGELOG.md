@@ -251,6 +251,15 @@ Two independent version numbers matter in this project:
 
 ### Fixed
 
+- **AU did not register after the VST_bomb → SecLab folder rename.** `cargo xtask bundle-auv2`
+  copied "the first `*-build-helper-output/auv2_Info.plist`" it found, and the reused cmake
+  build dir still held the pre-rename `vb_plugin_…` one, so the installed `.component` named a
+  `vb-plugin` executable it doesn't contain and `auval` reported "didn't find the component".
+  xtask now reads only the helper dir of the current output name (one `WRAPPER_OUTPUT_NAME`
+  constant also feeds `CLAP_WRAPPER_OUTPUT_NAME`). Also: a cmake build dir whose
+  `CMakeCache.txt` was generated for another source path (the repo folder moved) is cleared
+  before configuring instead of failing every wrapped build.
+
 - **Library re-port: enforce the unique patch title in `seclab-library`, not drevo (000208).** drevo
   dropped intrinsic title uniqueness (drevo #595: `create_node` now accepts a repeated title), so
   the `library / drevo` CI job went red on `a_duplicate_title_is_rejected`. The library owns the
