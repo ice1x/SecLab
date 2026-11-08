@@ -122,8 +122,11 @@ Two independent version numbers matter in this project:
   dependencies for the lockfile even when their feature is off, so the old absolute path made every
   workspace command (`cargo fmt`, `cargo test --workspace`, even `cargo metadata`) fail on any
   machine without that exact directory. drevo is still only compiled under `--features library`;
-  local live-development against a sibling drevo checkout is preserved by a `paths` override in the
-  developer's user-global `~/.cargo/config.toml` (outside the repo, so it never reaches CI).
+  local live-development against a drevo checkout uses an uncommitted `[patch]` in SecLab's root
+  `Cargo.toml` (see the comment in `crates/seclab-library/Cargo.toml`). An earlier version of this
+  note recommended a `paths` override in the user-global `~/.cargo/config.toml`; that override
+  applies to every cargo project on the machine and broke dependency resolution in other drevo
+  checkouts, so it is no longer recommended.
 
 - **Release bundles for macOS, Linux and Windows on hosted runners (000090, 000261).**
   [`release.yml`](.github/workflows/release.yml) leaves the self-hosted Mac: the macOS leg now runs

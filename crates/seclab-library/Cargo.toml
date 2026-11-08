@@ -23,10 +23,19 @@ authors.workspace = true
 # `--features library`; `cargo metadata --no-deps` (the fmt gate) does not even fetch it.
 # The pin keeps the `library` signal job reproducible; bump it to adopt newer drevo.
 #
-# Local live-dev against a sibling drevo checkout (editing drevo and rebuilding SecLab in
-# one step) is restored by a `paths` override in the developer's user-global
-# `~/.cargo/config.toml` (outside the repo, so it never reaches CI). Cargo matches it by
-# package name + version; absent that override — e.g. on CI — the pinned git rev is used.
+# To build SecLab against a local drevo checkout, add a `[patch]` to SecLab's ROOT
+# Cargo.toml for the duration of the work and do not commit it:
+#
+#   [patch."https://github.com/ice1x/drevo.git"]
+#   drevo = { path = "../drevo" }
+#
+# A `[patch]` applies to this workspace only. Do NOT use a `paths = [...]` override in
+# `~/.cargo/config.toml`: Cargo applies it to every project on the machine (and, through
+# the parent-directory config walk, to everything under `~` regardless of CARGO_HOME). It
+# redirected `drevo` inside other drevo checkouts and worktrees to one fixed tree, which put
+# two `drevo-auth 0.1.0` from different paths in their graph ("failed to select a version
+# for `drevo-auth`") and, where resolution did succeed, linked their tests against the
+# wrong branch's code.
 drevo = { git = "https://github.com/ice1x/drevo.git", rev = "e3f321de3685e91df20d50da548ca7d99dfc4521", default-features = false, optional = true }
 # Reading patches to import (000095). seclab-project is a light workspace crate; still gated
 # behind `library` so the default build stays untouched.
