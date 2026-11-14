@@ -22,6 +22,10 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **"Export plugin" button (000267).** The editor toolbar (standalone and DAW plugin) has an
+  **Export plugin** dialog: name the patch and it is installed as its own CLAP/VST3/AU in your
+  plug-in folders — rescan in the DAW and it shows up as a separate instrument. Re-exporting a
+  name updates that plugin. macOS only for now; needs the stock SecLab plugin installed.
 - **Export a patch as its own plugin (000266).** New `seclab-export` crate: clones the installed
   SecLab CLAP/VST3/AU into `<Name>.clap/.vst3/.component` carrying the patch and its own identity
   (the VST3/AU embed their own CLAP copy), gives the AU its own name and subtype, ad-hoc signs and

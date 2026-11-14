@@ -36,6 +36,8 @@ use crate::widgets::{
 
 #[cfg(feature = "assistant")]
 use crate::assistant_panel::{assistant_panel_ui, AssistantAction};
+#[cfg(feature = "export")]
+use crate::export_panel::ExportHost;
 #[cfg(feature = "assistant")]
 use crate::report_panel::ReportHost;
 #[cfg(feature = "assistant")]
@@ -219,6 +221,10 @@ pub struct EditorApp {
     /// Behind `assistant` so the HTTP/keychain stack stays out of the wasm/plugin builds.
     #[cfg(feature = "assistant")]
     report: ReportHost,
+    /// The "Export plugin" dialog (000267): installs the current patch as its own
+    /// CLAP/VST3/AU. Behind `export` (native hosts only).
+    #[cfg(feature = "export")]
+    export: ExportHost,
 }
 
 /// The editor's two surfaces. **Structure** is the node/wire graph where a patch is built;
@@ -389,6 +395,8 @@ impl Default for EditorApp {
             assistant: AssistantHost::new(),
             #[cfg(feature = "assistant")]
             report: ReportHost::new(),
+            #[cfg(feature = "export")]
+            export: ExportHost::new(),
         }
     }
 }
@@ -696,6 +704,28 @@ impl EditorApp {
     #[must_use]
     pub fn camera(&self) -> &Camera {
         &self.camera
+    }
+
+    /// The "Export plugin" dialog (000267).
+    #[cfg(feature = "export")]
+    #[must_use]
+    pub fn export_dialog(&self) -> &ExportHost {
+        &self.export
+    }
+
+    /// Mutable access to the "Export plugin" dialog (open it, name the patch, swap the exporter).
+    #[cfg(feature = "export")]
+    pub fn export_dialog_mut(&mut self) -> &mut ExportHost {
+        &mut self.export
+    }
+
+    /// Exports the patch as it is now under the dialog's name (what its Export button does).
+    /// A no-op when the patch cannot be serialized or the dialog is not ready to export.
+    #[cfg(feature = "export")]
+    pub fn start_export(&mut self) {
+        if let Ok(ron) = seclab_project::to_ron(&self.patch().to_doc()) {
+            self.export.start(ron);
+        }
     }
 
     /// The patch shown on the canvas.
@@ -2043,6 +2073,15 @@ impl EditorApp {
             self.report.poll();
             self.report.ui(ui, env!("VB_GIT_SHA"));
         }
+        // Collect a finished plugin export, draw its dialog, and start one on Export — the
+        // dialog does not own the patch, so the current document is serialized only here.
+        #[cfg(feature = "export")]
+        {
+            self.export.poll();
+            if self.export.ui(ui) {
+                self.start_export();
+            }
+        }
         // Install the palette's egui base once, and again after any theme toggle, so
         // panels/buttons/combos match the canvas.
         if self.visuals_dirty {
@@ -2117,6 +2156,9 @@ impl EditorApp {
                 // dialog, which signs the user in to GitHub and files the report as an issue.
                 #[cfg(feature = "assistant")]
                 self.report.toolbar_button(ui);
+                // "Export plugin" (000267): this patch as its own CLAP/VST3/AU.
+                #[cfg(feature = "export")]
+                self.export.toolbar_button(ui);
                 ui.separator();
                 // Breadcrumbs: root / macro#n / … — click any level to jump back.
                 let depth = self.stack.len();

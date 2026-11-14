@@ -29,6 +29,9 @@ eframe = { workspace = true, optional = true }
 seclab-ai = { workspace = true, optional = true }
 serde.workspace = true
 ron.workspace = true
+# "Export plugin" (000267): clones the installed SecLab bundles into `<Name>.clap/.vst3/.component`.
+# Optional (native hosts only): the wasm build has no plug-in folders to export into.
+seclab-export = { workspace = true, optional = true }
 
 [features]
 # `app` = the standalone/browser launchers (`run`, `web::start`, `impl eframe::App`). On by
@@ -52,6 +55,11 @@ assistant = ["dep:seclab-ai"]
 # wants live inference opts into this one.
 assistant-net = ["assistant", "seclab-ai/net", "seclab-ai/keychain"]
 
+# `export` = the "Export plugin" toolbar button + dialog (`export_panel`, backlog 000267): names the
+# current patch and installs it as its own CLAP/VST3/AU via `seclab-export` (file copies +
+# `codesign`, on a worker thread). Native only; on by the standalone and the plugin's `gui`.
+export = ["dep:seclab-export"]
+
 # WASM (browser) entry point only — see src/web.rs (backlog 000081). These compile solely
 # for the wasm32 target, so the native build is untouched. eframe brings the web renderer
 # (WebRunner/WebGL) itself; we only need the JS glue for the exported `start(canvas)` fn.
@@ -62,6 +70,8 @@ web-sys = { version = "0.3", features = ["HtmlCanvasElement"] }
 console_error_panic_hook = "0.1"
 
 [dev-dependencies]
+# Builds stock-looking template bundles (Info.plist) for the export journey test.
+plist = "1"
 # Assistant crate, for the proposal → diff → apply integration test only. This is a
 # dev-dependency so it never enters the editor's runtime graph; seclab-ai does not depend on
 # seclab-editor, so there is no dependency cycle.

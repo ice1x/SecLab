@@ -253,11 +253,20 @@ pub fn export_plugin(
     result
 }
 
+/// A fresh, private staging folder. The name combines the process id, a per-process counter and
+/// the time: the counter is what keeps two exports running at once in the same process (or two
+/// parallel tests) apart — a timestamp alone can repeat, and two exports sharing a folder delete
+/// each other's half-built bundles.
 fn staging_dir() -> Result<PathBuf, ExportError> {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let seq = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let dir = std::env::temp_dir().join(format!("seclab-export-{}-{nanos}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!(
+        "seclab-export-{}-{seq}-{nanos}",
+        std::process::id()
+    ));
     std::fs::create_dir_all(&dir).map_err(|e| io("cannot create", &dir, &e))?;
     Ok(dir)
 }
@@ -772,6 +781,43 @@ mod tests {
         let err = export_plugin(&acid(), PATCH, &dirs.templates(), &dirs, &Fails).unwrap_err();
         assert!(matches!(err, ExportError::Sign(_)));
         assert!(!dirs.clap.join("Acid Bass.clap").exists());
+    }
+
+    #[test]
+    fn concurrent_exports_never_share_a_staging_folder() {
+        // Regression: the folder was named by pid + timestamp only; two exports in one process
+        // (parallel tests on Linux CI) got the same name and wiped each other's bundles.
+        let dirs: Vec<PathBuf> = (0..64).map(|_| staging_dir().unwrap()).collect();
+        let unique: std::collections::HashSet<_> = dirs.iter().collect();
+        assert_eq!(unique.len(), dirs.len());
+        for d in &dirs {
+            std::fs::remove_dir_all(d).unwrap();
+        }
+        // And whole exports racing on threads all succeed with their own bundles.
+        let root = Root::new("race");
+        let plugin_dirs = PluginDirs::user_macos(&root.0);
+        install_templates(&plugin_dirs, true);
+        let handles: Vec<_> = (0..8)
+            .map(|i| {
+                let d = plugin_dirs.clone();
+                std::thread::spawn(move || {
+                    let id = PluginIdentity::for_name(&format!("Race {i}")).unwrap();
+                    export_plugin(&id, PATCH, &d.templates(), &d, &NoSign).map(|_| ())
+                })
+            })
+            .collect();
+        for h in handles {
+            h.join().unwrap().unwrap();
+        }
+        for i in 0..8 {
+            let patch = plugin_dirs
+                .vst3
+                .join(format!(
+                    "Race {i}.vst3/Contents/PlugIns/seclab-plugin.clap/Contents/Resources"
+                ))
+                .join(PATCH_FILE);
+            assert_eq!(std::fs::read_to_string(patch).unwrap(), PATCH);
+        }
     }
 
     #[test]

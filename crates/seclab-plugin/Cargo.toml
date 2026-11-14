@@ -35,9 +35,14 @@ seclab-editor = { workspace = true, optional = true }
 [features]
 # Embed the full egui node editor in the plugin window. Build bundles with `--features gui`
 # to get an in-host editor. It carries the AI assistant (chat + Settings, real providers via
-# `assistant-net`: rustls HTTP + OS keychain), the same as the standalone — so every gui build
-# (xtask bundles, release CI) ships the chat. The default/headless build stays network-free.
-gui = ["dep:nih_plug_egui", "dep:seclab-editor", "seclab-editor/assistant-net"]
+# `assistant-net`: rustls HTTP + OS keychain) and the "Export plugin" dialog (`export`), the same
+# as the standalone — so every gui build (xtask bundles, release CI) ships both. The default/headless build stays network-free.
+gui = [
+    "dep:nih_plug_egui",
+    "dep:seclab-editor",
+    "seclab-editor/assistant-net",
+    "seclab-editor/export",
+]
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true

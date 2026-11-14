@@ -16,7 +16,7 @@ seclab-runtime.workspace = true
 # turns on the AI assistant chat + Settings panels with the real network providers (reqwest)
 # and the OS keychain, so a user can run a cloud or a local (Ollama/LM Studio/llama.cpp) model
 # from the app.
-seclab-editor = { workspace = true, features = ["app", "assistant-net"] }
+seclab-editor = { workspace = true, features = ["app", "assistant-net", "export"] }
 cpal.workspace = true
 midir.workspace = true
 egui.workspace = true
