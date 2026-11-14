@@ -18,6 +18,9 @@ seclab-project.workspace = true
 # The instrument core (default_patch, engine_from_doc, …), split out so it carries no
 # nih-plug dependency and stays wasm32-portable; re-exported as `engine_builder`.
 seclab-engine.workspace = true
+# `identity.ron` — the bundle's runtime name + CLAP id (000265).
+serde.workspace = true
+ron.workspace = true
 nih_plug.workspace = true
 # egui editor embedded in the plugin window (000067). OPTIONAL, behind the `gui` feature:
 # the default build (and the required clap-validator CI gate) ships no editor, so a

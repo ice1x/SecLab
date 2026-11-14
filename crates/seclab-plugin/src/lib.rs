@@ -13,6 +13,7 @@
 
 #[cfg(feature = "gui")]
 pub mod editor;
+pub mod identity;
 
 // The instrument core now lives in the host-framework-free `seclab-engine` crate (so it stays
 // wasm32-portable for the browser audio path, backlog 000083). Re-exported under the old
@@ -697,7 +698,9 @@ fn process_in_quanta(
     }
 }
 
-nih_export_clap!(SecLab);
+// The CLAP entry point is our own (`identity::entry::clap_entry`) rather than
+// `nih_export_clap!(SecLab)`: it serves the same nih-plug wrapper, but reports the bundle's
+// runtime identity (name + CLAP id from `identity.ron`) so an exported patch is its own plugin.
 
 #[cfg(test)]
 mod tests {
