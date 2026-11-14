@@ -1,0 +1,17 @@
+[package]
+name = "seclab-export"
+description = "SecLab — export a patch as its own plugin (runtime identity + bundle cloning)."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+ron.workspace = true
+# Reads/writes the bundles' Info.plist (bundle id, AU name + subtype). Pure Rust, MIT.
+plist = "1"
+
+[lints]
+workspace = true
