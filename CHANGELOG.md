@@ -22,6 +22,12 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Runtime plugin identity (000265).** A plugin bundle can now carry
+  `Contents/Resources/identity.ron` with its own display name and CLAP id; SecLab's own CLAP
+  entry point (replacing `nih_export_clap!`) reports them to the host, so a copy of the bundle
+  is a separate plugin (and, through clap-wrapper, a separate VST3 class). Without the file the
+  plugin is the stock `SecLab` / `com.ice1x.seclab`. First step of exporting a patch as its own
+  plugin.
 - **AI assistant chat in the DAW plugin (000264).** The CLAP/VST3/AU editor now has the same
   assistant section as the standalone: describe a sound in plain language, review the proposed
   blocks/interface diff, apply it to the patch — which the plugin rebuilds and plays inside the

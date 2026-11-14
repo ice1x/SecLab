@@ -1024,6 +1024,21 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   plugin wraps its editor host in a `Mutex`, reached via `get_mut` — never locked per frame).
   Verified on the real artifact: bundled CLAP (10.5 MB) + `auval` pass, and the wrapped `.app`
   window shows the assistant section 🧪
+- [x] 000265 — **Runtime plugin identity** (export step 1 of 3) — `seclab_plugin::identity`: a bundle
+  may carry `Contents/Resources/identity.ron` (`(name, clap_id)`, validated: printable ≤64-char name,
+  `[A-Za-z0-9._-]` reverse-DNS id); our own CLAP entry point (replacing `nih_export_clap!`) serves the
+  same nih-plug `Wrapper` but reports that name + id, so a copied bundle is a distinct plugin in the
+  host (clap-wrapper derives the VST3 class id from the CLAP id). No file / a broken file keeps the
+  built-in `SecLab` / `com.ice1x.seclab`, so the stock plugin and existing DAW projects are
+  unaffected. Verified on the real artifact: a copied bundle with an identity lists as
+  `com.ice1x.seclab.user.acid-bass` / "Acid Bass" and passes clap-validator 🧪
+- [ ] 000266 — **Export a patch as its own plugin** (export step 2 of 3) — clone the installed
+  `seclab-plugin.{clap,vst3,component}` templates into `<Name>.{clap,vst3,component}`: embed a copy of
+  the CLAP (with `patch.vbp` + `identity.ron`) in each wrapper's `Contents/PlugIns` (clap-wrapper
+  searches the wrapper bundle first), rewrite Info.plist (bundle id; AU name + a subtype derived from
+  the id), ad-hoc codesign, verify with clap-validator + `auval` 🧪
+- [ ] 000267 — **"Export plugin" button** (export step 3 of 3) — editor UI (standalone + plugin):
+  name the patch, export it straight into the user's plug-in folders, report what was installed 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with
