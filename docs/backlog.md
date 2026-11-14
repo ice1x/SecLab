@@ -1047,8 +1047,17 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   `com.ice1x.seclab.user.export-test-bass`, and the AU passes `auval` (`aumu cax0 clAd`), loading the
   embedded CLAP from its own `PlugIns` with the patch's parameters; the stock AU still validates.
   Not verified: a VST3 host load (no VST3 validator here; same clap-wrapper search path) 🧪
-- [ ] 000267 — **"Export plugin" button** (export step 3 of 3) — editor UI (standalone + plugin):
-  name the patch, export it straight into the user's plug-in folders, report what was installed 🧪
+- [x] 000267 — **"Export plugin" button** (export step 3 of 3) — `seclab_editor::export_panel`
+  behind a new `export` feature (on in the standalone and the plugin's `gui`): a toolbar button opens
+  a dialog where the user names the patch, sees the CLAP id + AU code it will get and whether it
+  replaces an earlier export, and clicks Export; `EditorApp::start_export` serializes the patch on
+  the canvas and `seclab_export::export_plugin` runs on a worker thread (installed templates →
+  `~/Library/Audio/Plug-Ins`, ad-hoc signed); the dialog lists what was installed (rescan the DAW).
+  The exporter is injected, so the flow is unit-tested and an end-to-end journey (factory patch →
+  tweak → export → bundles carry exactly the canvas patch; two names → two plugins; re-export
+  replaces one; no stock plugin → explained, nothing written) runs the real exporter on temp
+  templates. macOS-only (elsewhere the dialog says so). Verified in the built standalone: the
+  toolbar shows the button (the export itself was verified on real bundles in 000266) 🧪
 
 **Maintaining the list:** mark `[x]` when done, do not reuse numbers; add new tasks at
 the end with a new global number (000182, …); split a large task into 🧩 subtasks with

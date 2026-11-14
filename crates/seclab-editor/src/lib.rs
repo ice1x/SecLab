@@ -12,6 +12,8 @@ pub mod app;
 #[cfg(feature = "assistant")]
 pub mod assistant_panel;
 pub mod camera;
+#[cfg(feature = "export")]
+pub mod export_panel;
 pub mod factory;
 pub mod layout;
 pub mod library;
