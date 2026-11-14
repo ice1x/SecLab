@@ -374,7 +374,7 @@ impl Default for SecLab {
 const EDITOR_SIZE: (u32, u32) = (1120, 720);
 
 impl Plugin for SecLab {
-    const NAME: &'static str = "SecLab";
+    const NAME: &'static str = seclab_export::identity::BUILTIN_NAME;
     const VENDOR: &'static str = "ice1x";
     const URL: &'static str = "https://github.com/ice1x/SecLab";
     const EMAIL: &'static str = "tunodnb@gmail.com";
@@ -586,7 +586,7 @@ impl Plugin for SecLab {
 }
 
 impl ClapPlugin for SecLab {
-    const CLAP_ID: &'static str = "com.ice1x.seclab";
+    const CLAP_ID: &'static str = seclab_export::identity::BUILTIN_CLAP_ID;
     const CLAP_DESCRIPTION: Option<&'static str> = Some("Node-graph synthesizer built with SecLab");
     const CLAP_MANUAL_URL: Option<&'static str> = Some("https://github.com/ice1x/SecLab");
     const CLAP_SUPPORT_URL: Option<&'static str> = Some("https://github.com/ice1x/SecLab/issues");

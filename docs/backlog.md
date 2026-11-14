@@ -1032,11 +1032,21 @@ explicit "what will be sent?" review, and any stored secret is scrubbed first.
   built-in `SecLab` / `com.ice1x.seclab`, so the stock plugin and existing DAW projects are
   unaffected. Verified on the real artifact: a copied bundle with an identity lists as
   `com.ice1x.seclab.user.acid-bass` / "Acid Bass" and passes clap-validator 🧪
-- [ ] 000266 — **Export a patch as its own plugin** (export step 2 of 3) — clone the installed
-  `seclab-plugin.{clap,vst3,component}` templates into `<Name>.{clap,vst3,component}`: embed a copy of
-  the CLAP (with `patch.vbp` + `identity.ron`) in each wrapper's `Contents/PlugIns` (clap-wrapper
-  searches the wrapper bundle first), rewrite Info.plist (bundle id; AU name + a subtype derived from
-  the id), ad-hoc codesign, verify with clap-validator + `auval` 🧪
+- [x] 000266 — **Export a patch as its own plugin** (export step 2 of 3) — new crate `seclab-export`
+  (the identity type moved here from the plugin, so plugin and exporter share one format):
+  `export_plugin(identity, patch_ron, templates, dest, signer)` clones the installed
+  `seclab-plugin.{clap,vst3,component}` into `<Name>.{clap,vst3,component}`. The CLAP gets
+  `Resources/{patch.vbp,identity.ron}` + a rewritten bundle id/name; each clap-wrapper bundle embeds
+  that CLAP as `Contents/PlugIns/<CFBundleExecutable>.clap` (clap-wrapper searches its own PlugIns
+  before the system CLAP folders); the AU gets `ice1x: <Name>` and a stable 4-char subtype from the
+  id. `PluginIdentity::for_name` derives a deterministic id (slug, + FNV hash when the slug is lossy),
+  so re-exporting a name updates that plugin. Built in a staging dir, installed only when every
+  bundle is built and ad-hoc signed (nothing half-written on failure); the stock plugin's name/id are
+  reserved. Verified on the real artifact (`--example export_installed`, Minitaur patch): all three
+  bundles pass `codesign --verify --deep --strict`, the CLAP passes clap-validator as
+  `com.ice1x.seclab.user.export-test-bass`, and the AU passes `auval` (`aumu cax0 clAd`), loading the
+  embedded CLAP from its own `PlugIns` with the patch's parameters; the stock AU still validates.
+  Not verified: a VST3 host load (no VST3 validator here; same clap-wrapper search path) 🧪
 - [ ] 000267 — **"Export plugin" button** (export step 3 of 3) — editor UI (standalone + plugin):
   name the patch, export it straight into the user's plug-in folders, report what was installed 🧪
 

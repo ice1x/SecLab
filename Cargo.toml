@@ -11,12 +11,13 @@ members = [
     "crates/seclab-plugin",
     "crates/seclab-ai",
     "crates/seclab-library",
+    "crates/seclab-export",
     "xtask",
 ]
 
 # Shared package metadata inherited by every crate via `field.workspace = true`.
 [workspace.package]
-version = "0.0.77"
+version = "0.0.78"
 edition = "2021"
 license = "LicenseRef-PolyForm-Strict-1.0.0"
 repository = "https://github.com/ice1x/SecLab"
@@ -41,6 +42,7 @@ libc = "0.2"
 nih_plug = { git = "https://github.com/robbert-vdh/nih-plug.git", default-features = false, features = ["assert_process_allocs"] }
 seclab-project = { path = "crates/seclab-project" }
 seclab-ai = { path = "crates/seclab-ai" }
+seclab-export = { path = "crates/seclab-export" }
 serde = { version = "1", features = ["derive"] }
 ron = "0.12"
 egui = "0.31"

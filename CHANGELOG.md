@@ -22,6 +22,12 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Export a patch as its own plugin (000266).** New `seclab-export` crate: clones the installed
+  SecLab CLAP/VST3/AU into `<Name>.clap/.vst3/.component` carrying the patch and its own identity
+  (the VST3/AU embed their own CLAP copy), gives the AU its own name and subtype, ad-hoc signs and
+  installs them — so each exported patch shows up in the DAW as a separate plugin. Try it with
+  `cargo run -p seclab-export --example export_installed -- <patch.vbp> "<Name>"`; the editor
+  button follows (000267).
 - **Runtime plugin identity (000265).** A plugin bundle can now carry
   `Contents/Resources/identity.ron` with its own display name and CLAP id; SecLab's own CLAP
   entry point (replacing `nih_export_clap!`) reports them to the host, so a copy of the bundle
