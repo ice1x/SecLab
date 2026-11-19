@@ -21,6 +21,9 @@ cpal.workspace = true
 midir.workspace = true
 egui.workspace = true
 eframe.workspace = true
+seclab-project.workspace = true
+# PNG writer for the self-screenshot mode (already in the tree via eframe → arboard).
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [lints]
 workspace = true

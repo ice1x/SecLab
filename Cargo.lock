@@ -3687,10 +3687,12 @@ dependencies = [
  "cpal",
  "eframe",
  "egui",
+ "image",
  "midir",
  "seclab-core",
  "seclab-editor",
  "seclab-nodes",
+ "seclab-project",
  "seclab-runtime",
 ]
 
