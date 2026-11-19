@@ -5459,6 +5459,7 @@ name = "xtask"
 version = "0.0.84"
 dependencies = [
  "nih_plug_xtask",
+ "plist",
  "seclab-nodes",
  "seclab-plugin",
  "seclab-project",
