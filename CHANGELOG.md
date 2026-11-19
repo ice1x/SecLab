@@ -133,6 +133,11 @@ Two independent version numbers matter in this project:
   Gatekeeper's *Open Anyway*, `xattr` for the zips), Windows/Linux folders, feedback and the
   license split; the developer quick start moved to a "For developers" section.
 
+- **Export finds a system-wide SecLab install.** "Export plugin" now looks for the stock
+  SecLab plugin in `~/Library/Audio/Plug-Ins` first and then in `/Library/Audio/Plug-Ins`
+  (where the macOS `.pkg` installer puts it), format by format; exports still go to the
+  per-user folders and never touch the system-wide install.
+
 - **CI runners: `macos-14` → `macos-15` (000260).** GitHub Actions retired the macOS 14 images on
   2026-11-02 ([runner-images#13518](https://github.com/actions/runner-images/issues/13518)); the
   first push after that failed every job in 0 s with "The configuration 'macos-14-arm64-us-default'
