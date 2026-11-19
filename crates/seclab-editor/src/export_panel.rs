@@ -15,7 +15,7 @@ use std::sync::{mpsc, Arc};
 
 use egui::{self, Ui};
 use seclab_export::bundle::{au_subtype, bundle_stem, default_signer};
-use seclab_export::{export_plugin, ExportError, Exported, PluginDirs, PluginIdentity};
+use seclab_export::{export_plugin, ExportError, Exported, PluginDirs, PluginIdentity, Templates};
 
 /// Runs one export: identity + patch RON → installed bundles.
 pub type Exporter =
@@ -26,12 +26,14 @@ fn user_plugin_dirs() -> Option<PluginDirs> {
     std::env::var_os("HOME").map(|home| PluginDirs::user_macos(&PathBuf::from(home)))
 }
 
-/// The production exporter: clone the installed stock bundles into the user's plug-in folders.
+/// The production exporter: clone the installed stock bundles — per user, or system-wide as the
+/// `.pkg` installer puts them — into the user's plug-in folders.
 #[must_use]
 pub fn installed_exporter() -> Exporter {
     Arc::new(|identity, ron| {
         let dirs = user_plugin_dirs().ok_or_else(|| ExportError::Io("HOME is not set".into()))?;
-        export_plugin(identity, ron, &dirs.templates(), &dirs, &*default_signer())
+        let templates = Templates::first_installed(&[dirs.clone(), PluginDirs::system_macos()]);
+        export_plugin(identity, ron, &templates, &dirs, &*default_signer())
     })
 }
 

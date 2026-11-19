@@ -15,7 +15,7 @@ use seclab_editor::export_panel::{ExportHost, Exporter};
 use seclab_editor::EditorApp;
 use seclab_export::bundle::{NoSign, PATCH_FILE, TEMPLATE_STEM};
 use seclab_export::identity::IDENTITY_FILE;
-use seclab_export::{export_plugin, PluginDirs, PluginIdentity};
+use seclab_export::{export_plugin, PluginDirs, PluginIdentity, Templates};
 
 struct Root(PathBuf);
 impl Drop for Root {
@@ -205,4 +205,40 @@ fn without_the_stock_plugin_installed_the_dialog_explains_and_nothing_is_written
         .unwrap()
         .contains("not installed"));
     assert!(!dirs.clap.exists());
+}
+
+#[test]
+fn after_a_system_wide_pkg_install_the_export_still_lands_in_the_users_folders() {
+    // The .pkg installer puts the stock plugin in /Library (here: a temp "system" root); the
+    // user has nothing in ~/Library yet.
+    let (_system_root, system) = installed_home("pkg-system");
+    let user_root =
+        std::env::temp_dir().join(format!("seclab-e2e-export-pkg-user-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&user_root);
+    let _cleanup = Root(user_root.clone());
+    let user = PluginDirs::user_macos(&user_root);
+
+    let (u, s) = (user.clone(), system.clone());
+    let exporter: Exporter = Arc::new(move |identity, ron| {
+        let templates = Templates::first_installed(&[u.clone(), s.clone()]);
+        export_plugin(identity, ron, &templates, &u, &NoSign)
+    });
+    let mut app = EditorApp::new();
+    app.load_doc(&factory_patch("minitaur.ron"));
+    *app.export_dialog_mut() = ExportHost::with_exporter(exporter, Some(user.clap.clone()), true);
+    app.export_dialog_mut().open();
+    app.export_dialog_mut().set_name("Pkg Bass");
+    app.start_export();
+    finish(&mut app);
+
+    let out = app
+        .export_dialog()
+        .exported()
+        .expect("export succeeded")
+        .clone();
+    assert!(out.clap.starts_with(&user.clap));
+    assert!(out.vst3.unwrap().starts_with(&user.vst3));
+    assert!(out.component.unwrap().starts_with(&user.components));
+    // The system-wide install is read, never written.
+    assert!(!system.clap.join("Pkg Bass.clap").exists());
 }
