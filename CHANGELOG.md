@@ -22,6 +22,11 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Standalone self-screenshot mode (docs).** `SECLAB_SCREENSHOT=<out.png>` makes
+  `seclab-standalone` open the patch in `SECLAB_SCREENSHOT_PATCH` (optional) on the surface in
+  `SECLAB_SCREENSHOT_VIEW` (`blocks`/`panel`), save a PNG of its own window and quit — no OS
+  screen-recording permission needed. Used for the README screenshots in `docs/images/`.
+
 - **Public-beta release pipeline.** A `v*` tag now produces a **draft GitHub pre-release** with
   every file attached, a `SHA256SUMS.txt`, and notes taken from this CHANGELOG plus install
   instructions — published by hand after a check. macOS ships a **`.pkg` installer** (CLAP,

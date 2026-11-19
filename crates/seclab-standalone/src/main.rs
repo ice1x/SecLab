@@ -13,6 +13,7 @@ mod audio;
 mod live;
 mod midi_io;
 mod scope;
+mod screenshot;
 mod settings;
 
 use std::collections::HashMap;
@@ -161,6 +162,8 @@ struct LiveApp {
     scope_buf: Box<[f32; SCOPE_LEN]>,
     /// Whether the visualization panel is shown.
     show_scope: bool,
+    /// The `SECLAB_SCREENSHOT` docs mode, when on.
+    screenshot: Option<screenshot::Screenshotter>,
 }
 
 impl LiveApp {
@@ -366,6 +369,26 @@ impl LiveApp {
 
 impl eframe::App for LiveApp {
     fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
+        if let Some(shot) = &mut self.screenshot {
+            let events = ctx.input(|i| i.events.clone());
+            match shot.on_frame(&events) {
+                screenshot::Step::Wait => {}
+                screenshot::Step::Request => {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                }
+                screenshot::Step::Done(result) => {
+                    match result {
+                        Ok(path) => println!("screenshot written to {}", path.display()),
+                        Err(e) => eprintln!("screenshot failed: {e}"),
+                    }
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            }
+            // Keep frames coming without user input until the shot is taken.
+            ctx.request_repaint();
+        }
         // Visualization panel above the status strip (both take from the bottom).
         if self.show_scope {
             self.stack.scope.snapshot(&mut self.scope_buf);
@@ -465,6 +488,15 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
     let log = seclab_editor::log_buffer::LogBuffer::new(500);
     log.install_panic_hook();
     editor.set_log_buffer(log);
+    // Docs screenshots open a given patch first (`SECLAB_SCREENSHOT_PATCH`).
+    if let Some(path) = std::env::var_os(screenshot::ENV_PATCH).filter(|p| !p.is_empty()) {
+        let doc = seclab_project::open_path(std::path::Path::new(&path))
+            .map_err(|e| format!("{}: {e}", std::path::Path::new(&path).display()))?;
+        editor.load_doc(&doc);
+    }
+    if let Some(view) = std::env::var_os(screenshot::ENV_VIEW) {
+        editor.set_view_mode(screenshot::parse_view(&view.to_string_lossy())?);
+    }
     let registry = Registry::with_builtins();
     let build_ctx = BuildContext::default();
     let stack = start_stack(
@@ -502,6 +534,7 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
         midi_error: None,
         scope_buf: Box::new([0.0; SCOPE_LEN]),
         show_scope: true,
+        screenshot: screenshot::Screenshotter::from_env(),
     };
     // Plug in the first keyboard found; the audio window can switch or disconnect.
     if !app.midi_ports.is_empty() {
