@@ -52,6 +52,13 @@ impl PluginDirs {
         }
     }
 
+    /// The system-wide macOS plug-in folders (`/Library/Audio/Plug-Ins/…`), where the `.pkg`
+    /// installer puts the stock SecLab plugin.
+    #[must_use]
+    pub fn system_macos() -> Self {
+        Self::user_macos(Path::new("/"))
+    }
+
     /// The stock SecLab bundles in these folders — the export's templates.
     #[must_use]
     pub fn templates(&self) -> Templates {
@@ -73,6 +80,33 @@ pub struct Templates {
     pub vst3: PathBuf,
     /// `seclab-plugin.component` (the clap-wrapper AUv2).
     pub component: PathBuf,
+}
+
+impl Templates {
+    /// The installed stock bundles, looked up format by format in `locations` (first match
+    /// wins, so list the per-user folders before the system-wide ones). A format installed
+    /// nowhere keeps the first location's path, so a missing CLAP is reported there; with no
+    /// locations at all, the system-wide folders are assumed.
+    #[must_use]
+    pub fn first_installed(locations: &[PluginDirs]) -> Self {
+        let all: Vec<Self> = locations.iter().map(PluginDirs::templates).collect();
+        let fallback = all
+            .first()
+            .cloned()
+            .unwrap_or_else(|| PluginDirs::system_macos().templates());
+        let pick = |get: fn(&Self) -> &PathBuf| {
+            all.iter()
+                .map(get)
+                .find(|p| p.is_dir())
+                .unwrap_or_else(|| get(&fallback))
+                .clone()
+        };
+        Self {
+            clap: pick(|t| &t.clap),
+            vst3: pick(|t| &t.vst3),
+            component: pick(|t| &t.component),
+        }
+    }
 }
 
 /// What an export installed.
@@ -837,6 +871,95 @@ mod tests {
         assert_eq!(bundle_stem("A/B:C"), "A-B-C");
         assert_eq!(bundle_stem(".hidden"), "hidden");
         assert_eq!(bundle_stem("Кислотный бас"), "Кислотный бас");
+    }
+
+    #[test]
+    fn the_system_plugin_folders_are_under_root_library_audio() {
+        let dirs = PluginDirs::system_macos();
+        assert_eq!(dirs.clap, Path::new("/Library/Audio/Plug-Ins/CLAP"));
+        assert_eq!(dirs.vst3, Path::new("/Library/Audio/Plug-Ins/VST3"));
+        assert_eq!(
+            dirs.components,
+            Path::new("/Library/Audio/Plug-Ins/Components")
+        );
+    }
+
+    /// A per-user and a system-wide (installer) set of plug-in folders under one temp root.
+    fn user_and_system(root: &Root) -> (PluginDirs, PluginDirs) {
+        (
+            PluginDirs::user_macos(&root.0.join("home")),
+            PluginDirs::user_macos(&root.0.join("system")),
+        )
+    }
+
+    #[test]
+    fn templates_installed_system_wide_are_found_when_the_user_has_none() {
+        let root = Root::new("tpl-system");
+        let (user, system) = user_and_system(&root);
+        install_templates(&system, true);
+        assert_eq!(
+            Templates::first_installed(&[user, system.clone()]),
+            system.templates()
+        );
+    }
+
+    #[test]
+    fn a_per_user_install_wins_over_the_system_wide_one() {
+        let root = Root::new("tpl-user-wins");
+        let (user, system) = user_and_system(&root);
+        install_templates(&user, true);
+        install_templates(&system, true);
+        assert_eq!(
+            Templates::first_installed(&[user.clone(), system]),
+            user.templates()
+        );
+    }
+
+    #[test]
+    fn each_format_is_looked_up_on_its_own() {
+        let root = Root::new("tpl-mixed");
+        let (user, system) = user_and_system(&root);
+        install_templates(&user, false); // CLAP only, per user
+        install_templates(&system, true); // CLAP + VST3 + AU system-wide
+        let t = Templates::first_installed(&[user.clone(), system.clone()]);
+        assert_eq!(t.clap, user.templates().clap);
+        assert_eq!(t.vst3, system.templates().vst3);
+        assert_eq!(t.component, system.templates().component);
+    }
+
+    #[test]
+    fn with_nothing_installed_the_first_location_is_reported() {
+        let root = Root::new("tpl-none");
+        let (user, system) = user_and_system(&root);
+        assert_eq!(
+            Templates::first_installed(&[user.clone(), system]),
+            user.templates()
+        );
+        assert_eq!(
+            Templates::first_installed(&[]),
+            PluginDirs::system_macos().templates()
+        );
+    }
+
+    #[test]
+    fn exporting_from_a_system_wide_install_writes_only_to_the_user_folders() {
+        let root = Root::new("tpl-export-system");
+        let (user, system) = user_and_system(&root);
+        install_templates(&system, true);
+        let templates = Templates::first_installed(&[user.clone(), system.clone()]);
+        let out = export_plugin(&acid(), PATCH, &templates, &user, &NoSign).unwrap();
+        assert!(out.clap.starts_with(&user.clap));
+        assert!(out.vst3.unwrap().starts_with(&user.vst3));
+        assert!(out.component.unwrap().starts_with(&user.components));
+        let mut system_clap: Vec<_> = std::fs::read_dir(&system.clap)
+            .unwrap()
+            .map(|e| e.unwrap().file_name())
+            .collect();
+        system_clap.sort();
+        assert_eq!(
+            system_clap,
+            [std::ffi::OsString::from(format!("{TEMPLATE_STEM}.clap"))]
+        );
     }
 
     #[test]
