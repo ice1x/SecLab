@@ -142,6 +142,11 @@ Two independent version numbers matter in this project:
 
 ### Changed
 
+- **README rewritten for the public beta.** It now leads with what SecLab does for a musician:
+  screenshots, features, use cases, downloads, a step-by-step macOS install (installer,
+  Gatekeeper's *Open Anyway*, `xattr` for the zips), Windows/Linux folders, feedback and the
+  license split; the developer quick start moved to a "For developers" section.
+
 - **Export finds a system-wide SecLab install.** "Export plugin" now looks for the stock
   SecLab plugin in `~/Library/Audio/Plug-Ins` first and then in `/Library/Audio/Plug-Ins`
   (where the macOS `.pkg` installer puts it), format by format; exports still go to the
