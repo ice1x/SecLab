@@ -6,23 +6,35 @@ VST3 + AU).
 
 ## What a release contains
 
-One zip per OS, each carrying that OS's bundles plus the license documents (`LICENSE`,
-`NOTICE`, `EULA-BETA.md` — the beta binaries ship under the freeware beta EULA, the source
-under PolyForm Strict; see the README's License section).
+Every archive carries the license documents (`LICENSE`, `NOTICE`, `EULA-BETA.md` — the beta
+binaries ship under the freeware beta EULA, the source under PolyForm Strict; see the README's
+License section). File names use the version without the `v` (tag `v0.1.0-beta.1` →
+`0.1.0-beta.1`).
 
-### macOS — `SecLab-<tag>-macos-arm64.zip`
+### macOS (Apple Silicon)
 
-| Bundle | Format | Install location |
+| File | What it is |
+| --- | --- |
+| `SecLab-<version>-macOS-arm64.pkg` | **Installer** — all four bundles, system-wide, one choice per format (CLAP locked on); shows the beta EULA |
+| `SecLab-<version>-macOS-arm64-{CLAP,VST3,AU,Standalone}.zip` | one bundle each, for a manual install |
+| `SecLab-<version>-macOS-arm64.zip` | all four bundles in one zip |
+
+| Bundle | Format | Installer puts it in |
 | --- | --- | --- |
-| `seclab-plugin.clap` | CLAP | `~/Library/Audio/Plug-Ins/CLAP/` |
-| `seclab-plugin.vst3` | VST3 (clap-wrapper) | `~/Library/Audio/Plug-Ins/VST3/` |
-| `seclab-plugin.component` | AUv2 (clap-wrapper) | `~/Library/Audio/Plug-Ins/Components/` |
+| `seclab-plugin.clap` | CLAP | `/Library/Audio/Plug-Ins/CLAP/` |
+| `seclab-plugin.vst3` | VST3 (clap-wrapper) | `/Library/Audio/Plug-Ins/VST3/` |
+| `seclab-plugin.component` | AUv2 (clap-wrapper) | `/Library/Audio/Plug-Ins/Components/` |
 | `seclab-plugin.app` | wrapped standalone | `/Applications/` |
 
-The VST3 and AU dynamically load the CLAP from the standard locations, so install the
-`.clap` alongside them. Apple Silicon only (the hosted `macos-15` runner is arm64).
+The VST3, AU and app load the CLAP from the standard CLAP folders at runtime, so the CLAP is
+always installed. The installer's bundles are marked non-relocatable (Installer would otherwise
+"upgrade" a same-id developer build wherever it finds one instead of installing to `/Library`),
+and the AU package's `postinstall` restarts `AudioComponentRegistrar` so hosts see the component
+without a reboot. Files installed by a `.pkg` carry no download quarantine. "Export plugin"
+finds the stock bundles both in `~/Library` and in `/Library`. Apple Silicon only (the hosted
+`macos-15` runner is arm64; the installer refuses Intel Macs).
 
-### Linux — `SecLab-<tag>-linux-x86_64.zip`
+### Linux — `SecLab-<version>-Linux-x86_64.zip`
 
 | Bundle | Format | Install location |
 | --- | --- | --- |
@@ -30,7 +42,7 @@ The VST3 and AU dynamically load the CLAP from the standard locations, so instal
 | `seclab-plugin.vst3` | VST3 (clap-wrapper, bundle folder) | `~/.vst3/` |
 | `seclab-standalone` | native standalone (cpal + eframe) | anywhere on `$PATH` |
 
-### Windows — `SecLab-<tag>-windows-x86_64.zip`
+### Windows — `SecLab-<version>-Windows-x86_64.zip`
 
 | Bundle | Format | Install location |
 | --- | --- | --- |
@@ -60,10 +72,19 @@ It runs three independent legs on GitHub-hosted runners (`macos-15`, `ubuntu-lat
 `windows-latest`). The macOS leg calls the existing `cargo xtask` bundle commands (cloning
 and building clap-wrapper under `target/` on the first run); the Linux/Windows legs run
 `cargo xtask bundle-vst3` (the CLAP with the editor, then the clap-wrapper VST3 built with the
-runner's own C++ toolchain) and `cargo build --release -p seclab-standalone`. Each leg uploads its zip as a workflow
-artifact — **`SecLab-macos-arm64`**, **`SecLab-linux-x86_64`**, **`SecLab-windows-x86_64`**.
-The workflow does **not** create a public GitHub Release — download the artifacts from the
-run and attach them to a release yourself when you are ready to publish.
+runner's own C++ toolchain) and `cargo build --release -p seclab-standalone`. Each leg uploads
+its files as a workflow artifact — **`SecLab-macOS-arm64`**, **`SecLab-Linux-x86_64`**,
+**`SecLab-Windows-x86_64`**.
+
+On a **version tag** the macOS leg first runs `cargo xtask release-notes <tag>`, which fails
+the run early when the tag does not match the workspace version or `CHANGELOG.md` has no
+`## [<version>]` section. A final **publish** job then downloads every leg's files, writes
+`SHA256SUMS.txt`, and creates a **draft pre-release** for the tag with all of them attached and
+the notes as its body: the section's `### Highlights` (the whole section when it has none) plus
+install instructions (installer, Gatekeeper's *Open Anyway*, the `xattr` command for manual
+installs, Windows/Linux folders). **Nothing is public until a maintainer opens the draft on the
+Releases page, checks it, and clicks Publish.** A manual dispatch builds and uploads the
+artifacts only.
 
 The runner image labels are perishable (GitHub retires images roughly yearly and announces
 it in [actions/runner-images](https://github.com/actions/runner-images/issues?q=label%3Aannouncement));
@@ -71,9 +92,11 @@ when `ci.yml` moves to a newer image, move `release.yml` with it.
 
 ## Signing and notarization (macOS, optional)
 
-The macOS leg signs and notarizes **only when the credentials are configured** — otherwise it
-uploads unsigned bundles, which Gatekeeper blocks on other Macs (right-click → Open, or
-`xattr -d com.apple.quarantine`, works around it for testers). To turn signing on, set these
+The macOS leg signs with a Developer ID and notarizes **only when the credentials are
+configured** — otherwise `cargo xtask sign-adhoc` seals each bundle with an ad-hoc signature.
+Gatekeeper still blocks ad-hoc builds downloaded on another Mac: testers clear it once via
+*System Settings → Privacy & Security → Open Anyway* (installer) or `xattr -dr
+com.apple.quarantine` (manual zips), as the release notes explain. To turn signing on, set these
 as repository **secrets**:
 
 | Secret | Used by | What it is |
@@ -92,11 +115,18 @@ standalone; Authenticode signing is a follow-up).
 
 ## Cutting a release
 
-1. Update the version and [CHANGELOG.md](../CHANGELOG.md).
-2. Tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-3. The Release workflow builds, (optionally) signs, and uploads the three artifacts.
-4. Download them, verify they load (`clap-validator`, `auval -v aumu gWrp clAd` on macOS, or a
-   DAW), and attach the zips to a GitHub Release.
+1. Bump `version` in the root `Cargo.toml` (e.g. `0.1.0-beta.1`) and move the CHANGELOG's
+   _Unreleased_ notes under `## [0.1.0-beta.1] - <date>`; for a long section, start it with a
+   short `### Highlights` list — that is what the release page quotes. Check the notes locally:
+   `cargo xtask release-notes v0.1.0-beta.1`. Merge.
+2. Tag the merged commit and push the tag: `git tag v0.1.0-beta.1 && git push origin v0.1.0-beta.1`.
+3. The Release workflow builds, signs (Developer ID or ad-hoc), packages, and opens a **draft**
+   pre-release with every file + `SHA256SUMS.txt`.
+4. Download the `.pkg` and a zip from the draft, install on a clean user account, check the
+   plug-ins load (`auval -v aumu gWrp clAd`, a DAW, `clap-validator`), then **Publish** the draft.
+
+To try the packaging locally (macOS): `cargo xtask sign-adhoc && cargo xtask package-macos v0.0.0-test`
+→ `target/dist/`.
 
 ## Building locally
 

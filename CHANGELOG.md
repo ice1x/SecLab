@@ -27,6 +27,15 @@ Two independent version numbers matter in this project:
   `SECLAB_SCREENSHOT_VIEW` (`blocks`/`panel`), save a PNG of its own window and quit — no OS
   screen-recording permission needed. Used for the README screenshots in `docs/images/`.
 
+- **Public-beta release pipeline.** A `v*` tag now produces a **draft GitHub pre-release** with
+  every file attached, a `SHA256SUMS.txt`, and notes taken from this CHANGELOG plus install
+  instructions — published by hand after a check. macOS ships a **`.pkg` installer** (CLAP,
+  VST3, AU and the app system-wide, one choice per format, the beta EULA as its license page,
+  AU cache refresh) next to per-format zips; bundles are ad-hoc signed when no Developer ID is
+  configured. New `cargo xtask sign-adhoc`, `package-macos` and `release-notes` (which refuses a
+  tag that does not match the workspace version or has no CHANGELOG section). Asset names are
+  now `SecLab-<version>-{macOS-arm64,Linux-x86_64,Windows-x86_64}…`.
+
 - **"Export plugin" button (000267).** The editor toolbar (standalone and DAW plugin) has an
   **Export plugin** dialog: name the patch and it is installed as its own CLAP/VST3/AU in your
   plug-in folders — rescan in the DAW and it shows up as a separate instrument. Re-exporting a

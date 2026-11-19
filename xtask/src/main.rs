@@ -34,6 +34,12 @@
 //!   AudioUnit check. It bundles the AU itself, so it needs no prior `bundle-auv2`.
 //! - `cargo xtask sign` — code-signs every bundle in `target/bundled/` with the Developer
 //!   ID identity in `$DEVELOPER_ID` (hardened runtime + secure timestamp), then verifies.
+//! - `cargo xtask sign-adhoc` — ad-hoc signs (`codesign --sign -`) the four release bundles,
+//!   for a beta built without a Developer ID.
+//! - `cargo xtask package-macos <tag>` — per-format zips, an all-in-one zip and a `.pkg`
+//!   installer of the bundles in `target/bundled/` → `target/dist/` (see `package.rs`).
+//! - `cargo xtask release-notes <tag> [owner/repo]` — prints the GitHub Release body for a
+//!   version tag from `CHANGELOG.md`; fails when the tag and workspace version differ.
 //! - `cargo xtask notarize` — zips, submits to Apple's notary service via the
 //!   `$NOTARY_PROFILE` keychain profile, and staples the ticket to each bundle. See
 //!   [`docs/signing.md`](../docs/signing.md) for the full process and credential setup.
@@ -42,6 +48,7 @@
 
 use std::path::{Path, PathBuf};
 
+mod package;
 mod sign;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -71,6 +78,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("sign") => {
             args.next();
             sign_bundles()
+        }
+        Some("sign-adhoc") => {
+            args.next();
+            sign_adhoc()
+        }
+        Some("package-macos") => {
+            args.next();
+            let tag = args
+                .next()
+                .ok_or("usage: cargo xtask package-macos <tag-or-version>")?;
+            package_macos(&tag)
+        }
+        Some("release-notes") => {
+            args.next();
+            let tag = args
+                .next()
+                .ok_or("usage: cargo xtask release-notes <tag> [owner/repo]")?;
+            let repo = args.next().unwrap_or_else(|| "ice1x/SecLab".to_owned());
+            release_notes(&tag, &repo)
         }
         Some("notarize") => {
             args.next();
@@ -591,6 +617,179 @@ fn sign_bundles() -> Result<(), Box<dyn std::error::Error>> {
         "signed {} bundle(s). Next: `cargo xtask notarize`.",
         bundles.len()
     );
+    Ok(())
+}
+
+/// Ad-hoc signs (`codesign --sign -`) the four release bundles in `target/bundled/`, for a
+/// beta built without a Developer ID: it seals each bundle (resources included) so Apple-silicon
+/// hosts load it once Gatekeeper has been cleared. Verifies each signature afterwards.
+fn sign_adhoc() -> Result<(), Box<dyn std::error::Error>> {
+    let dir = bundled_dir()?;
+    for c in &package::MACOS_COMPONENTS {
+        let bundle = dir.join(c.bundle);
+        if !bundle.is_dir() {
+            return Err(format!("{} not found; build the bundles first", bundle.display()).into());
+        }
+        run(
+            std::process::Command::new("codesign").args(package::adhoc_codesign_args(&bundle)),
+            &format!("ad-hoc codesign {}", bundle.display()),
+        )?;
+        run(
+            std::process::Command::new("codesign").args(sign::codesign_verify_args(&bundle)),
+            &format!("verify signature of {}", bundle.display()),
+        )?;
+        println!("ad-hoc signed: {}", bundle.display());
+    }
+    Ok(())
+}
+
+/// Copies a bundle with `ditto` (keeps signatures, symlinks and permissions intact).
+fn ditto(from: &Path, to: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    run(
+        std::process::Command::new("ditto").arg(from).arg(to),
+        &format!("ditto {}", from.display()),
+    )
+}
+
+/// Zips `items` (names inside `dir`) into `archive`, keeping symlinks as links.
+fn zip_items(dir: &Path, items: &[&str], archive: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let _ = std::fs::remove_file(archive);
+    run(
+        std::process::Command::new("zip")
+            .current_dir(dir)
+            .env("COPYFILE_DISABLE", "1")
+            .args(["-r", "-q", "-y"])
+            .arg(archive)
+            .args(items),
+        &format!("zip {}", archive.display()),
+    )
+}
+
+/// Packages the (already signed) macOS bundles into `target/dist/`: one zip per format, one
+/// zip with everything, and a `.pkg` installer with a choice per format. Every archive carries
+/// the license documents.
+fn package_macos(tag: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use package::{LICENSE_FILES, MACOS_COMPONENTS};
+    let version = package::release_version(tag);
+    let root = workspace_root()?;
+    let bundled = root.join("target").join("bundled");
+    for c in &MACOS_COMPONENTS {
+        if !bundled.join(c.bundle).is_dir() {
+            return Err(format!("{} missing in {}", c.bundle, bundled.display()).into());
+        }
+    }
+    let dist = root.join("target").join("dist");
+    let stage = root.join("target").join("pkg-stage");
+    let _ = std::fs::remove_dir_all(&stage);
+    std::fs::create_dir_all(&stage)?;
+    std::fs::create_dir_all(&dist)?;
+
+    let docs = |into: &Path| -> Result<(), Box<dyn std::error::Error>> {
+        for f in LICENSE_FILES {
+            std::fs::copy(root.join(f), into.join(f))?;
+        }
+        Ok(())
+    };
+
+    // Per-format zips, and one with everything.
+    let all = stage.join("zip-all");
+    std::fs::create_dir_all(&all)?;
+    docs(&all)?;
+    for c in &MACOS_COMPONENTS {
+        let dir = stage.join(format!("zip-{}", c.id));
+        std::fs::create_dir_all(&dir)?;
+        ditto(&bundled.join(c.bundle), &dir.join(c.bundle))?;
+        ditto(&bundled.join(c.bundle), &all.join(c.bundle))?;
+        docs(&dir)?;
+        let mut items = vec![c.bundle];
+        items.extend(LICENSE_FILES);
+        let archive = dist.join(package::macos_asset_name(&version, Some(c.label), "zip"));
+        zip_items(&dir, &items, &archive)?;
+        println!("packaged {}", archive.display());
+    }
+    let mut items: Vec<&str> = MACOS_COMPONENTS.iter().map(|c| c.bundle).collect();
+    items.extend(LICENSE_FILES);
+    let archive = dist.join(package::macos_asset_name(&version, None, "zip"));
+    zip_items(&all, &items, &archive)?;
+    println!("packaged {}", archive.display());
+
+    // The installer: one component package per format, wrapped by productbuild.
+    let pkgs = stage.join("pkgs");
+    std::fs::create_dir_all(&pkgs)?;
+    for c in &MACOS_COMPONENTS {
+        let pkg_root = stage.join(format!("root-{}", c.id));
+        std::fs::create_dir_all(&pkg_root)?;
+        ditto(&bundled.join(c.bundle), &pkg_root.join(c.bundle))?;
+        // Strip quarantine/Finder metadata so it is not installed along with the bundle.
+        let _ = std::process::Command::new("xattr")
+            .arg("-cr")
+            .arg(&pkg_root)
+            .status();
+        let plist = stage.join(format!("{}.plist", c.id));
+        std::fs::write(&plist, package::component_plist(c.bundle))?;
+        let scripts = if c.id == "au" {
+            let dir = stage.join("scripts-au");
+            std::fs::create_dir_all(&dir)?;
+            let script = dir.join("postinstall");
+            std::fs::write(&script, package::AU_POSTINSTALL)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))?;
+            }
+            Some(dir)
+        } else {
+            None
+        };
+        let out = pkgs.join(package::component_pkg_name(c));
+        run(
+            std::process::Command::new("pkgbuild")
+                .env("COPYFILE_DISABLE", "1")
+                .args(package::pkgbuild_args(
+                    c,
+                    &pkg_root,
+                    &plist,
+                    scripts.as_deref(),
+                    &version,
+                    &out,
+                )),
+            &format!("pkgbuild {}", c.id),
+        )?;
+    }
+    let resources = stage.join("resources");
+    std::fs::create_dir_all(&resources)?;
+    std::fs::copy(root.join("EULA-BETA.md"), resources.join("EULA.txt"))?;
+    let distribution = stage.join("distribution.xml");
+    std::fs::write(
+        &distribution,
+        package::distribution_xml(&version, &MACOS_COMPONENTS, "EULA.txt"),
+    )?;
+    let installer = dist.join(package::macos_asset_name(&version, None, "pkg"));
+    let _ = std::fs::remove_file(&installer);
+    run(
+        std::process::Command::new("productbuild").args(package::productbuild_args(
+            &distribution,
+            &pkgs,
+            &resources,
+            &version,
+            &installer,
+        )),
+        "productbuild",
+    )?;
+    println!("packaged {}", installer.display());
+    Ok(())
+}
+
+/// Prints the GitHub Release body for `tag` (its CHANGELOG section + install instructions),
+/// refusing a version tag that does not match the workspace version.
+fn release_notes(tag: &str, repo: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let root = workspace_root()?;
+    let cargo = std::fs::read_to_string(root.join("Cargo.toml"))?;
+    let workspace = package::workspace_version(&cargo).ok_or("no [workspace.package] version")?;
+    package::check_tag_matches(tag, &workspace)?;
+    let changelog = std::fs::read_to_string(root.join("CHANGELOG.md"))?;
+    let notes = package::release_notes(&changelog, &package::release_version(tag), repo)?;
+    println!("{notes}");
     Ok(())
 }
 
