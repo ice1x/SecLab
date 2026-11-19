@@ -348,7 +348,7 @@ pub fn release_notes(changelog: &str, version: &str, repo: &str) -> Result<Strin
 
 const INSTALL_NOTES: &str = r#"## Install
 
-> **Public beta.** Free to use, including for music you release — see the [beta EULA](https://github.com/{repo}/blob/main/EULA-BETA.md). Please report bugs via **Report a bug** in the app or [GitHub Issues](https://github.com/{repo}/issues).
+> **Public beta.** Free to use, including for music you release — see the [beta EULA](https://github.com/{repo}/blob/main/EULA-BETA.md). Please report bugs with **Report** in the app's toolbar or [GitHub Issues](https://github.com/{repo}/issues).
 
 ### macOS (Apple Silicon, macOS 11+)
 

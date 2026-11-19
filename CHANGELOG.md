@@ -8,10 +8,11 @@ All notable changes to SecLab are documented here. The format follows
 Two independent version numbers matter in this project:
 
 - **Crate / release version** — a single workspace-wide version (`version.workspace` in the
-  root `Cargo.toml`), currently **0.0.1** — the first cut release. The project is **pre-1.0**,
-  so the API and patch format may still change between releases. This version follows
-  [Semantic Versioning](https://semver.org/) — MAJOR.MINOR.PATCH — and each release moves the
-  accumulated _Unreleased_ notes under a dated heading.
+  root `Cargo.toml`), currently **0.1.0-beta.1** — the first public beta. The project is
+  **pre-1.0**, so the API and patch format may still change between releases. This version
+  follows [Semantic Versioning](https://semver.org/) — MAJOR.MINOR.PATCH, with `-beta.N`
+  pre-releases — and each release moves the accumulated _Unreleased_ notes under a dated
+  heading whose `### Highlights` the GitHub Release page quotes (`cargo xtask release-notes`).
 - **Project format version** — the on-disk `.ron` patch format has its own version
   (`seclab_project::FORMAT_VERSION`), currently **1**, with backward loading supported down to
   `MIN_SUPPORTED_VERSION` via the migration path. This number changes only when the patch
@@ -19,6 +20,31 @@ Two independent version numbers matter in this project:
   _Changed_ entry here.
 
 ## [Unreleased]
+
+## [0.1.0-beta.1] - 2026-11-19
+
+### Highlights
+
+The first public beta of SecLab — build synths and effects visually and export each one as its
+own plug-in.
+
+- **Visual patch editor** — 86 DSP blocks in 11 groups (oscillators, filters, envelopes, LFOs,
+  sequencers, dynamics, effects), typed ports, undo/redo, reusable macros, and a **Panel** view
+  that turns every patch into a playable control surface.
+- **Export plugin** — name a patch and it is installed as its own CLAP + VST3 + AU (macOS), a
+  separate instrument in your DAW. No compiler needed.
+- **AI assistant** — describe a sound and get a validated patch with its control panel, in the
+  standalone app and inside the DAW. Works with Anthropic, OpenAI-compatible APIs, or a local
+  model (Ollama, LM Studio, llama.cpp); keys stay in the OS keychain.
+- **49 factory patches** — classic-inspired synths (Minitaur, Minimoog, Juno-60, MS-20, SH-101,
+  TB-303…) and showcase patches for the new spectral effects: vocoder, phase-vocoder pitch
+  shifter, spectral freeze/blur/gate, robotize, whisperize, frequency shifter, flanger, EQs.
+- **Every format** — CLAP, VST3 and AUv2 with the full editor inside the DAW plus a standalone
+  app on macOS (with a `.pkg` installer); CLAP, VST3 and the standalone on Windows and Linux.
+- **Built-in bug reporter** — *Report* files a GitHub issue with the log attached, showing
+  exactly what is sent.
+- **Free beta** — the official binaries are free to use, including for music you release
+  ([beta EULA](https://github.com/ice1x/SecLab/blob/main/EULA-BETA.md)).
 
 ### Added
 
@@ -1318,4 +1344,5 @@ editor, plugin export, and the AI assistant from the ground up. Highlights by ar
   drifting implementation. No behavioural change; native/wasm builds, tests, clippy
   (`-D warnings`), and the `gui` build all stay green.
 
-[Unreleased]: https://github.com/ice1x/SecLab/commits/main
+[Unreleased]: https://github.com/ice1x/SecLab/compare/v0.1.0-beta.1...main
+[0.1.0-beta.1]: https://github.com/ice1x/SecLab/releases/tag/v0.1.0-beta.1
