@@ -14,5 +14,8 @@ seclab-project.workspace = true
 seclab-nodes.workspace = true
 seclab-plugin = { path = "../crates/seclab-plugin" }
 
+[dev-dependencies]
+plist = "1"
+
 [lints]
 workspace = true
