@@ -22,6 +22,11 @@ Two independent version numbers matter in this project:
 
 ### Added
 
+- **Standalone self-screenshot mode (docs).** `SECLAB_SCREENSHOT=<out.png>` makes
+  `seclab-standalone` open the patch in `SECLAB_SCREENSHOT_PATCH` (optional) on the surface in
+  `SECLAB_SCREENSHOT_VIEW` (`blocks`/`panel`), save a PNG of its own window and quit — no OS
+  screen-recording permission needed. Used for the README screenshots in `docs/images/`.
+
 - **"Export plugin" button (000267).** The editor toolbar (standalone and DAW plugin) has an
   **Export plugin** dialog: name the patch and it is installed as its own CLAP/VST3/AU in your
   plug-in folders — rescan in the DAW and it shows up as a separate instrument. Re-exporting a
