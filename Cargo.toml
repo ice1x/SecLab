@@ -55,3 +55,9 @@ eframe = { version = "0.31", default-features = false, features = [
 
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
+
+# Full debuginfo grew target/debug past 60 GB (deps + incremental). Line tables keep
+# file:line in panics and backtraces, which is all the tests and CI need; switch a crate
+# back to `debug = true` locally when stepping through it in a debugger.
+[profile.dev]
+debug = "line-tables-only"
