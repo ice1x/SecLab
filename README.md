@@ -5,6 +5,7 @@ plug-in.** No coding required.
 
 [![Latest release](https://img.shields.io/github/v/release/ice1x/SecLab?include_prereleases&label=public%20beta)](https://github.com/ice1x/SecLab/releases)
 [![CI](https://github.com/ice1x/SecLab/actions/workflows/ci.yml/badge.svg)](https://github.com/ice1x/SecLab/actions/workflows/ci.yml)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ice1x)
 
 ![SecLab's Panel view: the Minitaur patch as a playable control surface](docs/images/panel-minitaur.png)
 
@@ -104,6 +105,13 @@ on first launch (*More info → Run anyway*). Export plugin is macOS-only for no
 
 Found a bug or missing something? Use **Report** in the app's toolbar, or open an issue on
 [GitHub Issues](https://github.com/ice1x/SecLab/issues). Include your OS, DAW and plug-in format.
+
+## Support SecLab
+
+SecLab is free during the beta and built by one developer. If it is useful to you, you can
+support its development on **[Ko-fi](https://ko-fi.com/ice1x)** — thank you!
+
+[![Support SecLab on Ko-fi](https://img.shields.io/badge/Ko--fi-support%20SecLab-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ice1x)
 
 ## License
 
