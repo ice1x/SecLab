@@ -21,6 +21,13 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **Donations via Ko-fi.** The README has a *Support SecLab* section and badge, the repository
+  shows a **Sponsor** button (`.github/FUNDING.yml`), and every GitHub Release body ends with a
+  *Support SecLab* section (`cargo xtask release-notes`). One test keeps the link identical in
+  all three places.
+
 ## [0.1.0-beta.1] - 2026-11-19
 
 ### Highlights
