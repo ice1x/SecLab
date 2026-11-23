@@ -56,6 +56,11 @@ install the `.clap` too. The AUv2 and the wrapped `.app` are macOS-only (`cargo 
 bundle-auv2` / `bundle-standalone` refuse to run elsewhere); off macOS the standalone is the
 native `seclab-standalone`.
 
+Every macOS bundle's `Info.plist` carries the workspace version: `cargo xtask bundle*` passes it
+to clap-wrapper and stamps `CFBundleShortVersionString` / `CFBundleVersion` (the numeric core,
+`0.1.0`), `CFBundleLongVersionString` (the full `0.1.0-beta.1`) and the AU's component version
+(see `xtask/src/version.rs`).
+
 Each CLAP already carries the MVP synth's default patch (the `export` step installs a `.vbp`
 into the bundle's resources; the plugin loads `VB_PATCH` → bundled patch → built-in default,
 in that order).

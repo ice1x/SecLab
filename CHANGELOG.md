@@ -21,6 +21,18 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Fixed
+
+- **Bundle versions in `Info.plist`.** The macOS bundles carried the bundlers' defaults instead
+  of the SecLab version: `1.0.0` (CLAP), `0.16.0` (AU, app), and an empty / literal
+  `MACOSX_BUNDLE_SHORT_VERSION_STRING` (VST3). `cargo xtask bundle*` now passes the workspace
+  version to clap-wrapper (`CLAP_WRAPPER_BUNDLE_VERSION`) and stamps every bundle's
+  `Info.plist`: `CFBundleShortVersionString` / `CFBundleVersion` get the numeric core
+  (`0.1.0`), `CFBundleLongVersionString` the full version (`0.1.0-beta.1`), and the AU's
+  `AudioComponents` version the matching integer (`auval`: *Component Version 0.1.0*). Note for
+  testers: the AU's component version goes from 0.16.0 to 0.1.0 — a host that caches AU
+  versions rescans it once.
+
 ### Added
 
 - **Donations via Ko-fi.** The README has a *Support SecLab* section and badge, the repository

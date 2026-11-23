@@ -50,6 +50,7 @@ use std::path::{Path, PathBuf};
 
 mod package;
 mod sign;
+mod version;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1).peekable();
@@ -116,8 +117,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("wrote {out}");
             Ok(())
         }
+        Some("bundle") => {
+            nih_plug_xtask::main_with_args("cargo xtask", args)?;
+            // nih-plug's bundler writes `1.0.0` into the CLAP's Info.plist; stamp ours (when
+            // the plugin crate is what was bundled).
+            match bundle_dir() {
+                Ok(clap) => stamp_version(&clap),
+                Err(_) => Ok(()),
+            }
+        }
         _ => nih_plug_xtask::main_with_args("cargo xtask", args).map_err(Into::into),
     }
+}
+
+/// The release version every bundle carries — the workspace version (xtask inherits it).
+const RELEASE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Stamps [`RELEASE_VERSION`] into `bundle`'s `Info.plist` (see `version.rs`); a no-op for a
+/// single-file plugin (a Linux `.clap`), which has none.
+fn stamp_version(bundle: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    if version::stamp_bundle(bundle, RELEASE_VERSION)? {
+        println!(
+            "stamped version {RELEASE_VERSION} into {}",
+            bundle.display()
+        );
+    }
+    Ok(())
 }
 
 /// Known-upstream exclusions, each with a reason:
@@ -289,6 +314,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
     )?;
     let root = workspace_root()?;
     let clap_bundle = bundle_dir()?;
+    stamp_version(&clap_bundle)?;
 
     // Clone once, reuse forever (delete target/clap-wrapper to refresh). The check is for a
     // USABLE checkout, not a mere directory: on CI, `Swatinem/rust-cache` restores `target/`
@@ -335,6 +361,12 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
             "-DCMAKE_OSX_ARCHITECTURES=x86_64",
         ]);
     configure.arg(format!("-DCLAP_WRAPPER_OUTPUT_NAME={WRAPPER_OUTPUT_NAME}"));
+    // Without it clap-wrapper versions the AU/app as its own 0.16.0 and leaves the VST3's
+    // version keys broken; it also feeds the AU's AudioComponents version integer.
+    configure.arg(format!(
+        "-DCLAP_WRAPPER_BUNDLE_VERSION={}",
+        version::bundle_version(RELEASE_VERSION)
+    ));
     if let Some(flag) = format.extra_cmake_flag() {
         configure.arg(flag);
     }
@@ -381,6 +413,7 @@ fn bundle_wrapped(format: WrappedFormat) -> Result<(), Box<dyn std::error::Error
         )?;
         println!("installed + branded AU plist as: {AU_DISPLAY_NAME}");
     }
+    stamp_version(&dest)?;
 
     println!("built: {}", dest.display());
     println!(
