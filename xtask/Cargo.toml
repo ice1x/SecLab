@@ -13,8 +13,7 @@ nih_plug_xtask = { git = "https://github.com/robbert-vdh/nih-plug.git" }
 seclab-project.workspace = true
 seclab-nodes.workspace = true
 seclab-plugin = { path = "../crates/seclab-plugin" }
-
-[dev-dependencies]
+# Stamps the release version into the bundles' Info.plist (src/version.rs).
 plist = "1"
 
 [lints]
