@@ -167,4 +167,15 @@ mod tests {
         assert!(TOUR.iter().any(|s| s.view == "panel"));
         assert!(TOUR.iter().any(|s| s.view == "blocks"));
     }
+
+    #[test]
+    fn the_readme_shows_the_committed_tour_gif() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let readme = std::fs::read_to_string(root.join("README.md")).unwrap();
+        assert!(readme.contains("](docs/images/tour.gif)"));
+        let gif = std::fs::read(root.join("docs/images/tour.gif")).unwrap();
+        let frames = decode(&gif);
+        assert_eq!(frames.len(), TOUR.len(), "re-run `cargo xtask readme-tour`");
+        assert_eq!(frames[0].buffer().width(), GIF_WIDTH);
+    }
 }
