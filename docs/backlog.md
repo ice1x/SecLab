@@ -253,7 +253,11 @@ the definition of done.
 
 - [x] 000127 — Docs→graph pipeline: convert the product documentation (node reference from 000086/000115, port compatibility rules, DSP heuristics, example patches) into a typed drevo knowledge graph — `NodeKind` / `Port` / `Parameter` / `Concept` / `Heuristic` / `ExamplePatch` nodes with `has_port` / `compatible_with` / `in_category` / `explains` / `uses` edges — `Library::build_registry_ontology` derives the structural core (node-kind/port/parameter/category + has_port/has_parameter/in_category/compatible_with) from the registry; `add_concept`/`add_heuristic`/`link_explains` attach authored knowledge 🧪
 - [x] 000128 — Assistant retrieval over the graph: `KnowledgeStore` queries fetch only the ontology slice a question needs (FTS + vector + graph traversal), replacing the full node-card corpus in the prompt; measure the token savings per exchange — `Library::knowledge_slice` (FTS → owning node-kinds → compact cards via traversal); test asserts a slice is a fraction of the full `node_reference` corpus 🧪
-- [ ] 000129 — 🧩 Expose the same knowledge graph via drevo's MCP/server mode for external AI agents (dev tooling); off by default, does not change the embedded in-app path
+- [x] 000129 — ~~🧩 Expose the same knowledge graph via drevo's MCP/server mode for external AI agents (dev tooling); off by default, does not change the embedded in-app path~~
+  **Won't do (2026-11-24).** Users already get the graph through the in-app assistant (000128); a dev
+  agent reads the registry straight from the repo. A server mode would add http/axum deps and an
+  untested surface for no user value. If an external agent ever needs it, dump the ontology into an
+  existing drevo MCP instead of embedding a server.
 - [x] 000130 — 🧩 Keep the graph in sync: regenerate from the registry/docs on release, stale-graph diff check in CI — `Library::missing_ontology_kinds(registry)` diff (empty = in sync); CI test asserts a fresh build covers every registry kind 🧪
 
 ### Epic 13 — Factory preset library (clones of real gear)
