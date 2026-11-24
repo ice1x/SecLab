@@ -21,6 +21,21 @@ Two independent version numbers matter in this project:
 
 ## [Unreleased]
 
+### Added
+
+- **UI tour GIF in the README (000089).** `cargo xtask readme-tour` opens six factory patches
+  (Panel and Blocks views) in the standalone's self-screenshot mode and encodes them into a
+  looping `docs/images/tour.gif`. It is reproducible and needs no screen recording. The README's
+  two screenshots are re-captured with it.
+
+### Changed
+
+- **Audio settings live in the status strip.** The audio-settings window (device, sample rate,
+  buffer, MIDI input) used to be a collapsed floating window parked in the top-left corner,
+  covering the sidebar and the panel header. The status strip's device readout
+  (`⚙ <device> @ <rate> Hz / <block> frames`) is now a toggle button. The window only exists
+  while it is open, and it opens just above the strip.
+
 ### Fixed
 
 - **Bundle versions in `Info.plist`.** The macOS bundles carried the bundlers' defaults instead

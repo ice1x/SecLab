@@ -7,7 +7,7 @@ plug-in.** No coding required.
 [![CI](https://github.com/ice1x/SecLab/actions/workflows/ci.yml/badge.svg)](https://github.com/ice1x/SecLab/actions/workflows/ci.yml)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/ice1x)
 
-![SecLab's Panel view: the Minitaur patch as a playable control surface](docs/images/panel-minitaur.png)
+![A tour of SecLab: factory patches (Minitaur, Juno-60, MS-20) as playable panels, and their block graphs](docs/images/tour.gif)
 
 Wire oscillators, filters, envelopes, effects and modulators together, hear the result in real
 time, play it from your MIDI keyboard — then press **Export plugin** and the patch shows up in
@@ -40,6 +40,8 @@ your DAW as its own instrument. A built-in **AI assistant** turns a plain-langua
   and a spectrum view.
 - **Built-in bug reporter** — *Report* files a GitHub issue with the log attached (opt-in,
   shows you exactly what is sent).
+
+![SecLab's Panel view: the Minitaur patch as a playable control surface](docs/images/panel-minitaur.png)
 
 ![SecLab's Blocks view: a first synth wired from oscillator to output](docs/images/blocks-first-synth.png)
 
@@ -142,6 +144,9 @@ cargo run -p seclab-standalone
 
 # build the VST3 / AU / CLAP bundles
 cargo xtask bundle seclab-plugin
+
+# re-capture the README's UI tour GIF (docs/images/tour.gif) from the factory patches
+cargo xtask readme-tour
 
 # tests / lint / format (required before every commit)
 cargo test --workspace
