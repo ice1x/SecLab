@@ -10,6 +10,7 @@
 //! variants over `n` seconds and exit (useful for scripts; no window).
 
 mod audio;
+mod audio_ui;
 mod live;
 mod midi_io;
 mod scope;
@@ -162,98 +163,96 @@ struct LiveApp {
     scope_buf: Box<[f32; SCOPE_LEN]>,
     /// Whether the visualization panel is shown.
     show_scope: bool,
+    /// Whether the audio-settings window is open (toggled from the status strip).
+    show_audio: bool,
     /// The `SECLAB_SCREENSHOT` docs mode, when on.
     screenshot: Option<screenshot::Screenshotter>,
 }
 
 impl LiveApp {
-    /// Renders the floating audio-settings window and applies changes.
-    fn audio_settings_ui(&mut self, ctx: &egui::Context) {
-        egui::Window::new("audio")
-            .default_open(false)
-            .resizable(false)
-            .show(ctx, |ui| {
-                let mut device_changed = false;
-                egui::ComboBox::from_label("device")
-                    .selected_text(
-                        self.device_names
-                            .get(self.sel_device)
-                            .map_or("?", String::as_str),
-                    )
-                    .show_ui(ui, |ui| {
-                        for (i, name) in self.device_names.iter().enumerate() {
-                            if ui.selectable_value(&mut self.sel_device, i, name).changed() {
-                                device_changed = true;
-                            }
+    /// Renders the audio-settings window (while open, above the `status` strip) and applies
+    /// changes.
+    fn audio_settings_ui(&mut self, ctx: &egui::Context, status: egui::Rect) {
+        let mut open = self.show_audio;
+        audio_ui::settings_window(ctx, &mut open, status, |ui| {
+            let mut device_changed = false;
+            egui::ComboBox::from_label("device")
+                .selected_text(
+                    self.device_names
+                        .get(self.sel_device)
+                        .map_or("?", String::as_str),
+                )
+                .show_ui(ui, |ui| {
+                    for (i, name) in self.device_names.iter().enumerate() {
+                        if ui.selectable_value(&mut self.sel_device, i, name).changed() {
+                            device_changed = true;
                         }
-                    });
-                if device_changed {
-                    if let Some(device) = self.devices.get(self.sel_device) {
-                        self.rates = supported_rates(device);
-                        if !self.rates.contains(&self.sel_rate) {
-                            self.sel_rate = self.rates.first().copied().unwrap_or(48_000);
-                        }
-                    }
-                }
-
-                egui::ComboBox::from_label("sample rate")
-                    .selected_text(format!("{} Hz", self.sel_rate))
-                    .show_ui(ui, |ui| {
-                        for rate in &self.rates {
-                            ui.selectable_value(&mut self.sel_rate, *rate, format!("{rate} Hz"));
-                        }
-                    });
-
-                egui::ComboBox::from_label("block size")
-                    .selected_text(format!("{} frames", self.sel_block))
-                    .show_ui(ui, |ui| {
-                        for block in BLOCK_OPTIONS {
-                            ui.selectable_value(
-                                &mut self.sel_block,
-                                *block,
-                                format!("{block} frames"),
-                            );
-                        }
-                    });
-
-                if ui.button("apply").clicked() {
-                    self.apply_audio_settings();
-                }
-                if let Some(err) = &self.audio_error {
-                    ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
-                }
-
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.label("MIDI");
-                    if ui.button("rescan").clicked() {
-                        self.midi_ports = list_ports();
-                        // The connected index may now point at a different port.
-                        self.disconnect_midi();
                     }
                 });
-                if self.midi_ports.is_empty() {
-                    ui.weak("no MIDI inputs");
-                } else {
-                    let mut clicked: Option<usize> = None;
-                    for (i, name) in self.midi_ports.iter().enumerate() {
-                        let connected = self.sel_midi == Some(i);
-                        if ui.selectable_label(connected, name).clicked() {
-                            clicked = Some(i);
-                        }
-                    }
-                    if let Some(i) = clicked {
-                        if self.sel_midi == Some(i) {
-                            self.disconnect_midi();
-                        } else {
-                            self.connect_midi(i);
-                        }
+            if device_changed {
+                if let Some(device) = self.devices.get(self.sel_device) {
+                    self.rates = supported_rates(device);
+                    if !self.rates.contains(&self.sel_rate) {
+                        self.sel_rate = self.rates.first().copied().unwrap_or(48_000);
                     }
                 }
-                if let Some(err) = &self.midi_error {
-                    ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
+            }
+
+            egui::ComboBox::from_label("sample rate")
+                .selected_text(format!("{} Hz", self.sel_rate))
+                .show_ui(ui, |ui| {
+                    for rate in &self.rates {
+                        ui.selectable_value(&mut self.sel_rate, *rate, format!("{rate} Hz"));
+                    }
+                });
+
+            egui::ComboBox::from_label("block size")
+                .selected_text(format!("{} frames", self.sel_block))
+                .show_ui(ui, |ui| {
+                    for block in BLOCK_OPTIONS {
+                        ui.selectable_value(&mut self.sel_block, *block, format!("{block} frames"));
+                    }
+                });
+
+            if ui.button("apply").clicked() {
+                self.apply_audio_settings();
+            }
+            if let Some(err) = &self.audio_error {
+                ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
+            }
+
+            ui.separator();
+            ui.horizontal(|ui| {
+                ui.label("MIDI");
+                if ui.button("rescan").clicked() {
+                    self.midi_ports = list_ports();
+                    // The connected index may now point at a different port.
+                    self.disconnect_midi();
                 }
             });
+            if self.midi_ports.is_empty() {
+                ui.weak("no MIDI inputs");
+            } else {
+                let mut clicked: Option<usize> = None;
+                for (i, name) in self.midi_ports.iter().enumerate() {
+                    let connected = self.sel_midi == Some(i);
+                    if ui.selectable_label(connected, name).clicked() {
+                        clicked = Some(i);
+                    }
+                }
+                if let Some(i) = clicked {
+                    if self.sel_midi == Some(i) {
+                        self.disconnect_midi();
+                    } else {
+                        self.connect_midi(i);
+                    }
+                }
+            }
+            if let Some(err) = &self.midi_error {
+                ui.colored_label(egui::Color32::from_rgb(0xe5, 0x48, 0x48), err);
+            }
+        });
+        self.show_audio = open;
     }
 
     /// Connects MIDI port `i`, replacing any current connection.
@@ -397,7 +396,7 @@ impl eframe::App for LiveApp {
                 .show(ctx, |ui| self.scope_ui(ui));
         }
         // Status strip so the editor gets the remaining space.
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+        let status = egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let load = self.stack.monitor.load();
                 let xruns = self.stack.monitor.xruns();
@@ -413,15 +412,15 @@ impl eframe::App for LiveApp {
                     ui.label(xrun_text);
                 }
                 ui.separator();
-                ui.label(
+                let readout = format!(
+                    "{} @ {} Hz / {} frames",
                     self.device_names
                         .get(self.sel_device)
                         .map_or("?", String::as_str),
+                    self.sel_rate,
+                    self.sel_block
                 );
-                ui.label(format!(
-                    "@ {} Hz / {} frames",
-                    self.sel_rate, self.sel_block
-                ));
+                audio_ui::device_button(ui, &mut self.show_audio, &readout);
                 ui.separator();
                 ui.checkbox(&mut self.show_scope, "scope");
             });
@@ -432,7 +431,7 @@ impl eframe::App for LiveApp {
         // The embedded editor draws its own top/side/central panels into the space the
         // bottom panels leave — one shared editor, native and (soon) in the plugin window.
         eframe::App::update(&mut self.editor, ctx, frame);
-        self.audio_settings_ui(ctx);
+        self.audio_settings_ui(ctx, status.response.rect);
 
         // An audible edit happened: recompile and swap. A patch that no longer
         // compiles (e.g. mid-edit) keeps the previous engine running.
@@ -534,6 +533,7 @@ fn run_live_editor() -> Result<(), Box<dyn std::error::Error>> {
         midi_error: None,
         scope_buf: Box::new([0.0; SCOPE_LEN]),
         show_scope: true,
+        show_audio: false,
         screenshot: screenshot::Screenshotter::from_env(),
     };
     // Plug in the first keyboard found; the audio window can switch or disconnect.

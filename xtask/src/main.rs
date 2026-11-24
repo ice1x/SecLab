@@ -50,6 +50,7 @@ use std::path::{Path, PathBuf};
 
 mod package;
 mod sign;
+mod tour;
 mod version;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -99,6 +100,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let repo = args.next().unwrap_or_else(|| "ice1x/SecLab".to_owned());
             release_notes(&tag, &repo)
         }
+        Some("readme-tour") => {
+            args.next();
+            readme_tour()
+        }
         Some("notarize") => {
             args.next();
             notarize_bundles()
@@ -128,6 +133,43 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         _ => nih_plug_xtask::main_with_args("cargo xtask", args).map_err(Into::into),
     }
+}
+
+/// Captures the [`tour::TOUR`] shots with the standalone's self-screenshot mode and encodes
+/// them into `docs/images/tour.gif` (000089). Opens one window per shot; macOS/desktop only.
+fn readme_tour() -> Result<(), Box<dyn std::error::Error>> {
+    let root = workspace_root()?;
+    run(
+        std::process::Command::new("cargo")
+            .current_dir(&root)
+            .args(["build", "--release", "-p", "seclab-standalone"]),
+        "build the standalone",
+    )?;
+    let exe = root.join("target/release/seclab-standalone");
+    let shots_dir = root.join("target/tour");
+    std::fs::create_dir_all(&shots_dir)?;
+    let mut frames = Vec::new();
+    for (i, shot) in tour::TOUR.iter().enumerate() {
+        let png = shots_dir.join(format!("{i:02}-{}-{}.png", shot.view, shot.patch));
+        let _ = std::fs::remove_file(&png);
+        run(
+            std::process::Command::new(&exe)
+                .env("SECLAB_SCREENSHOT", &png)
+                .env(
+                    "SECLAB_SCREENSHOT_PATCH",
+                    root.join("examples").join(shot.patch),
+                )
+                .env("SECLAB_SCREENSHOT_VIEW", shot.view),
+            "capture a tour shot",
+        )?;
+        println!("captured {}", png.display());
+        frames.push(image::open(&png)?.into_rgba8());
+    }
+    let gif = tour::encode_gif(&frames, tour::GIF_WIDTH, tour::FRAME_DELAY_MS)?;
+    let out = root.join("docs/images/tour.gif");
+    std::fs::write(&out, &gif)?;
+    println!("wrote {} ({} KiB)", out.display(), gif.len() / 1024);
+    Ok(())
 }
 
 /// The release version every bundle carries — the workspace version (xtask inherits it).
