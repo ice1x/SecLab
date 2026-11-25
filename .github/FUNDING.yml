@@ -1,3 +1,0 @@
-# Shows the "Sponsor" button on the repository page. Keep in sync with the README's
-# "Support SecLab" section and KO_FI_URL in xtask/src/package.rs (a test checks both).
-ko_fi: ice1x
