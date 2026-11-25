@@ -87,7 +87,7 @@ the run early when the tag does not match the workspace version or `CHANGELOG.md
 `SHA256SUMS.txt`, and creates a **draft pre-release** for the tag with all of them attached and
 the notes as its body: the section's `### Highlights` (the whole section when it has none) plus
 install instructions (installer, Gatekeeper's *Open Anyway*, the `xattr` command for manual
-installs, Windows/Linux folders), then a *Support SecLab* section with the Ko-fi link. **Nothing is public until a maintainer opens the draft on the
+installs, Windows/Linux folders). **Nothing is public until a maintainer opens the draft on the
 Releases page, checks it, and clicks Publish.** A manual dispatch builds and uploads the
 artifacts only.
 

@@ -338,22 +338,13 @@ pub fn release_notes(changelog: &str, version: &str, repo: &str) -> Result<Strin
     };
     let pkg = macos_asset_name(version, None, "pkg");
     Ok(format!(
-        "{notes}\n\n{}\n\n{}",
+        "{notes}\n\n{}",
         INSTALL_NOTES
             .replace("{pkg}", &pkg)
             .replace("{repo}", repo)
-            .trim_end(),
-        SUPPORT_NOTES.replace("{ko_fi}", KO_FI_URL).trim_end()
+            .trim_end()
     ))
 }
-
-/// The maintainer's donation page (also in the README and `.github/FUNDING.yml`).
-pub const KO_FI_URL: &str = "https://ko-fi.com/ice1x";
-
-const SUPPORT_NOTES: &str = r#"## Support SecLab
-
-SecLab is free during the beta. If it is useful to you, you can support its development on **[Ko-fi]({ko_fi})** — thank you!
-"#;
 
 const INSTALL_NOTES: &str = r#"## Install
 
@@ -614,28 +605,11 @@ mod tests {
         assert!(notes.contains("xattr -dr com.apple.quarantine"));
         assert!(notes.contains("https://github.com/ice1x/SecLab/blob/main/EULA-BETA.md"));
         assert!(!notes.contains("{repo}") && !notes.contains("{pkg}"));
-        // The notes end with how to support the project.
-        let support = notes.find("## Support SecLab").expect("a support section");
-        assert!(support > notes.find("## Install").unwrap());
-        assert!(notes[support..].contains(KO_FI_URL));
+        // The install instructions are the last section; no donation section.
+        assert!(!notes.contains("## Support") && !notes.to_lowercase().contains("ko-fi"));
         // Without highlights the whole section is quoted.
         let old = release_notes(CHANGELOG, "0.0.1", "o/r").unwrap();
         assert!(old.starts_with("### Added\n\n- first\n\n## Install"));
-    }
-
-    #[test]
-    fn the_donation_link_is_the_same_everywhere() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-        let readme = std::fs::read_to_string(root.join("README.md")).unwrap();
-        let support = readme
-            .find("## Support SecLab")
-            .expect("README support section");
-        assert!(readme[support..].contains(KO_FI_URL));
-        let funding = std::fs::read_to_string(root.join(".github/FUNDING.yml")).unwrap();
-        let handle = KO_FI_URL.rsplit('/').next().unwrap();
-        assert!(funding
-            .lines()
-            .any(|l| l.trim() == format!("ko_fi: {handle}")));
     }
 
     #[test]
