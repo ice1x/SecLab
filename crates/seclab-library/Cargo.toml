@@ -36,7 +36,7 @@ authors.workspace = true
 # two `drevo-auth 0.1.0` from different paths in their graph ("failed to select a version
 # for `drevo-auth`") and, where resolution did succeed, linked their tests against the
 # wrong branch's code.
-drevo = { git = "https://github.com/ice1x/drevo.git", rev = "e3f321de3685e91df20d50da548ca7d99dfc4521", default-features = false, optional = true }
+drevo = { git = "https://github.com/ice1x/drevo.git", rev = "e9dc852c82dba832a7973964c7d06b78131e6f3b", default-features = false, optional = true }
 # Reading patches to import (000095). seclab-project is a light workspace crate; still gated
 # behind `library` so the default build stays untouched.
 seclab-project = { workspace = true, optional = true }

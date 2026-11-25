@@ -1056,7 +1056,7 @@ checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 [[package]]
 name = "drevo"
 version = "0.0.0"
-source = "git+https://github.com/ice1x/drevo.git?rev=e3f321de3685e91df20d50da548ca7d99dfc4521#e3f321de3685e91df20d50da548ca7d99dfc4521"
+source = "git+https://github.com/ice1x/drevo.git?rev=e9dc852c82dba832a7973964c7d06b78131e6f3b#e9dc852c82dba832a7973964c7d06b78131e6f3b"
 dependencies = [
  "bincode",
  "drevo-auth",
@@ -1072,7 +1072,7 @@ dependencies = [
 [[package]]
 name = "drevo-auth"
 version = "0.1.0"
-source = "git+https://github.com/ice1x/drevo.git?rev=e3f321de3685e91df20d50da548ca7d99dfc4521#e3f321de3685e91df20d50da548ca7d99dfc4521"
+source = "git+https://github.com/ice1x/drevo.git?rev=e9dc852c82dba832a7973964c7d06b78131e6f3b#e9dc852c82dba832a7973964c7d06b78131e6f3b"
 dependencies = [
  "thiserror 2.0.20",
 ]
@@ -1080,7 +1080,7 @@ dependencies = [
 [[package]]
 name = "drevo-core"
 version = "0.2.0"
-source = "git+https://github.com/ice1x/drevo.git?rev=e3f321de3685e91df20d50da548ca7d99dfc4521#e3f321de3685e91df20d50da548ca7d99dfc4521"
+source = "git+https://github.com/ice1x/drevo.git?rev=e9dc852c82dba832a7973964c7d06b78131e6f3b#e9dc852c82dba832a7973964c7d06b78131e6f3b"
 dependencies = [
  "bincode",
  "js-sys",
@@ -3480,7 +3480,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
